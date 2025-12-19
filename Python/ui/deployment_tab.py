@@ -38,18 +38,9 @@ class DeploymentTab(QWidget):
 
         # Row 1: Network check and Steam DB button
         self.net_check_checkbox = QCheckBox("Check Network Connection")
-        steam_db_button = QPushButton("STEAM DB")
-        steam_db_menu = QMenu(steam_db_button)
-        download_v1_action = steam_db_menu.addAction("Download steam.json (v1)")
-        download_v2_action = steam_db_menu.addAction("Download steam.json (v2)")
-        steam_db_menu.addSeparator()
-        delete_json_action = steam_db_menu.addAction("Delete steam.json")
-        delete_cache_action = steam_db_menu.addAction("Delete Steam Caches")
-        steam_db_button.setMenu(steam_db_menu)
 
         row1_layout = QHBoxLayout()
         row1_layout.addWidget(self.net_check_checkbox)
-        row1_layout.addWidget(steam_db_button)
         row1_layout.addStretch(1)
         general_options_layout.addLayout(row1_layout)
 
@@ -79,8 +70,25 @@ class DeploymentTab(QWidget):
         steam_version_layout.addWidget(steam_version_label)
         steam_version_layout.addWidget(self.steam_json_v1_radio)
         steam_version_layout.addWidget(self.steam_json_v2_radio)
+
+        # Add a single download button
+        self.download_steam_json_button = QPushButton("Download")
+        self.download_steam_json_button.setToolTip("Download the selected version of steam.json")
+        steam_version_layout.addWidget(self.download_steam_json_button)
+
         steam_version_layout.addStretch(1)
         general_options_layout.addLayout(steam_version_layout)
+
+        # Row 5: Steam Data Management Buttons
+        steam_data_buttons_layout = QHBoxLayout()
+        self.delete_json_button = QPushButton("Delete steam.json")
+        self.delete_cache_button = QPushButton("Delete Steam Caches")
+
+        steam_data_buttons_layout.addStretch(1)
+        steam_data_buttons_layout.addWidget(self.delete_json_button)
+        steam_data_buttons_layout.addWidget(self.delete_cache_button)
+        general_options_layout.addSpacing(10)
+        general_options_layout.addLayout(steam_data_buttons_layout)
 
         # --- Creation Options Section ---
         creation_options_widget = QWidget()
@@ -123,10 +131,14 @@ class DeploymentTab(QWidget):
 
         index_sources_button.clicked.connect(self.index_sources_requested.emit)
         create_button.clicked.connect(self.create_selected_requested.emit)
-        download_v1_action.triggered.connect(lambda: self.download_steam_json_requested.emit(1))
-        download_v2_action.triggered.connect(lambda: self.download_steam_json_requested.emit(2))
-        delete_json_action.triggered.connect(self.delete_steam_json_requested.emit)
-        delete_cache_action.triggered.connect(self.delete_steam_cache_requested.emit)
+        self.download_steam_json_button.clicked.connect(self._on_download_clicked)
+        self.delete_json_button.clicked.connect(self.delete_steam_json_requested.emit)
+        self.delete_cache_button.clicked.connect(self.delete_steam_cache_requested.emit)
+
+    def _on_download_clicked(self):
+        """Emit the download signal with the currently selected version."""
+        version = 1 if self.steam_json_v1_radio.isChecked() else 2
+        self.download_steam_json_requested.emit(version)
 
     def sync_ui_from_config(self, config: AppConfig):
         """Updates the UI widgets with values from the AppConfig model."""

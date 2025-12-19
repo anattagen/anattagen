@@ -175,5 +175,11 @@ def title_case_and_cleanup(name: str) -> str:
     
     return name
 
-
-
+def to_snake_case(name: str) -> str:
+    """Convert a string to snake_case format."""
+    if not name:
+        return ""
+    name = re.sub(r'[^\w\s-]', '', name)
+    name = re.sub(r'[\s-]+(?=[\w])', '_', name.strip()).lower()
+    name = re.sub(r'\W', '', name)
+    return name

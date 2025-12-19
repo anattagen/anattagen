@@ -16,6 +16,7 @@ A desktop application to create isolated environments for PC games.
 ## Contributors
 
 *   **Vai-brainium Quantum Quill** - AI assistant that helped resolve critical UI and data processing issues.
+*   **The Gemini Architect** - AI architect who refactored core systems for robustness and implemented advanced configuration controls.
 
 # But, why???
 
@@ -55,14 +56,8 @@ Run the installer or extract the binary to a location of your choice, **or** dow
 ```sh
 [RJ_PROJ]
 
-			├── README.md
 			├── README.set
 			├── requirements.txt
-			│
-			├──  bin
-			│   ├──  aria2c.exe
-			│   ├──  Shortcut.exe
-			│   └──  7z.exe
 			│
 			├──  Python
 			│   ├──  ax_DeskTemplate.set
@@ -71,24 +66,33 @@ Run the installer or extract the binary to a location of your choice, **or** dow
 			│   ├──  ax_Trigger.set
 			│   ├──  cmdtemplate.set
 			│   ├──  config.set
-			│   ├──  configparser.ConfigParser
+			│   ├──  config_manager.py
+			│   ├──  constants.py
+			│   ├──  data_handler.py
 			│   ├──  demoted.set
 			│   ├──  exclude_exe.set
+			│   ├──  first_run_init.py
+			│   ├──  folder_demoted.set
 			│   ├──  folder_exclude.set
-			│   ├──  Launcher.py
 			│   ├──  Joystick.ico
-			│   ├──  ks_Blank.set
-			│   ├──  ks_DeskTemplate.set
-			│   ├──  ks_GameTemplate.set
+			│   ├──  ks_Blank.Template.set
+			│   ├──  ks_Desk.Template.set
+			│   ├──  ks_Game.Template.set
 			│   ├──  ks_Trigger.set
+			│   ├──  Launcher.py
 			│   ├──  main.py
 			│   ├──  main_window_new.py
+			│   ├──  models.py
 			│   ├──  release_groups.set
 			│   ├──  repos.set
+			│   ├──  setup_tab.py
 			│   │
-			│   └──  ui
+			│   └──  ui/
+			│        ├──  accordion.py
 			│        ├──  config_manager.py
+			│        ├──  deployment_tab.py
 			│        ├──  deployment_tab_ui.py
+			│        ├──  editor_tab.py
 			│        ├──  editor_tab_ui.py
 			│        ├──  game_indexer.py
 			│        ├──  index_manager.py
@@ -102,32 +106,27 @@ Run the installer or extract the binary to a location of your choice, **or** dow
 			│        ├──  ui_widgets.py
 			│        ├──  widgets.py
 			│        │
-			│        └──  creation
-			│            ├──  config_writer.py
+			│        └──  creation/
 			│            ├──  creation_controller.py
 			│            ├──  file_propagator.py
-			│            ├──  joystick_profile_manager.py
-			│            ├──  launcher_cretor.py
-			│            ├──  launcher_manager.py
-			│            ├──  shortcut_manager.py
-			│            └──  profile_manager.py
+			│            └──  joystick_profile_manager.py
 			│
-			├──  site
-			│   ├──  AnkaCoder_b.otf
-			│   ├──  index.set
-			│   ├──  index.html
-			│   ├──  InterUI.ttf
-			│   ├──  Hermit-Regular.otf
-			│   ├──  key.ico
-			│   ├──  TruenoLt.otf
-			│   ├──  version.txt
-			│   └──  img
-			│        ├──  Install.png
-			│        ├──  key.png
-			│        ├──  runas.png
-			│        ├──  Setup.png
-			│        ├──  Tip.png
-			│        └──  Update.png
+			└──  site/
+				├──  AnkaCoder_b.ttf
+				├──  Hermit-Regular.otf
+				├──  InterUI.ttf
+				├──  key.ico
+				├──  malgun.ttf
+				├──  TruenoLt.otf
+				├──  index.html
+				├──  index.set
+				└──  img/
+					├──  Install.png
+					├──  Update.png
+					├──  keymapper.png
+					├──  key.png
+					├──  runas.png
+					└──  tip.png
 
 
 ```

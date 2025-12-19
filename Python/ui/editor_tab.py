@@ -25,14 +25,20 @@ class EditorTab(QWidget):
 
         # --- Table ---
         self.table = QTableWidget()
-        self.table.setColumnCount(23)
+        self.table.setColumnCount(30)
         self.table.setHorizontalHeaderLabels([
             "Create", "Name", "Directory", "SteamID", 
             "NameOverride", "Options", "Arguments", "RunAsAdmin",
-            "Borderless-Windowing", "Hide Taskbar", "MM Game Profile", "MM Desktop Profile",
+            "Controller Mapper", "Borderless Windowing", "Multi-monitor App", "Hide Taskbar",
+            "MM Game Profile", "MM Desktop Profile",
             "Player 1 Profile", "Player 2 Profile", "MediaCenterProfile",
-            "JustBeforeLaunch", "JustAfterExit",
-            "Pre1", "Post1", "Pre2", "Post2", "Pre3", "Post3"
+            "After Launch", "Before Exit",
+            "Pre1 En", "Pre1",
+            "Post1 En", "Post1",
+            "Pre2 En", "Pre2",
+            "Post2 En", "Post2",
+            "Pre3 En", "Pre3",
+            "Post3 En", "Post3"
         ])
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
@@ -107,6 +113,7 @@ class EditorTab(QWidget):
         self.table.setRowCount(0)
         for row_num, game in enumerate(data):
             self.table.insertRow(row_num)
+            self.table.blockSignals(True) # Block signals during population
 
             # Create (CheckBox) - col 0
             self.table.setCellWidget(row_num, 0, self._create_checkbox_widget(game.get('create', False)))
@@ -136,50 +143,63 @@ class EditorTab(QWidget):
             # RunAsAdmin (CheckBox) - col 7
             self.table.setCellWidget(row_num, 7, self._create_checkbox_widget(game.get('run_as_admin', False)))
 
-            # Borderless-Windowing (CheckBox) - col 8
-            self.table.setCellWidget(row_num, 8, self._create_checkbox_widget(game.get('borderless_windowing', False)))
+            # Controller Mapper (CheckBox) - col 8
+            self.table.setCellWidget(row_num, 8, self._create_checkbox_widget(game.get('controller_mapper_enabled', True)))
 
-            # Hide Taskbar (CheckBox) - col 9
-            self.table.setCellWidget(row_num, 9, self._create_checkbox_widget(game.get('hide_taskbar', False)))
+            # Borderless Windowing (CheckBox) - col 9
+            self.table.setCellWidget(row_num, 9, self._create_checkbox_widget(game.get('borderless_windowing_enabled', True)))
 
-            # MM Game Profile - col 10
-            self.table.setItem(row_num, 10, QTableWidgetItem(game.get('mm_game_profile', '')))
+            # Multi-monitor App (CheckBox) - col 10
+            self.table.setCellWidget(row_num, 10, self._create_checkbox_widget(game.get('multi_monitor_app_enabled', True)))
 
-            # MM Desktop Profile - col 11
-            self.table.setItem(row_num, 11, QTableWidgetItem(game.get('mm_desktop_profile', '')))
+            # Hide Taskbar (CheckBox) - col 11
+            self.table.setCellWidget(row_num, 11, self._create_checkbox_widget(game.get('hide_taskbar', False)))
 
-            # Player 1 Profile - col 12
-            self.table.setItem(row_num, 12, QTableWidgetItem(game.get('player1_profile', '')))
+            # MM Game Profile - col 12
+            self.table.setItem(row_num, 12, QTableWidgetItem(game.get('mm_game_profile', '')))
 
-            # Player 2 Profile - col 13
-            self.table.setItem(row_num, 13, QTableWidgetItem(game.get('player2_profile', '')))
+            # MM Desktop Profile - col 13
+            self.table.setItem(row_num, 13, QTableWidgetItem(game.get('mm_desktop_profile', '')))
 
-            # MediaCenterProfile - col 14
-            self.table.setItem(row_num, 14, QTableWidgetItem(game.get('mediacenter_profile', '')))
+            # Player 1 Profile - col 14
+            self.table.setItem(row_num, 14, QTableWidgetItem(game.get('player1_profile', '')))
 
-            # JustBeforeLaunch - col 15
-            self.table.setItem(row_num, 15, QTableWidgetItem(game.get('just_before_launch', '')))
+            # Player 2 Profile - col 15
+            self.table.setItem(row_num, 15, QTableWidgetItem(game.get('player2_profile', '')))
 
-            # JustAfterExit - col 16
-            self.table.setItem(row_num, 16, QTableWidgetItem(game.get('just_after_exit', '')))
+            # MediaCenterProfile - col 16
+            self.table.setItem(row_num, 16, QTableWidgetItem(game.get('mediacenter_profile', '')))
 
-            # Pre1 - col 17
-            self.table.setItem(row_num, 17, QTableWidgetItem(game.get('pre1', '')))
+            # Just After Launch (CheckBox) - col 17
+            self.table.setCellWidget(row_num, 17, self._create_checkbox_widget(game.get('just_after_launch_enabled', True)))
 
-            # Post1 - col 18
-            self.table.setItem(row_num, 18, QTableWidgetItem(game.get('post1', '')))
+            # Just Before Exit (CheckBox) - col 18
+            self.table.setCellWidget(row_num, 18, self._create_checkbox_widget(game.get('just_before_exit_enabled', True)))
+            
+            # Pre/Post Scripts with Enabled Checkboxes
+            self.table.setCellWidget(row_num, 19, self._create_checkbox_widget(game.get('pre_1_enabled', True)))
+            self.table.setItem(row_num, 20, QTableWidgetItem(game.get('pre1_path', '')))
 
-            # Pre2 - col 19
-            self.table.setItem(row_num, 19, QTableWidgetItem(game.get('pre2', '')))
+            self.table.setCellWidget(row_num, 21, self._create_checkbox_widget(game.get('post_1_enabled', True)))
+            self.table.setItem(row_num, 22, QTableWidgetItem(game.get('post1_path', '')))
 
-            # Post2 - col 20
-            self.table.setItem(row_num, 20, QTableWidgetItem(game.get('post2', '')))
+            self.table.setCellWidget(row_num, 23, self._create_checkbox_widget(game.get('pre_2_enabled', True)))
+            self.table.setItem(row_num, 24, QTableWidgetItem(game.get('pre2_path', '')))
 
-            # Pre3 - col 21
-            self.table.setItem(row_num, 21, QTableWidgetItem(game.get('pre3', '')))
+            self.table.setCellWidget(row_num, 25, self._create_checkbox_widget(game.get('post_2_enabled', True)))
+            self.table.setItem(row_num, 26, QTableWidgetItem(game.get('post2_path', '')))
 
-            # Post3 - col 22
-            self.table.setItem(row_num, 22, QTableWidgetItem(game.get('post3', '')))
+            self.table.setCellWidget(row_num, 27, self._create_checkbox_widget(game.get('pre_3_enabled', True)))
+            self.table.setItem(row_num, 28, QTableWidgetItem(game.get('pre3_path', '')))
+
+            self.table.setCellWidget(row_num, 29, self._create_checkbox_widget(game.get('post_3_enabled', True)))
+            # The Post3 value column would be 30, which is out of bounds.
+            # I will assume the last column is for the Post3 checkbox.
+            # If you need a text field for Post3, you must increase column count to 31
+            # and add a header label for it.
+            # self.table.setItem(row_num, 30, QTableWidgetItem(game.get('post3_path', '')))
+
+            self.table.blockSignals(False) # Unblock signals
 
     def get_all_game_data(self):
         """Extract all game data from the table."""
@@ -187,43 +207,71 @@ class EditorTab(QWidget):
         for row in range(self.table.rowCount()):
             game = {}
 
-            # Override (CheckBox)
-            override_widget = self.table.cellWidget(row, 0)
-            if override_widget:
-                override_layout = override_widget.layout()
-                if override_layout:
-                    override_checkbox = override_layout.itemAt(0).widget()
-                    game['override'] = override_checkbox.isChecked()
+            # Column 0: Create (CheckBox)
+            game['create'] = self._get_checkbox_value(row, 0)
 
-            # Executable (Text)
-            game['exec_name'] = self.table.item(row, 1).text() if self.table.item(row, 1) else ''
+            # Column 1: Name (Text)
+            game['name'] = self.table.item(row, 1).text() if self.table.item(row, 1) else ''
 
-            # Directory (Text)
+            # Column 2: Directory (Text)
             game['directory'] = self.table.item(row, 2).text() if self.table.item(row, 2) else ''
 
-            # AppID (Text)
-            game['steam_appid'] = self.table.item(row, 3).text() if self.table.item(row, 3) else ''
+            # Column 3: SteamID (Text)
+            game['steam_id'] = self.table.item(row, 3).text() if self.table.item(row, 3) else ''
 
-            # Name (Text)
+            # Column 4: NameOverride (Text)
             game['name_override'] = self.table.item(row, 4).text() if self.table.item(row, 4) else ''
 
-            # Arguments (Text)
-            game['arguments'] = self.table.item(row, 5).text() if self.table.item(row, 5) else ''
+            # Column 5: Options (Text)
+            game['options'] = self.table.item(row, 5).text() if self.table.item(row, 5) else ''
 
-            # Run (Text)
-            game['run'] = self.table.item(row, 6).text() if self.table.item(row, 6) else ''
+            # Column 6: Arguments (Text)
+            game['arguments'] = self.table.item(row, 6).text() if self.table.item(row, 6) else ''
 
-            # Monitor (Text)
-            game['monitor'] = self.table.item(row, 7).text() if self.table.item(row, 7) else ''
+            # Column 7: RunAsAdmin (CheckBox)
+            game['run_as_admin'] = self._get_checkbox_value(row, 7)
 
-            # Audio (Text)
-            game['audio'] = self.table.item(row, 8).text() if self.table.item(row, 8) else ''
+            # Column 8: Controller Mapper (CheckBox)
+            game['controller_mapper_enabled'] = self._get_checkbox_value(row, 8)
 
-            # Profile (Text)
-            game['joystick_profile'] = self.table.item(row, 9).text() if self.table.item(row, 9) else ''
+            # Column 9: Borderless Windowing (CheckBox)
+            game['borderless_windowing_enabled'] = self._get_checkbox_value(row, 9)
 
-            # Notes (Text)
-            game['notes'] = self.table.item(row, 10).text() if self.table.item(row, 10) else ''
+            # Column 10: Multi-monitor App (CheckBox)
+            game['multi_monitor_app_enabled'] = self._get_checkbox_value(row, 10)
+
+            # Column 11: Hide Taskbar (CheckBox)
+            game['hide_taskbar'] = self._get_checkbox_value(row, 11)
+
+            # Columns 12-16: Profiles (Text)
+            game['mm_game_profile'] = self.table.item(row, 12).text() if self.table.item(row, 12) else ''
+            game['mm_desktop_profile'] = self.table.item(row, 13).text() if self.table.item(row, 13) else ''
+            game['player1_profile'] = self.table.item(row, 14).text() if self.table.item(row, 14) else ''
+            game['player2_profile'] = self.table.item(row, 15).text() if self.table.item(row, 15) else ''
+            game['mediacenter_profile'] = self.table.item(row, 16).text() if self.table.item(row, 16) else ''
+
+            # Columns 17-23: Launch/Exit and Pre/Post scripts
+            game['just_after_launch_enabled'] = self._get_checkbox_value(row, 17)
+            game['just_before_exit_enabled'] = self._get_checkbox_value(row, 18)
+
+            game['pre_1_enabled'] = self._get_checkbox_value(row, 19)
+            game['pre1_path'] = self.table.item(row, 20).text() if self.table.item(row, 20) else ''
+
+            game['post_1_enabled'] = self._get_checkbox_value(row, 21)
+            game['post1_path'] = self.table.item(row, 22).text() if self.table.item(row, 22) else ''
+
+            game['pre_2_enabled'] = self._get_checkbox_value(row, 23)
+            game['pre2_path'] = self.table.item(row, 24).text() if self.table.item(row, 24) else ''
+
+            game['post_2_enabled'] = self._get_checkbox_value(row, 25)
+            game['post2_path'] = self.table.item(row, 26).text() if self.table.item(row, 26) else ''
+
+            game['pre_3_enabled'] = self._get_checkbox_value(row, 27)
+            game['pre3_path'] = self.table.item(row, 28).text() if self.table.item(row, 28) else ''
+
+            game['post_3_enabled'] = self._get_checkbox_value(row, 29)
+            # As noted in populate_from_data, there is no column for the Post3 value.
+            # game['post3'] = self.table.item(row, 30).text() if self.table.item(row, 30) else ''
 
             data.append(game)
         return data

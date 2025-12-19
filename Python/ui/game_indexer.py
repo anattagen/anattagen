@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QLabel, QWidget, QHBoxLayout, QMessageBox
 )
 from Python.ui.name_processor import NameProcessor
-from Python.ui.name_utils import normalize_name_for_matching, make_safe_filename
+from Python.ui.name_utils import normalize_name_for_matching, make_safe_filename, to_snake_case
 from Python.ui.steam_utils import locate_and_exclude_manager_config
 
 def index_games(main_window, enable_name_matching=False):
@@ -299,91 +299,18 @@ def traverse_source_directory(main_window, current_dir_path, source_root_path, e
                         # Add to the found executables cache
                         main_window.found_executables_cache.add(exec_full_path_lower)
                         
-                        # Add to the editor table
-                        row_position = main_window.editor_table.rowCount()
-                        main_window.editor_table.insertRow(row_position)
-                        
-                        # Create a checkbox for the Include column
-                        include_checkbox = QCheckBox()
-                        include_checkbox.setChecked(include_by_default)  # Set based on our determination
-                        include_checkbox_widget = QWidget()
-                        include_checkbox_layout = QHBoxLayout(include_checkbox_widget)
-                        include_checkbox_layout.addWidget(include_checkbox)
-                        include_checkbox_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                        include_checkbox_layout.setContentsMargins(0, 0, 0, 0)
-                        
-                        # Set the items in the table
-                        main_window.editor_table.setCellWidget(row_position, 0, include_checkbox_widget)
-                        main_window.editor_table.setItem(row_position, 1, QTableWidgetItem(exec_name))
-                        main_window.editor_table.setItem(row_position, 2, QTableWidgetItem(dir_path))
-                        main_window.editor_table.setItem(row_position, 3, QTableWidgetItem(steam_name))
-                        main_window.editor_table.setItem(row_position, 4, QTableWidgetItem(name_override))
-                        main_window.editor_table.setItem(row_position, 5, QTableWidgetItem(""))
-                        main_window.editor_table.setItem(row_position, 6, QTableWidgetItem(""))
-                        main_window.editor_table.setItem(row_position, 7, QTableWidgetItem(steam_id))
-                        
-                        # Get deployment tab settings to populate path fields with CEN/LC indicators
-                        # Columns 8-20 are path fields that should use < for CEN and > for LC
-                        path_columns = {
-                            8: "p1_profile_edit",
-                            9: "p2_profile_edit",
-                            10: "controller_mapper_app_line_edit",
-                            11: "multimonitor_gaming_config_edit",
-                            12: "multimonitor_media_config_edit",
-                            13: "post_launch_app_line_edit_0",
-                            14: "post_launch_app_line_edit_1",
-                            15: "post_launch_app_line_edit_2",
-                            16: "pre_launch_app_line_edit_0",
-                            17: "pre_launch_app_line_edit_1",
-                            18: "pre_launch_app_line_edit_2",
-                            19: "after_launch_app_line_edit",
-                            20: "before_exit_app_line_edit"
-                        }
-                        
-                        # Check if deployment_path_options exists
-                        if hasattr(main_window, 'deployment_path_options'):
-                            for col, path_key in path_columns.items():
-                                # Default to CEN
-                                indicator = "<"
-                                
-                                # Check if we have a radio group for this path
-                                if path_key in main_window.deployment_path_options:
-                                    radio_group = main_window.deployment_path_options[path_key]
-                                    checked_button = radio_group.checkedButton()
-                                    if checked_button and checked_button.text() == "LC":
-                                        indicator = ">"
-                            
-                                main_window.editor_table.setItem(row_position, col, QTableWidgetItem(indicator))
-                        else:
-                            # If no deployment_path_options, default all to CEN
-                            for col in range(8, 21):
-                                main_window.editor_table.setItem(row_position, col, QTableWidgetItem("<"))
-                        
-                        # Set borderless status (E for enabled, K for terminates on exit, blank for not enabled)
-                        borderless_value = ""
-                        if hasattr(main_window, 'enable_borderless_windowing_checkbox') and main_window.enable_borderless_windowing_checkbox.isChecked():
-                            borderless_value = "E"
-                            if hasattr(main_window, 'terminate_bw_on_exit_checkbox') and main_window.terminate_bw_on_exit_checkbox.isChecked():
-                                borderless_value = "K"
-                        main_window.editor_table.setItem(row_position, 21, QTableWidgetItem(borderless_value))
-                        
-                        # Use deployment tab settings for AsAdmin and NoTB if not explicitly provided
-                        as_admin = False
-                        if hasattr(main_window, 'run_as_admin_checkbox'):
-                            as_admin = main_window.run_as_admin_checkbox.isChecked()
-                        
-                        no_tb = False
-                        if hasattr(main_window, 'hide_taskbar_checkbox'):
-                            no_tb = main_window.hide_taskbar_checkbox.isChecked()
-                        
-                        # Create AsAdmin checkbox
-                        as_admin_widget = create_status_widget(main_window, as_admin, row_position, 22)
-                        main_window.editor_table.setCellWidget(row_position, 22, as_admin_widget)
-                        
-                        # Create NoTB checkbox
-                        no_tb_widget = create_status_widget(main_window, no_tb, row_position, 23)
-                        main_window.editor_table.setCellWidget(row_position, 23, no_tb_widget)
-                        
+                        # Call add_executable_to_editor_table to populate the row with defaults
+                        # This function will now retrieve all default enabled states from config.defaults
+                        add_executable_to_editor_table(
+                            main_window,
+                            include_checked=include_by_default,
+                            exec_name=exec_name,
+                            directory=dir_path,
+                            steam_name=steam_name,
+                            name_override=name_override,
+                            steam_id=steam_id
+                        )
+
                         # Update counter
                         added_exe_count += 1
                         
@@ -393,7 +320,6 @@ def traverse_source_directory(main_window, current_dir_path, source_root_path, e
                     except PermissionError:
                         continue
                     except Exception as e:
-
                         continue
     
     except PermissionError:
@@ -402,70 +328,6 @@ def traverse_source_directory(main_window, current_dir_path, source_root_path, e
         pass
     
     return added_exe_count
-
-def get_editor_table_data(editor_table):
-    """Extract data from the editor table into a list of dictionaries"""
-    data = []
-    for row in range(editor_table.rowCount()):
-        # Get checkbox values safely
-        def get_checkbox_value(row, col):
-            widget = editor_table.cellWidget(row, col)
-            if widget:
-                # Find the checkbox within the container widget
-                checkbox = widget.findChild(QCheckBox)
-                if checkbox:
-                    return checkbox.isChecked()
-            return False
-        
-        # Get borderless value from combo box or text item
-        borderless_widget = editor_table.cellWidget(row, 21)
-        borderless_item = editor_table.item(row, 21)
-        
-        if isinstance(borderless_widget, QComboBox):
-            borderless_value = borderless_widget.currentText()
-        elif borderless_item:
-            borderless_value = borderless_item.text()
-        else:
-            borderless_value = "No"
-        
-        # Get CEN/LC indicators for path fields
-        path_indicators = {}
-        for col in range(8, 21):
-            item = editor_table.item(row, col)
-            if item:
-                indicator = item.text()
-                # Store the indicator (< for CEN, > for LC)
-                path_indicators[f"col_{col}_indicator"] = indicator
-        
-        row_data = {
-            "include": get_checkbox_value(row, 0),
-            "executable": editor_table.item(row, 1).text() if editor_table.item(row, 1) else "",
-            "directory": editor_table.item(row, 2).text() if editor_table.item(row, 2) else "",
-            "steam_title": editor_table.item(row, 3).text() if editor_table.item(row, 3) else "",
-            "name_override": editor_table.item(row, 4).text() if editor_table.item(row, 4) else "",
-            "options": editor_table.item(row, 5).text() if editor_table.item(row, 5) else "",
-            "arguments": editor_table.item(row, 6).text() if editor_table.item(row, 6) else "",
-            "steam_id": editor_table.item(row, 7).text() if editor_table.item(row, 7) else "",
-            "p1_profile": editor_table.item(row, 8).text() if editor_table.item(row, 8) else "",
-            "p2_profile": editor_table.item(row, 9).text() if editor_table.item(row, 9) else "",
-            "desktop_ctrl": editor_table.item(row, 10).text() if editor_table.item(row, 10) else "",
-            "game_monitor_cfg": editor_table.item(row, 11).text() if editor_table.item(row, 11) else "",
-            "desktop_monitor_cfg": editor_table.item(row, 12).text() if editor_table.item(row, 12) else "",
-            "post1": editor_table.item(row, 13).text() if editor_table.item(row, 13) else "",
-            "post2": editor_table.item(row, 14).text() if editor_table.item(row, 14) else "",
-            "post3": editor_table.item(row, 15).text() if editor_table.item(row, 15) else "",
-            "pre1": editor_table.item(row, 16).text() if editor_table.item(row, 16) else "",
-            "pre2": editor_table.item(row, 17).text() if editor_table.item(row, 17) else "",
-            "pre3": editor_table.item(row, 18).text() if editor_table.item(row, 18) else "",
-            "just_after": editor_table.item(row, 19).text() if editor_table.item(row, 19) else "",
-            "just_before": editor_table.item(row, 20).text() if editor_table.item(row, 20) else "",
-            "borderless": borderless_value,
-            "as_admin": get_checkbox_value(row, 22),
-            "no_tb": get_checkbox_value(row, 23),
-            "path_indicators": path_indicators  # Store all path indicators
-        }
-        data.append(row_data)
-    return data
 
 def load_set_file(filename):
     """Load a .set file into a set of strings"""
@@ -504,21 +366,7 @@ def add_executable_to_editor_table(main_window, include_checked=True, exec_name=
                                   steam_name="", name_override="", options="", arguments="", 
                                   steam_id="", as_admin=False, no_tb=False, update_ui=True):
     """
-    Add an executable to the editor table
-    
-    Args:
-        main_window: The main application window
-        include_checked: Whether the include checkbox should be checked
-        exec_name: The executable name
-        directory: The directory path
-        steam_name: The Steam name
-        name_override: The name override
-        options: Additional options
-        arguments: Command line arguments
-        steam_id: The Steam ID
-        as_admin: Whether to run as admin
-        no_tb: Whether to disable taskbar integration
-        update_ui: Whether to update the UI after adding
+    Add an executable to the editor table, applying global default enabled states.
     """
     # Debug output
 
@@ -532,6 +380,11 @@ def add_executable_to_editor_table(main_window, include_checked=True, exec_name=
     # Create include checkbox
     include_widget = create_status_widget(main_window, include_checked, row, 0)
     main_window.editor_table.setCellWidget(row, 0, include_widget)
+
+    # Retrieve global default enabled states from AppConfig
+    config_defaults = main_window.config.defaults
+    as_admin = main_window.config.run_as_admin # From Deployment tab
+    no_tb = main_window.config.hide_taskbar # From Deployment tab
     
     # Set text items
     main_window.editor_table.setItem(row, 1, QTableWidgetItem(exec_name))
@@ -543,57 +396,84 @@ def add_executable_to_editor_table(main_window, include_checked=True, exec_name=
     main_window.editor_table.setItem(row, 7, QTableWidgetItem(steam_id))
     
     # Get deployment tab settings to populate path fields with CEN/LC indicators
-    # Columns 8-20 are path fields that should use < for CEN and > for LC
+    # These columns correspond to path fields in the Setup Tab.
     path_columns = {
-        8: "p1_profile_edit",
-        9: "p2_profile_edit",
-        10: "controller_mapper_app_line_edit",
-        11: "multimonitor_gaming_config_edit",
-        12: "multimonitor_media_config_edit",
-        13: "post_launch_app_line_edit_0",
-        14: "post_launch_app_line_edit_1",
-        15: "post_launch_app_line_edit_2",
-        16: "pre_launch_app_line_edit_0",
-        17: "pre_launch_app_line_edit_1",
-        18: "pre_launch_app_line_edit_2",
-        19: "after_launch_app_line_edit",
-        20: "before_exit_app_line_edit"
+        # These keys match the `line_edit_attr` from `_create_path_row_with_cen_lc` in setup_tab.py
+        12: "multimonitor_gaming_config_edit",
+        13: "multimonitor_media_config_edit",
+        14: "p1_profile_edit",
+        15: "p2_profile_edit",
+        16: "mediacenter_profile_edit",
+        20: "pre1_edit",
+        22: "post1_edit",
+        24: "pre2_edit",
+        26: "post2_edit",
+        28: "pre3_edit",
     }
     
     # Check if deployment_path_options exists
     if hasattr(main_window, 'deployment_path_options'):
         for col, path_key in path_columns.items():
+            snake_case_key = to_snake_case(path_key.replace("_edit", "").replace("_app", ""))
+
             # Default to CEN
             indicator = "<"
             
             # Check if we have a radio group for this path
-            if path_key in main_window.deployment_path_options:
-                radio_group = main_window.deployment_path_options[path_key]
+            if snake_case_key in main_window.deployment_path_options:
+                radio_group = main_window.deployment_path_options[snake_case_key]
                 checked_button = radio_group.checkedButton()
                 if checked_button and checked_button.text() == "LC":
                     indicator = ">"
-            
+
             main_window.editor_table.setItem(row, col, QTableWidgetItem(indicator))
     else:
         # If no deployment_path_options, default all to CEN
-        for col in range(8, 21):
+        for col in path_columns.keys():
             main_window.editor_table.setItem(row, col, QTableWidgetItem("<"))
     
-    # Set borderless status (E for enabled, K for terminates on exit, blank for not enabled)
-    borderless_value = ""
-    if hasattr(main_window, 'enable_borderless_windowing_checkbox') and main_window.enable_borderless_windowing_checkbox.isChecked():
-        borderless_value = "E"
-        if hasattr(main_window, 'terminate_bw_on_exit_checkbox') and main_window.terminate_bw_on_exit_checkbox.isChecked():
-            borderless_value = "K"
-    main_window.editor_table.setItem(row, 21, QTableWidgetItem(borderless_value))
+    # Retrieve default enabled states for specific features from config.defaults
+    controller_mapper_enabled = config_defaults.get('controller_mapper_enabled', True)
+    borderless_windowing_enabled = config_defaults.get('borderless_windowing_enabled', True)
+    multi_monitor_app_enabled = config_defaults.get('multi_monitor_app_enabled', True)
+    just_after_launch_enabled = config_defaults.get('just_after_launch_enabled', True)
+    just_before_exit_enabled = config_defaults.get('just_before_exit_enabled', True)
+    pre1_enabled = config_defaults.get('pre_1_enabled', True)
+    post1_enabled = config_defaults.get('post_1_enabled', True)
+    pre2_enabled = config_defaults.get('pre_2_enabled', True)
+    post2_enabled = config_defaults.get('post_2_enabled', True)
+    pre3_enabled = config_defaults.get('pre_3_enabled', True)
+    post3_enabled = config_defaults.get('post_3_enabled', True)
+
+    # Create checkboxes for the new enabled columns
+    main_window.editor_table.setCellWidget(row, 8, create_status_widget(main_window, controller_mapper_enabled, row, 8))
+    main_window.editor_table.setCellWidget(row, 9, create_status_widget(main_window, borderless_windowing_enabled, row, 9))
+    main_window.editor_table.setCellWidget(row, 10, create_status_widget(main_window, multi_monitor_app_enabled, row, 10))
     
-    # Use deployment tab settings for AsAdmin and NoTB if not explicitly provided
-    if not as_admin and hasattr(main_window, 'run_as_admin_checkbox'):
-        as_admin = main_window.run_as_admin_checkbox.isChecked()
+    # Column 11 is Hide Taskbar, handled below
+    # Columns 12-16 are profile paths, their CEN/LC indicators are handled above
+
+    main_window.editor_table.setCellWidget(row, 17, create_status_widget(main_window, just_after_launch_enabled, row, 17))
+    main_window.editor_table.setCellWidget(row, 18, create_status_widget(main_window, just_before_exit_enabled, row, 18))
     
-    if not no_tb and hasattr(main_window, 'hide_taskbar_checkbox'):
-        no_tb = main_window.hide_taskbar_checkbox.isChecked()
-    
+    main_window.editor_table.setCellWidget(row, 19, create_status_widget(main_window, pre1_enabled, row, 19))
+    # The text field for Pre1 (col 20) is set by the CEN/LC logic above
+
+    main_window.editor_table.setCellWidget(row, 21, create_status_widget(main_window, post1_enabled, row, 21))
+    # The text field for Post1 (col 22) is set by the CEN/LC logic above
+
+    main_window.editor_table.setCellWidget(row, 23, create_status_widget(main_window, pre2_enabled, row, 23))
+    # The text field for Pre2 (col 24) is set by the CEN/LC logic above
+
+    main_window.editor_table.setCellWidget(row, 25, create_status_widget(main_window, post2_enabled, row, 25))
+    # The text field for Post2 (col 26) is set by the CEN/LC logic above
+
+    main_window.editor_table.setCellWidget(row, 27, create_status_widget(main_window, pre3_enabled, row, 27))
+    # The text field for Pre3 (col 28) is set by the CEN/LC logic above
+
+    main_window.editor_table.setCellWidget(row, 29, create_status_widget(main_window, post3_enabled, row, 29))
+    # No text field for Post3 in the current editor_tab.py, so column 30 is not used for a text item.
+
     # Create AsAdmin checkbox
     as_admin_widget = create_status_widget(main_window, as_admin, row, 22)
     main_window.editor_table.setCellWidget(row, 22, as_admin_widget)
@@ -601,7 +481,6 @@ def add_executable_to_editor_table(main_window, include_checked=True, exec_name=
     # Create NoTB checkbox
     no_tb_widget = create_status_widget(main_window, no_tb, row, 23)
     main_window.editor_table.setCellWidget(row, 23, no_tb_widget)
-    
     # Update UI if requested
     if update_ui:
         QCoreApplication.processEvents()

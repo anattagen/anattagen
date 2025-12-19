@@ -12,6 +12,7 @@ import os
 import time
 import threading
 
+import requests
 # Import tab population functions
 from Python.setup_tab import SetupTab
 from Python.ui.deployment_tab import DeploymentTab
@@ -126,6 +127,16 @@ class SteamManager:
             self.main_window.statusBar().showMessage("Download already in progress", 3000)
             return
 
+        # Confirm overwrite if file exists
+        output_file = constants.STEAM_JSON_FILE
+        if os.path.exists(output_file):
+            reply = QMessageBox.question(self.main_window, "Confirm Overwrite",
+                                         f"The file 'steam.json' already exists. Are you sure you want to download and replace it?",
+                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                         QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.No:
+                return
+
         url = None
         repos_file = constants.REPOS_SET
         try:
@@ -144,12 +155,12 @@ class SteamManager:
         if not url:
             url = f"http://api.steampowered.com/ISteamApps/GetAppList/v{version}/?format=json"
 
-        output_file = constants.STEAM_JSON_FILE
         if os.path.exists(output_file):
             backup_file = output_file + ".old"
             if os.path.exists(backup_file):
                 os.remove(backup_file)
             shutil.copy2(output_file, backup_file)
+            logging.info(f"Backed up existing '{os.path.basename(output_file)}' to '{os.path.basename(backup_file)}'")
 
         # Disable UI elements during download
         self._disable_ui_during_download()
@@ -166,37 +177,46 @@ class SteamManager:
         """Download file with progress tracking."""
         self.is_downloading = True
         start_time = time.time()
-
+    
         try:
-            # Create a custom progress hook
-            def progress_hook(block_num, block_size, total_size):
-                if total_size > 0:
-                    downloaded = block_num * block_size
-                    percent = min(100, (downloaded * 100) / total_size)
-
-                    # Calculate speed and ETA
-                    elapsed_time = time.time() - start_time
-                    if elapsed_time > 0:
-                        speed = downloaded / elapsed_time  # bytes per second
-                        speed_mb = speed / (1024 * 1024)  # MB/s
-
-                        remaining = total_size - downloaded
-                        if speed > 0:
-                            eta_seconds = remaining / speed
-                            eta_str = self._format_eta(eta_seconds)
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            with requests.get(url, headers=headers, stream=True) as r:
+                r.raise_for_status()
+                total_size = int(r.headers.get('content-length', 0))
+                downloaded = 0
+                
+                with open(output_file, 'wb') as f:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            
+                            if total_size > 0:
+                                percent = min(100, (downloaded * 100) / total_size)
+                                elapsed_time = time.time() - start_time
+                                if elapsed_time > 0:
+                                    speed = downloaded / elapsed_time
+                                    speed_mb = speed / (1024 * 1024)
+                                    remaining = total_size - downloaded
+                                    eta_seconds = remaining / speed if speed > 0 else 0
+                                    eta_str = self._format_eta(eta_seconds)
+                                    progress_text = f"Downloading Steam JSON (v{version}): {percent:.1f}% | {speed_mb:.2f} MB/s | ETA: {eta_str}"
+                                else:
+                                    progress_text = f"Downloading Steam JSON (v{version}): {percent:.1f}%"
+                            else: # If no content-length, just show amount downloaded
+                                downloaded_mb = downloaded / (1024 * 1024)
+                                progress_text = f"Downloading Steam JSON (v{version}): {downloaded_mb:.2f} MB"
+                            
+                            QCoreApplication.postEvent(self.main_window, _StatusUpdateEvent(progress_text))
                         else:
-                            eta_str = "Unknown"
-
-                        progress_text = f"Downloading Steam JSON (v{version}): {percent:.1f}% | {speed_mb:.2f} MB/s | ETA: {eta_str}"
-                    else:
-                        progress_text = f"Downloading Steam JSON (v{version}): {percent:.1f}%"
-
-                    # Update status bar on main thread
-                    QCoreApplication.postEvent(self.main_window, _StatusUpdateEvent(progress_text))
-
-            # Download with progress hook
-            urllib.request.urlretrieve(url, output_file, progress_hook)
-
+                            # Handle case where chunk is empty
+                            break
+                        if self.main_window.isHidden(): # Check if window is closed
+                            logging.warning("Main window closed during download. Aborting.")
+                            raise Exception("Download aborted.")
+                            
             # Check if download was successful
             if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
                 QCoreApplication.postEvent(self.main_window, _StatusUpdateEvent(f"Steam JSON (v{version}) downloaded successfully", 5000))
@@ -206,7 +226,7 @@ class SteamManager:
             else:
                 QCoreApplication.postEvent(self.main_window, _StatusUpdateEvent(f"Failed to download Steam JSON (v{version})", 5000))
 
-        except urllib.error.URLError as e:
+        except requests.exceptions.RequestException as e:
             QCoreApplication.postEvent(self.main_window, _StatusUpdateEvent(f"Network error downloading Steam JSON: {str(e)}", 5000))
         except Exception as e:
             QCoreApplication.postEvent(self.main_window, _StatusUpdateEvent(f"Error downloading Steam JSON: {str(e)}", 5000))
@@ -230,35 +250,23 @@ class SteamManager:
 
     def _disable_ui_during_download(self):
         """Disable UI elements during download."""
-        # Disable tabs
-        for i in range(self.main_window.tabs.count()):
-            tab = self.main_window.tabs.widget(i)
-            tab.setEnabled(False)
-
-        # Disable specific buttons if they exist
-        if hasattr(self.main_window, 'process_steam_json_button'):
-            self.main_window.process_steam_json_button.setEnabled(False)
-        if hasattr(self.main_window, 'update_steam_json_button'):
-            self.main_window.update_steam_json_button.setEnabled(False)
+        # Disable the entire tab widget to prevent switching
+        self.main_window.tabs.setEnabled(False)
 
     def _enable_ui_after_download(self):
         """Re-enable UI elements after download."""
-        # Re-enable tabs
-        for i in range(self.main_window.tabs.count()):
-            tab = self.main_window.tabs.widget(i)
-            tab.setEnabled(True)
-
-        # Re-enable specific buttons if they exist
-        if hasattr(self.main_window, 'process_steam_json_button'):
-            self.main_window.process_steam_json_button.setEnabled(True)
-        if hasattr(self.main_window, 'update_steam_json_button'):
-            self.main_window.update_steam_json_button.setEnabled(True)
+        # Re-enable the tab widget
+        self.main_window.tabs.setEnabled(True)
 
     def prompt_and_process_steam_json(self, file_path=None):
         """Prompt the user to select a Steam JSON file and process it."""
         from Python.ui.steam_processor import SteamProcessor
+        
+        # Check if steam_processor exists, if not create it
         if not hasattr(self, 'steam_processor'):
             self.steam_processor = SteamProcessor(self.main_window, self.steam_cache_manager)
+        
+        # Now that we're sure it exists, use it
         if file_path:
             self.steam_processor.process_steam_json_file(file_path)
         else:
@@ -298,13 +306,7 @@ class MainWindow(QMainWindow):
         self.steam_manager = SteamManager(self)
         
         # Sync the UI to reflect the loaded configuration
-        self._sync_ui_from_config()
-        
-        # Initialize Steam cache manager
-        self.steam_cache_manager = SteamCacheManager(self)
-        
-        # Initialize the creation controller
-        self._setup_creation_controller()
+        self.sync_ui_from_config()
         
         # Show the window
         self.show()
@@ -498,8 +500,8 @@ class MainWindow(QMainWindow):
         # Update the model and save the configuration
         self.config.logging_verbosity = level_text
         config_manager.save_configuration(self.config)
-
-    def _sync_ui_from_config(self):
+        
+    def sync_ui_from_config(self):
         """Updates the UI widgets with values from the AppConfig model."""
         # Delegate syncing the setup tab to its own class
         self.setup_tab.sync_ui_from_config(self.config)
@@ -531,80 +533,6 @@ class MainWindow(QMainWindow):
         # Call create_all with the selected games
         result = self.creation_controller.create_all(selected_games)
         self.statusBar().showMessage(f"Creation process finished. Processed: {result['processed_count']}, Failed: {result['failed_count']}", 5000)
-
-    def _download_steam_json(self, version=2):
-        """Download the Steam JSON file"""
-        
-        # Get the URL from the repos.set file
-        url = None
-        try:            
-            if os.path.exists(constants.REPOS_SET):
-                with open(constants.REPOS_SET, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        if version == 1 and "STEAMJSON1" in line:
-                            url = line.split("=")[1].strip()
-                            break
-                        elif version == 2 and "STEAMJSON2" in line:
-                            url = line.split("=")[1].strip()
-                            break
-        except Exception as e:
-            pass
-        
-        if not url:
-            # Use default URLs if not found in repos.set
-            if version == 1:
-                url = "http://api.steampowered.com/ISteamApps/GetAppList/v1/?format=json"
-            else:
-                url = "http://api.steampowered.com/ISteamApps/GetAppList/v2/?format=json"
-        
-        # Create the output file path
-        output_file = constants.STEAM_JSON_FILE
-        
-        # If the file already exists, back it up
-        if os.path.exists(output_file):
-            backup_file = constants.STEAM_JSON_FILE + ".old"
-            try:
-                # Remove old backup if it exists
-                if os.path.exists(backup_file):
-                    os.remove(backup_file)
-                
-                # Create backup
-                shutil.copy2(output_file, backup_file)
-
-            except Exception as e:
-                pass
-        
-        # Show a message to the user
-        self.statusBar().showMessage(f"Downloading Steam JSON (v{version})...", 0)
-        
-        try:
-            # Download the file
-            urllib.request.urlretrieve(url, output_file)
-            
-            # Check if the file was downloaded successfully
-            if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
-                self.statusBar().showMessage(f"Steam JSON (v{version}) downloaded successfully", 5000)
-                
-                # Ask if the user wants to process the file now
-                reply = QMessageBox.question(
-                    self, 
-                    "Process Steam JSON", 
-                    "Steam JSON downloaded successfully. Do you want to process it now?",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                    QMessageBox.StandardButton.Yes
-                )
-                
-                if reply == QMessageBox.StandardButton.Yes:
-                    # Backup existing cache files before processing
-                    self._backup_steam_cache_files()
-                    
-                    # Process the file
-                    self._prompt_and_process_steam_json(output_file)
-            else:
-                self.statusBar().showMessage(f"Failed to download Steam JSON (v{version})", 5000)
-        except Exception as e:
-            self.statusBar().showMessage(f"Error downloading Steam JSON: {str(e)}", 5000)
-
 
     def _backup_steam_cache_files(self):
         """Backup Steam cache files before processing"""
@@ -640,90 +568,3 @@ class MainWindow(QMainWindow):
 
             except Exception as e:
                 pass
-
-
-    def _prompt_and_process_steam_json(self, file_path=None):
-        """Prompt the user to select a Steam JSON file and process it"""
-        from Python.ui.steam_processor import SteamProcessor
-        
-        # Create processor if needed
-        if not hasattr(self, 'steam_processor'):
-            self.steam_processor = SteamProcessor(self, self.steam_cache_manager)
-        
-        # Process Steam JSON
-        if file_path:
-            self.steam_processor.process_steam_json_file(file_path)
-        else:
-            self.steam_processor.prompt_and_process_steam_json()
-
-    def _delete_steam_cache(self):
-        """Delete the Steam cache files"""
-        # Get the cache file paths
-        from Python.ui.steam_cache import STEAM_FILTERED_TXT, NORMALIZED_INDEX_CACHE
-        filtered_cache_path = os.path.join(constants.APP_ROOT_DIR, STEAM_FILTERED_TXT)
-        normalized_index_path = os.path.join(constants.APP_ROOT_DIR, NORMALIZED_INDEX_CACHE)
-        
-        # Ask for confirmation
-        reply = QMessageBox.question(
-            self, 
-            "Delete Steam Cache", 
-            "Are you sure you want to delete the Steam cache files?\n\n"
-            f"This will delete:\n- {STEAM_FILTERED_TXT}\n- {NORMALIZED_INDEX_CACHE}",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-        
-        if reply == QMessageBox.StandardButton.Yes:
-            # Delete the files
-            files_deleted = 0
-            
-            if os.path.exists(filtered_cache_path):
-                try:
-                    os.remove(filtered_cache_path)
-                    files_deleted += 1
-
-                except Exception as e:
-                    pass
-            
-            if os.path.exists(normalized_index_path):
-                try:
-                    os.remove(normalized_index_path)
-                    files_deleted += 1
-
-                except Exception as e:
-                    pass
-            
-            # Reset the cache in memory
-            if hasattr(self, 'steam_cache_manager'):
-                self.steam_cache_manager.reset_steam_caches()
-            
-            # Show a message
-            self.statusBar().showMessage(f"Deleted {files_deleted} Steam cache files", 5000)
-
-    def _delete_steam_json(self):
-        """Delete the Steam JSON file"""
-        # Get the JSON file path
-        json_file_path = constants.STEAM_JSON_FILE
-        
-        # Ask for confirmation
-        reply = QMessageBox.question(
-            self, 
-            "Delete Steam JSON", 
-            "Are you sure you want to delete the Steam JSON file?\n\n"
-            "This will delete:\n- steam.json",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-        
-        if reply == QMessageBox.StandardButton.Yes:
-            # Delete the file
-            if os.path.exists(json_file_path):
-                try:
-                    os.remove(json_file_path)
-
-                    self.statusBar().showMessage("Steam JSON file deleted", 5000)
-                except Exception as e:
-                    self.statusBar().showMessage(f"Error deleting Steam JSON: {str(e)}", 5000)
-
-            else:
-                self.statusBar().showMessage("Steam JSON file not found", 5000)

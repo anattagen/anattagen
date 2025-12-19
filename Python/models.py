@@ -50,3 +50,9 @@ class AppConfig:
 
         # Other settings not directly on UI
         self.app_directory = ""
+
+        # Default enabled states for various features
+        self.defaults = {}
+
+        # Default run-wait states for various features
+        self.run_wait_states = {}

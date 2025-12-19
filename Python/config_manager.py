@@ -1,5 +1,6 @@
 import configparser
 import os
+from PyQt6.QtWidgets import QFileDialog, QComboBox, QCheckBox, QLineEdit
 import logging
 from Python.models import AppConfig
 from Python import constants
@@ -74,6 +75,16 @@ def load_configuration(config_model: AppConfig):
             config_model.create_overwrite_launcher = config.getboolean("Deployment", "CreateOverwriteLauncher", fallback=False)
             config_model.create_overwrite_joystick_profiles = config.getboolean("Deployment", "CreateOverwriteJoystickProfiles", fallback=False)
 
+        # --- Default Enabled States ---
+        if config.has_section("DefaultEnabledStates"):
+            for key, value in config.items("DefaultEnabledStates"):
+                config_model.defaults[key] = value.lower() in ('true', '1', 'yes', 'on')
+
+        # --- Default Run-Wait States ---
+        if config.has_section("DefaultRunWaitStates"):
+            for key, value in config.items("DefaultRunWaitStates"):
+                config_model.run_wait_states[key] = value.lower() in ('true', '1', 'yes', 'on')
+
     except Exception as e:
         logging.error(f"Error reading configuration file '{CONFIG_FILE}': {e}")
 
@@ -127,6 +138,16 @@ def save_configuration(config_model: AppConfig):
     config.set("Deployment", "CreateProfileFolders", str(config_model.create_profile_folders))
     config.set("Deployment", "CreateOverwriteLauncher", str(config_model.create_overwrite_launcher))
     config.set("Deployment", "CreateOverwriteJoystickProfiles", str(config_model.create_overwrite_joystick_profiles))
+
+    # --- Default Enabled States ---
+    config.add_section("DefaultEnabledStates")
+    for key, value in config_model.defaults.items():
+        config.set("DefaultEnabledStates", key, str(value))
+
+    # --- Default Run-Wait States ---
+    config.add_section("DefaultRunWaitStates")
+    for key, value in config_model.run_wait_states.items():
+        config.set("DefaultRunWaitStates", key, str(value))
 
     try:
         with open(CONFIG_FILE, 'w', encoding='utf-8') as configfile:

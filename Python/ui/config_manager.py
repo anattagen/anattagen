@@ -33,7 +33,6 @@ def gather_current_configuration(main_window) -> configparser.ConfigParser:
     config["Current Settings"] = {}
     config["Element Locations"] = {}
     config["App Locations"] = {}
-    config["Deployment Options"] = {}  # Section for deployment options
     
     # Get the app's root directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -50,17 +49,6 @@ def gather_current_configuration(main_window) -> configparser.ConfigParser:
     config["Current Settings"]["game_managers_present"] = main_window.other_managers_combo.currentText()
     config["Current Settings"]["exclude_selected_manager_games"] = str(main_window.exclude_manager_checkbox.isChecked())
     config["Current Settings"]["logging_verbosity"] = main_window.logging_verbosity_combo.currentText()
-
-    # --- Save CEN/LC options ---
-    # Check if deployment_path_options exists
-    if hasattr(main_window, 'deployment_path_options'):
-
-        for path_key, radio_group in main_window.deployment_path_options.items():
-            checked_button = radio_group.checkedButton()
-            if checked_button:
-                mode = checked_button.text()
-
-                config["Deployment Options"][f"{path_key}_mode"] = mode
 
     # --- Element Locations ---
     if hasattr(main_window, 'profiles_dir_edit'):
@@ -306,6 +294,13 @@ def load_configuration(main_window, config_path=None):
                     if button.text() == mode:
                         button.setChecked(True)
                         break
+        
+        # Load Default Enabled States
+        if "Default Enabled States" in config and hasattr(main_window, 'default_enabled_checkboxes'):
+            des = config["Default Enabled States"]
+            for key, checkbox in main_window.default_enabled_checkboxes.items():
+                enabled_key = f"{key}_enabled"
+                checkbox.setChecked(get_bool("Default Enabled States", enabled_key, True))
 
         # --- Element Locations ---
         if "Element Locations" in config:

@@ -1,21 +1,14 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QGroupBox, QLabel, QLineEdit, QFormLayout,
-    QPushButton, QComboBox, QListWidget, QAbstractItemView, QHBoxLayout,
+    QPushButton, QComboBox, QListWidget, QAbstractItemView, QHBoxLayout, QCheckBox,
     QRadioButton, QFileDialog, QButtonGroup
 )
 from PyQt6.QtCore import pyqtSignal
 from Python.models import AppConfig
+from Python.ui.name_utils import to_snake_case
 from Python.ui.widgets import DragDropListWidget
 from Python.ui.accordion import AccordionSection
 import os
-import re
-
-def to_snake_case(name):
-    """Convert a string to snake_case format"""
-    name = re.sub(r'[^\w\s-]', '', name)
-    name = re.sub(r'[\s-]+(?=[\w])', '_', name.strip()).lower()
-    name = re.sub(r'\W', '', name)
-    return name
 
 class SetupTab(QWidget):
     """A QWidget that encapsulates all UI and logic for the Setup tab."""
@@ -25,9 +18,11 @@ class SetupTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.deployment_path_options = {}
+        self.default_enabled_checkboxes = {}
+        self.default_run_wait_checkboxes = {}
         self._setup_ui()
 
-    def _create_path_row_with_cen_lc(self, label_text, line_edit_attr, is_directory=False):
+    def _create_path_row_with_cen_lc(self, label_text, line_edit_attr, is_directory=False, add_enabled=True, add_run_wait=False):
         """Helper to create a path row with CEN/LC radio buttons."""
         line_edit = QLineEdit()
         browse_button = QPushButton("Browse...")
@@ -41,17 +36,39 @@ class SetupTab(QWidget):
         button_group.addButton(lc_radio)
 
         field_layout = QHBoxLayout()
+
+        # 'Enabled' checkbox
+        if add_enabled:
+            enabled_checkbox = QCheckBox()
+            enabled_checkbox.setChecked(True)
+            field_layout.addWidget(enabled_checkbox)
+            snake_case_key = to_snake_case(label_text.replace(":", ""))
+            self.default_enabled_checkboxes[snake_case_key] = enabled_checkbox
+        else:
+            # Add a spacer to keep alignment consistent
+            spacer = QWidget()
+            spacer.setFixedWidth(20) # Approx width of a checkbox
+            field_layout.addWidget(spacer)
+
         field_layout.addWidget(line_edit)
         field_layout.addWidget(browse_button)
         field_layout.addWidget(cen_radio)
         field_layout.addWidget(lc_radio)
+
+        # 'Run-Wait' checkbox
+        if add_run_wait:
+            run_wait_checkbox = QCheckBox("Wait")
+            field_layout.addWidget(run_wait_checkbox)
+            snake_case_key = to_snake_case(label_text.replace(":", ""))
+            self.default_run_wait_checkboxes[snake_case_key] = run_wait_checkbox
 
         if is_directory:
             browse_button.clicked.connect(lambda checked, le=line_edit: self._browse_for_directory(le))
         else:
             browse_button.clicked.connect(lambda checked, le=line_edit: self._browse_for_file(le))
 
-        self.deployment_path_options[to_snake_case(label_text.replace(":", ""))] = button_group
+        snake_case_key = to_snake_case(label_text.replace(":", ""))
+        self.deployment_path_options[snake_case_key] = button_group
         return field_layout
 
     def _setup_ui(self):
@@ -74,11 +91,11 @@ class SetupTab(QWidget):
         main_settings_layout.addRow("", source_buttons_layout)
 
         # Profiles Directory with CEN/LC
-        profiles_layout = self._create_path_row_with_cen_lc("Profiles Directory:", "profiles_dir_edit", is_directory=True)
+        profiles_layout = self._create_path_row_with_cen_lc("Profiles Directory:", "profiles_dir_edit", is_directory=True, add_enabled=False)
         main_settings_layout.addRow("Profiles Directory:", profiles_layout)
 
         # Launchers Directory with CEN/LC
-        launchers_layout = self._create_path_row_with_cen_lc("Launchers Directory:", "launchers_dir_edit", is_directory=True)
+        launchers_layout = self._create_path_row_with_cen_lc("Launchers Directory:", "launchers_dir_edit", is_directory=True, add_enabled=False)
         main_settings_layout.addRow("Launchers Directory:", launchers_layout)
 
         # Logging Verbosity
@@ -93,30 +110,30 @@ class SetupTab(QWidget):
         paths_layout = QFormLayout()
 
         # Application paths
-        paths_layout.addRow("Controller Mapper:", self._create_path_row_with_cen_lc("Controller Mapper:", "controller_mapper_app_edit"))
-        paths_layout.addRow("Borderless Windowing:", self._create_path_row_with_cen_lc("Borderless Windowing:", "borderless_app_edit"))
-        paths_layout.addRow("Multi-Monitor App:", self._create_path_row_with_cen_lc("Multi-Monitor App:", "multimonitor_app_edit"))
+        paths_layout.addRow("Controller Mapper:", self._create_path_row_with_cen_lc("Controller Mapper:", "controller_mapper_app_edit", add_run_wait=True))
+        paths_layout.addRow("Borderless Windowing:", self._create_path_row_with_cen_lc("Borderless Windowing:", "borderless_app_edit", add_run_wait=True))
+        paths_layout.addRow("Multi-Monitor App:", self._create_path_row_with_cen_lc("Multi-Monitor App:", "multimonitor_app_edit", add_run_wait=True))
         
         # Profile paths
-        paths_layout.addRow("P1 Profile:", self._create_path_row_with_cen_lc("P1 Profile:", "p1_profile_edit"))
-        paths_layout.addRow("P2 Profile:", self._create_path_row_with_cen_lc("P2 Profile:", "p2_profile_edit"))
-        paths_layout.addRow("Mediacenter Profile:", self._create_path_row_with_cen_lc("Mediacenter Profile:", "mediacenter_profile_edit"))
-        paths_layout.addRow("MM Gaming Config:", self._create_path_row_with_cen_lc("MM Gaming Config:", "multimonitor_gaming_config_edit"))
-        paths_layout.addRow("MM Media Config:", self._create_path_row_with_cen_lc("MM Media Config:", "multimonitor_media_config_edit"))
+        paths_layout.addRow("P1 Profile:", self._create_path_row_with_cen_lc("P1 Profile:", "p1_profile_edit", add_enabled=False))
+        paths_layout.addRow("P2 Profile:", self._create_path_row_with_cen_lc("P2 Profile:", "p2_profile_edit", add_enabled=False))
+        paths_layout.addRow("Mediacenter Profile:", self._create_path_row_with_cen_lc("Mediacenter Profile:", "mediacenter_profile_edit", add_enabled=False))
+        paths_layout.addRow("MM Gaming Config:", self._create_path_row_with_cen_lc("MM Gaming Config:", "multimonitor_gaming_config_edit", add_enabled=False))
+        paths_layout.addRow("MM Media Config:", self._create_path_row_with_cen_lc("MM Media Config:", "multimonitor_media_config_edit", add_enabled=False))
 
         # Pre-launch apps
-        paths_layout.addRow("Pre 1:", self._create_path_row_with_cen_lc("Pre 1:", "pre1_edit"))
-        paths_layout.addRow("Pre 2:", self._create_path_row_with_cen_lc("Pre 2:", "pre2_edit"))
-        paths_layout.addRow("Pre 3:", self._create_path_row_with_cen_lc("Pre 3:", "pre3_edit"))
+        paths_layout.addRow("Pre 1:", self._create_path_row_with_cen_lc("Pre 1:", "pre1_edit", add_run_wait=True))
+        paths_layout.addRow("Pre 2:", self._create_path_row_with_cen_lc("Pre 2:", "pre2_edit", add_run_wait=True))
+        paths_layout.addRow("Pre 3:", self._create_path_row_with_cen_lc("Pre 3:", "pre3_edit", add_run_wait=True))
 
         # Post-launch apps
-        paths_layout.addRow("Post 1:", self._create_path_row_with_cen_lc("Post 1:", "post1_edit"))
-        paths_layout.addRow("Post 2:", self._create_path_row_with_cen_lc("Post 2:", "post2_edit"))
-        paths_layout.addRow("Post 3:", self._create_path_row_with_cen_lc("Post 3:", "post3_edit"))
+        paths_layout.addRow("Post 1:", self._create_path_row_with_cen_lc("Post 1:", "post1_edit", add_run_wait=True))
+        paths_layout.addRow("Post 2:", self._create_path_row_with_cen_lc("Post 2:", "post2_edit", add_run_wait=True))
+        paths_layout.addRow("Post 3:", self._create_path_row_with_cen_lc("Post 3:", "post3_edit", add_run_wait=True))
 
         # Just Before/After apps
-        paths_layout.addRow("Just After Launch:", self._create_path_row_with_cen_lc("Just After Launch:", "just_after_launch_edit"))
-        paths_layout.addRow("Just Before Exit:", self._create_path_row_with_cen_lc("Just Before Exit:", "just_before_exit_edit"))
+        paths_layout.addRow("Just After Launch:", self._create_path_row_with_cen_lc("Just After Launch:", "just_after_launch_edit", add_run_wait=True))
+        paths_layout.addRow("Just Before Exit:", self._create_path_row_with_cen_lc("Just Before Exit:", "just_before_exit_edit", add_run_wait=True))
 
         paths_group.setLayout(paths_layout)
 
@@ -178,6 +195,14 @@ class SetupTab(QWidget):
         # CEN/LC radio buttons
         for group in self.deployment_path_options.values():
             group.buttonClicked.connect(self.config_changed.emit)
+
+        # Default enabled checkboxes
+        for checkbox in self.default_enabled_checkboxes.values():
+            checkbox.stateChanged.connect(self.config_changed.emit)
+
+        # Default run-wait checkboxes
+        for checkbox in self.default_run_wait_checkboxes.values():
+            checkbox.stateChanged.connect(self.config_changed.emit)
 
         # Sequences
         self.launch_sequence_list.model().rowsMoved.connect(self.config_changed.emit)
@@ -254,6 +279,16 @@ class SetupTab(QWidget):
                 if button.text() == mode:
                     button.setChecked(True)
                     break
+        
+        for key, checkbox in self.default_enabled_checkboxes.items():
+            # The key for AppConfig.defaults is like 'controller_mapper_enabled'
+            enabled_key = f"{key}_enabled"
+            checkbox.setChecked(config.defaults.get(enabled_key, True))
+
+        for key, checkbox in self.default_run_wait_checkboxes.items():
+            # The key for AppConfig.run_wait_states is like 'controller_mapper_run_wait'
+            run_wait_key = f"{key}_run_wait"
+            checkbox.setChecked(config.run_wait_states.get(run_wait_key, False))
 
         self.launch_sequence_list.clear()
         self.launch_sequence_list.addItems(config.launch_sequence if config.launch_sequence else 
@@ -291,6 +326,14 @@ class SetupTab(QWidget):
             checked_button = group.checkedButton()
             if checked_button:
                 config.deployment_path_modes[key] = checked_button.text()
+
+        for key, checkbox in self.default_enabled_checkboxes.items():
+            enabled_key = f"{key}_enabled"
+            config.defaults[enabled_key] = checkbox.isChecked()
+
+        for key, checkbox in self.default_run_wait_checkboxes.items():
+            run_wait_key = f"{key}_run_wait"
+            config.run_wait_states[run_wait_key] = checkbox.isChecked()
 
         config.launch_sequence = [self.launch_sequence_list.item(i).text() for i in range(self.launch_sequence_list.count())]
         config.exit_sequence = [self.exit_sequence_list.item(i).text() for i in range(self.exit_sequence_list.count())]
