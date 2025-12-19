@@ -1,0 +1,54 @@
+[Current Settings]
+app_directory =
+source_directories = 
+exclude_items = 
+game_managers_present = 
+exclude_selected_manager_games = 
+logging_verbosity = 
+deployment_net_check = 
+deployment_name_check = 
+deployment_write_override =
+deployment_create_profile_folders = 
+deployment_use_kill_list = 
+deployment_run_as_admin = 
+deployment_hide_taskbar = 
+deployment_enable_launcher = 
+deployment_apply_mapper_profiles = 
+deployment_enable_borderless_windowing = 
+deployment_terminate_borderless_on_exit = 
+
+[Element Locations]
+profiles_directory = 
+launchers_directory = 
+player_1_profile_file = 
+player_2_profile_file = 
+mediacenter_desktop_profile_file = 
+multimonitor_gaming_config_file = 
+multimonitor_media_desktop_config_file = 
+steam_json_path = 
+filtered_steam_cache_path = 
+
+[Sequences]
+launchsequence = Controller-Mapper,Monitor-Config,No-TB,Pre1,Pre2,Pre3,Borderless
+exitsequence = Post1,Post2,Post3,Monitor-Config,Taskbar,Controller-Mapper
+
+[App Locations]
+controller_mapper_app = 
+borderless_windowing_app = 
+multi_monitor_app = 
+pre_launch_app_1 = 
+pre_launch_app_2 = 
+pre_launch_app_3 = 
+post_launch_app_1 = 
+post_launch_app_2 = 
+post_launch_app_3 = 
+just_after_launch_app = 
+just_before_exit_app = 
+just_after_launch_app_run_wait = 
+just_before_exit_app_run_wait = 
+pre_launch_app_1_run_wait = 
+pre_launch_app_2_run_wait = 
+pre_launch_app_3_run_wait = 
+post_launch_app_1_run_wait = 
+post_launch_app_2_run_wait = 
+post_launch_app_3_run_wait = 
