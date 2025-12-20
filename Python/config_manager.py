@@ -76,14 +76,44 @@ def load_configuration(config_model: AppConfig):
             config_model.create_overwrite_joystick_profiles = config.getboolean("Deployment", "CreateOverwriteJoystickProfiles", fallback=False)
 
         # --- Default Enabled States ---
-        if config.has_section("DefaultEnabledStates"):
+        if config.has_section("DefaultEnabledStates") and config.options("DefaultEnabledStates"):
             for key, value in config.items("DefaultEnabledStates"):
                 config_model.defaults[key] = value.lower() in ('true', '1', 'yes', 'on')
+        else:
+            # Set default enabled states if section doesn't exist or is empty
+            config_model.defaults = {
+                'controller_mapper_enabled': True,
+                'borderless_windowing_enabled': True,
+                'multi_monitor_app_enabled': True,
+                'just_after_launch_enabled': True,
+                'just_before_exit_enabled': True,
+                'pre_1_enabled': True,
+                'post_1_enabled': True,
+                'pre_2_enabled': True,
+                'post_2_enabled': True,
+                'pre_3_enabled': True,
+                'post_3_enabled': True,
+            }
 
         # --- Default Run-Wait States ---
-        if config.has_section("DefaultRunWaitStates"):
+        if config.has_section("DefaultRunWaitStates") and config.options("DefaultRunWaitStates"):
             for key, value in config.items("DefaultRunWaitStates"):
                 config_model.run_wait_states[key] = value.lower() in ('true', '1', 'yes', 'on')
+        else:
+            # Set default run-wait states if section doesn't exist or is empty
+            config_model.run_wait_states = {
+                'controller_mapper_run_wait': True,
+                'borderless_windowing_run_wait': True,
+                'multi_monitor_app_run_wait': True,
+                'just_after_launch_run_wait': False,
+                'just_before_exit_run_wait': True,
+                'pre_1_run_wait': True,
+                'post_1_run_wait': True,
+                'pre_2_run_wait': True,
+                'post_2_run_wait': True,
+                'pre_3_run_wait': True,
+                'post_3_run_wait': True,
+            }
 
     except Exception as e:
         logging.error(f"Error reading configuration file '{CONFIG_FILE}': {e}")

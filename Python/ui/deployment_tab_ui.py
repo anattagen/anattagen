@@ -44,17 +44,17 @@ def populate_deployment_tab(main_window):
     
     # Add actions for downloading different versions of steam.json
     download_v1_action = steam_db_menu.addAction("Download steam.json (v1)")
-    download_v1_action.triggered.connect(lambda: main_window._download_steam_json(version=1))
+    download_v1_action.triggered.connect(lambda: main_window.steam_manager.download_steam_json(1))
     
     download_v2_action = steam_db_menu.addAction("Download steam.json (v2)")
-    download_v2_action.triggered.connect(lambda: main_window._download_steam_json(version=2))
+    download_v2_action.triggered.connect(lambda: main_window.steam_manager.download_steam_json(2))
     
     steam_db_menu.addSeparator()
     
     delete_json_action = steam_db_menu.addAction("Delete steam.json")
-    delete_json_action.triggered.connect(main_window._delete_steam_json)
+    delete_json_action.triggered.connect(main_window.steam_manager.delete_steam_json)
     delete_cache_action = steam_db_menu.addAction("Delete Steam Caches")
-    delete_cache_action.triggered.connect(main_window._delete_steam_cache)
+    delete_cache_action.triggered.connect(main_window.steam_cache_manager.delete_cache_files)
     # Set the menu for the button
     steam_db_button.setMenu(steam_db_menu)
     

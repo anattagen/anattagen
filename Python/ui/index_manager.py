@@ -10,6 +10,7 @@ SAFE_PIPE_CHAR = ""  # U+2502
 
 
 def save_index(main_window, directory, data):
+    from Python import constants
     default_path = os.path.join(directory, INDEX_FILENAME)
     file_path = default_path
     
@@ -34,8 +35,12 @@ def save_index(main_window, directory, data):
                     
                     # Create a list of values
                     row_values = []
+                    # Define path columns using EditorCols constants
+                    path_columns = {constants.EditorCols.PLAYER1_PROFILE.value, constants.EditorCols.PLAYER2_PROFILE.value,
+                                    constants.EditorCols.MEDIACENTER_PROFILE.value, constants.EditorCols.MM_GAME_PROFILE.value,
+                                    constants.EditorCols.MM_DESKTOP_PROFILE.value}
                     for i, field in enumerate(fields):
-                        if 8 <= i <= 20:  # Path fields (columns 8-20)
+                        if i in path_columns:  # Path fields (using EditorCols mapping)
                             # Use the indicator from path_indicators if available
                             col = i
                             indicator = path_indicators.get(f"col_{col}_indicator", "<")  # Default to CEN
@@ -124,6 +129,7 @@ def load_index(main_window=None, directory=None, prompt_for_filename=False):
                         parts = [p.replace(SAFE_PIPE_CHAR, PIPE_CHAR) if SAFE_PIPE_CHAR else p for p in parts]
                         
                         # Define field names to match save_index
+                        from Python import constants
                         fields = ["include", "executable", "directory", "steam_title", 
                                   "name_override", "options", "arguments", "steam_id",
                                   "p1_profile", "p2_profile", "desktop_ctrl", 
@@ -136,12 +142,16 @@ def load_index(main_window=None, directory=None, prompt_for_filename=False):
                         # Create a dictionary for this row
                         row_dict = {}
                         path_indicators = {}
+                        # Define path columns using EditorCols constants
+                        path_columns = {constants.EditorCols.PLAYER1_PROFILE.value, constants.EditorCols.PLAYER2_PROFILE.value,
+                                        constants.EditorCols.MEDIACENTER_PROFILE.value, constants.EditorCols.MM_GAME_PROFILE.value,
+                                        constants.EditorCols.MM_DESKTOP_PROFILE.value}
                         
                         # Fill in values from parts
                         for i, field in enumerate(fields):
                             if i < len(parts):
-                                # For path fields (columns 8-20), extract the indicator
-                                if 8 <= i <= 20:
+                                # For path fields (using EditorCols mapping), extract the indicator
+                                if i in path_columns:
                                     path_indicators[f"col_{i}_indicator"] = parts[i]
                                     row_dict[field] = "" # Value is stored separately or derived
                                 else:

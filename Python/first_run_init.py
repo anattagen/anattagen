@@ -362,7 +362,69 @@ def run_first_time_setup(config: AppConfig):
     # 6. Set default sequences
     config.launch_sequence = ["Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Pre2", "Pre3", "Borderless"]
     config.exit_sequence = ["Post1", "Post2", "Post3", "Monitor-Config", "Taskbar", "Controller-Mapper"]
-    
+
+    # 7. Set default enabled states
+    config.defaults = {
+        'controller_mapper_enabled': True,
+        'borderless_windowing_enabled': True,
+        'multi_monitor_app_enabled': True,
+        'just_after_launch_enabled': True,
+        'just_before_exit_enabled': True,
+        'pre_1_enabled': True,
+        'post_1_enabled': True,
+        'pre_2_enabled': True,
+        'post_2_enabled': True,
+        'pre_3_enabled': True,
+        'post_3_enabled': True,
+    }
+
+    # 8. Set default run-wait states (all True except just_after_launch)
+    config.run_wait_states = {
+        'controller_mapper_run_wait': True,
+        'borderless_windowing_run_wait': True,
+        'multi_monitor_app_run_wait': True,
+        'just_after_launch_run_wait': False,
+        'just_before_exit_run_wait': True,
+        'pre_1_run_wait': True,
+        'post_1_run_wait': True,
+        'pre_2_run_wait': True,
+        'post_2_run_wait': True,
+        'pre_3_run_wait': True,
+        'post_3_run_wait': True,
+    }
+
+    # 9. Set default propagation modes (CEN/LC)
+    config.deployment_path_modes = {
+        'profiles_directory': 'CEN',
+        'launchers_directory': 'CEN',
+        'controller_mapper': 'CEN',
+        'borderless_windowing': 'CEN',
+        'multi_monitor_app': 'CEN',
+        'p1_profile': 'CEN',
+        'p2_profile': 'CEN',
+        'mediacenter_profile': 'CEN',
+        'mm_gaming_config': 'CEN',
+        'mm_media_config': 'CEN',
+        'pre_1': 'CEN',
+        'pre_2': 'CEN',
+        'pre_3': 'CEN',
+        'post_1': 'CEN',
+        'post_2': 'CEN',
+        'post_3': 'CEN',
+        'just_after_launch': 'CEN',
+        'just_before_exit': 'CEN',
+    }
+
+    # 10. Set default deployment tab options (all enabled except Hide Taskbar)
+    config.net_check = True
+    config.hide_taskbar = False  # Exception: Hide Taskbar should be disabled by default
+    config.run_as_admin = True
+    config.enable_name_matching = True
+    config.steam_json_version = 2  # Default to v2
+    config.create_profile_folders = True
+    config.create_overwrite_launcher = True
+    config.create_overwrite_joystick_profiles = True
+
     logging.info("First-time setup complete.")
 
 

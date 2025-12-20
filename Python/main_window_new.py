@@ -301,10 +301,6 @@ class MainWindow(QMainWindow):
         # Load configuration into the data model
         config_manager.load_configuration(self.config)
         
-        # Initialize managers
-        self.data_manager = DataManager(self)
-        self.steam_manager = SteamManager(self)
-        
         # Sync the UI to reflect the loaded configuration
         self.sync_ui_from_config()
         

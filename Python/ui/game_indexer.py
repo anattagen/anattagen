@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
 from Python.ui.name_processor import NameProcessor
 from Python.ui.name_utils import normalize_name_for_matching, make_safe_filename, to_snake_case
 from Python.ui.steam_utils import locate_and_exclude_manager_config
+from Python import constants
 
 def index_games(main_window, enable_name_matching=False):
     """
@@ -378,8 +379,8 @@ def add_executable_to_editor_table(main_window, include_checked=True, exec_name=
     main_window.editor_table.insertRow(row)
     
     # Create include checkbox
-    include_widget = create_status_widget(main_window, include_checked, row, 0)
-    main_window.editor_table.setCellWidget(row, 0, include_widget)
+    include_widget = create_status_widget(main_window, include_checked, row, constants.EditorCols.INCLUDE.value)
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.INCLUDE.value, include_widget)
 
     # Retrieve global default enabled states from AppConfig
     config_defaults = main_window.config.defaults
@@ -387,100 +388,113 @@ def add_executable_to_editor_table(main_window, include_checked=True, exec_name=
     no_tb = main_window.config.hide_taskbar # From Deployment tab
     
     # Set text items
-    main_window.editor_table.setItem(row, 1, QTableWidgetItem(exec_name))
-    main_window.editor_table.setItem(row, 2, QTableWidgetItem(directory))
-    main_window.editor_table.setItem(row, 3, QTableWidgetItem(steam_name))
-    main_window.editor_table.setItem(row, 4, QTableWidgetItem(name_override))
-    main_window.editor_table.setItem(row, 5, QTableWidgetItem(options))
-    main_window.editor_table.setItem(row, 6, QTableWidgetItem(arguments))
-    main_window.editor_table.setItem(row, 7, QTableWidgetItem(steam_id))
+    main_window.editor_table.setItem(row, constants.EditorCols.NAME.value, QTableWidgetItem(exec_name))
+    main_window.editor_table.setItem(row, constants.EditorCols.DIRECTORY.value, QTableWidgetItem(directory))
+    main_window.editor_table.setItem(row, constants.EditorCols.STEAMID.value, QTableWidgetItem(steam_name))
+    main_window.editor_table.setItem(row, constants.EditorCols.NAME_OVERRIDE.value, QTableWidgetItem(name_override))
+    main_window.editor_table.setItem(row, constants.EditorCols.OPTIONS.value, QTableWidgetItem(options))
+    main_window.editor_table.setItem(row, constants.EditorCols.ARGUMENTS.value, QTableWidgetItem(arguments))
+    # steam_id field placed in STEAMID column; additional IDs stored in name/override as needed
     
-    # Get deployment tab settings to populate path fields with CEN/LC indicators
-    # These columns correspond to path fields in the Setup Tab.
-    path_columns = {
-        # These keys match the `line_edit_attr` from `_create_path_row_with_cen_lc` in setup_tab.py
-        12: "multimonitor_gaming_config_edit",
-        13: "multimonitor_media_config_edit",
-        14: "p1_profile_edit",
-        15: "p2_profile_edit",
-        16: "mediacenter_profile_edit",
-        20: "pre1_edit",
-        22: "post1_edit",
-        24: "pre2_edit",
-        26: "post2_edit",
-        28: "pre3_edit",
-    }
-    
-    # Check if deployment_path_options exists
-    if hasattr(main_window, 'deployment_path_options'):
-        for col, path_key in path_columns.items():
-            snake_case_key = to_snake_case(path_key.replace("_edit", "").replace("_app", ""))
+    # Populate path text fields from current setup config so they are editable in the table
+    # Controller Mapper path
+    main_window.editor_table.setItem(row, constants.EditorCols.CM_PATH.value, QTableWidgetItem(getattr(main_window.config, 'controller_mapper_path', '')))
+    # Borderless Windowing path
+    main_window.editor_table.setItem(row, constants.EditorCols.BW_PATH.value, QTableWidgetItem(getattr(main_window.config, 'borderless_gaming_path', '')))
+    # Multi-monitor App path
+    main_window.editor_table.setItem(row, constants.EditorCols.MM_PATH.value, QTableWidgetItem(getattr(main_window.config, 'multi_monitor_tool_path', '')))
 
-            # Default to CEN
-            indicator = "<"
-            
-            # Check if we have a radio group for this path
-            if snake_case_key in main_window.deployment_path_options:
-                radio_group = main_window.deployment_path_options[snake_case_key]
-                checked_button = radio_group.checkedButton()
-                if checked_button and checked_button.text() == "LC":
-                    indicator = ">"
+    # Profile and MM config paths
+    main_window.editor_table.setItem(row, constants.EditorCols.MM_GAME_PROFILE.value, QTableWidgetItem(getattr(main_window.config, 'multimonitor_gaming_path', '')))
+    main_window.editor_table.setItem(row, constants.EditorCols.MM_DESKTOP_PROFILE.value, QTableWidgetItem(getattr(main_window.config, 'multimonitor_media_path', '')))
+    main_window.editor_table.setItem(row, constants.EditorCols.PLAYER1_PROFILE.value, QTableWidgetItem(getattr(main_window.config, 'p1_profile_path', '')))
+    main_window.editor_table.setItem(row, constants.EditorCols.PLAYER2_PROFILE.value, QTableWidgetItem(getattr(main_window.config, 'p2_profile_path', '')))
+    main_window.editor_table.setItem(row, constants.EditorCols.MEDIACENTER_PROFILE.value, QTableWidgetItem(getattr(main_window.config, 'mediacenter_profile_path', '')))
 
-            main_window.editor_table.setItem(row, col, QTableWidgetItem(indicator))
-    else:
-        # If no deployment_path_options, default all to CEN
-        for col in path_columns.keys():
-            main_window.editor_table.setItem(row, col, QTableWidgetItem("<"))
+    # Just After/Before paths
+    main_window.editor_table.setItem(row, constants.EditorCols.JA_PATH.value, QTableWidgetItem(getattr(main_window.config, 'just_after_launch_path', '')))
+    main_window.editor_table.setItem(row, constants.EditorCols.JB_PATH.value, QTableWidgetItem(getattr(main_window.config, 'just_before_exit_path', '')))
+
+    # Pre/Post default paths
+    main_window.editor_table.setItem(row, constants.EditorCols.PRE1_PATH.value, QTableWidgetItem(getattr(main_window.config, 'pre1_path', '')))
+    main_window.editor_table.setItem(row, constants.EditorCols.POST1_PATH.value, QTableWidgetItem(getattr(main_window.config, 'post1_path', '')))
+    main_window.editor_table.setItem(row, constants.EditorCols.PRE2_PATH.value, QTableWidgetItem(getattr(main_window.config, 'pre2_path', '')))
+    main_window.editor_table.setItem(row, constants.EditorCols.POST2_PATH.value, QTableWidgetItem(getattr(main_window.config, 'post2_path', '')))
+    main_window.editor_table.setItem(row, constants.EditorCols.PRE3_PATH.value, QTableWidgetItem(getattr(main_window.config, 'pre3_path', '')))
+    main_window.editor_table.setItem(row, constants.EditorCols.POST3_PATH.value, QTableWidgetItem(getattr(main_window.config, 'post3_path', '')))
     
-    # Retrieve default enabled states for specific features from config.defaults
+    # Retrieve default enabled states and run_wait states for specific features from config.defaults
     controller_mapper_enabled = config_defaults.get('controller_mapper_enabled', True)
+    controller_mapper_run_wait = config_defaults.get('controller_mapper_run_wait', False)
     borderless_windowing_enabled = config_defaults.get('borderless_windowing_enabled', True)
+    borderless_windowing_run_wait = config_defaults.get('borderless_windowing_run_wait', False)
     multi_monitor_app_enabled = config_defaults.get('multi_monitor_app_enabled', True)
+    multi_monitor_app_run_wait = config_defaults.get('multi_monitor_app_run_wait', False)
     just_after_launch_enabled = config_defaults.get('just_after_launch_enabled', True)
+    just_after_launch_run_wait = config_defaults.get('just_after_launch_run_wait', False)
     just_before_exit_enabled = config_defaults.get('just_before_exit_enabled', True)
+    just_before_exit_run_wait = config_defaults.get('just_before_exit_run_wait', False)
     pre1_enabled = config_defaults.get('pre_1_enabled', True)
     post1_enabled = config_defaults.get('post_1_enabled', True)
     pre2_enabled = config_defaults.get('pre_2_enabled', True)
     post2_enabled = config_defaults.get('post_2_enabled', True)
     pre3_enabled = config_defaults.get('pre_3_enabled', True)
     post3_enabled = config_defaults.get('post_3_enabled', True)
+    pre1_run_wait = config_defaults.get('pre_1_run_wait', False)
+    post1_run_wait = config_defaults.get('post_1_run_wait', False)
+    pre2_run_wait = config_defaults.get('pre_2_run_wait', False)
+    post2_run_wait = config_defaults.get('post_2_run_wait', False)
+    pre3_run_wait = config_defaults.get('pre_3_run_wait', False)
+    post3_run_wait = config_defaults.get('post_3_run_wait', False)
 
-    # Create checkboxes for the new enabled columns
-    main_window.editor_table.setCellWidget(row, 8, create_status_widget(main_window, controller_mapper_enabled, row, 8))
-    main_window.editor_table.setCellWidget(row, 9, create_status_widget(main_window, borderless_windowing_enabled, row, 9))
-    main_window.editor_table.setCellWidget(row, 10, create_status_widget(main_window, multi_monitor_app_enabled, row, 10))
+    # Create checkboxes for Controller Mapper
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.CM_ENABLED.value, create_status_widget(main_window, controller_mapper_enabled, row, constants.EditorCols.CM_ENABLED.value))
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.CM_RUN_WAIT.value, create_status_widget(main_window, controller_mapper_run_wait, row, constants.EditorCols.CM_RUN_WAIT.value))
+
+    # Create checkboxes for Borderless Windowing
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.BW_ENABLED.value, create_status_widget(main_window, borderless_windowing_enabled, row, constants.EditorCols.BW_ENABLED.value))
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.BW_RUN_WAIT.value, create_status_widget(main_window, borderless_windowing_run_wait, row, constants.EditorCols.BW_RUN_WAIT.value))
+
+    # Create checkboxes for Multi-Monitor App
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.MM_ENABLED.value, create_status_widget(main_window, multi_monitor_app_enabled, row, constants.EditorCols.MM_ENABLED.value))
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.MM_RUN_WAIT.value, create_status_widget(main_window, multi_monitor_app_run_wait, row, constants.EditorCols.MM_RUN_WAIT.value))
+
+    # Column 17 is Hide Taskbar (checkbox created later)
+
+    # Create checkboxes for Just After Launch
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.JA_ENABLED.value, create_status_widget(main_window, just_after_launch_enabled, row, constants.EditorCols.JA_ENABLED.value))
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.JA_RUN_WAIT.value, create_status_widget(main_window, just_after_launch_run_wait, row, constants.EditorCols.JA_RUN_WAIT.value))
+
+    # Create checkboxes for Just Before Exit
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.JB_ENABLED.value, create_status_widget(main_window, just_before_exit_enabled, row, constants.EditorCols.JB_ENABLED.value))
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.JB_RUN_WAIT.value, create_status_widget(main_window, just_before_exit_run_wait, row, constants.EditorCols.JB_RUN_WAIT.value))
+
+    # Pre/Post default enabled/run-wait checkboxes
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.PRE1_ENABLED.value, create_status_widget(main_window, pre1_enabled, row, constants.EditorCols.PRE1_ENABLED.value))
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.PRE1_RUN_WAIT.value, create_status_widget(main_window, pre1_run_wait, row, constants.EditorCols.PRE1_RUN_WAIT.value))
+
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.POST1_ENABLED.value, create_status_widget(main_window, post1_enabled, row, constants.EditorCols.POST1_ENABLED.value))
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.POST1_RUN_WAIT.value, create_status_widget(main_window, post1_run_wait, row, constants.EditorCols.POST1_RUN_WAIT.value))
+
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.PRE2_ENABLED.value, create_status_widget(main_window, pre2_enabled, row, constants.EditorCols.PRE2_ENABLED.value))
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.PRE2_RUN_WAIT.value, create_status_widget(main_window, pre2_run_wait, row, constants.EditorCols.PRE2_RUN_WAIT.value))
+
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.POST2_ENABLED.value, create_status_widget(main_window, post2_enabled, row, constants.EditorCols.POST2_ENABLED.value))
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.POST2_RUN_WAIT.value, create_status_widget(main_window, post2_run_wait, row, constants.EditorCols.POST2_RUN_WAIT.value))
+
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.PRE3_ENABLED.value, create_status_widget(main_window, pre3_enabled, row, constants.EditorCols.PRE3_ENABLED.value))
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.PRE3_RUN_WAIT.value, create_status_widget(main_window, pre3_run_wait, row, constants.EditorCols.PRE3_RUN_WAIT.value))
+
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.POST3_ENABLED.value, create_status_widget(main_window, post3_enabled, row, constants.EditorCols.POST3_ENABLED.value))
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.POST3_RUN_WAIT.value, create_status_widget(main_window, post3_run_wait, row, constants.EditorCols.POST3_RUN_WAIT.value))
+
+    # Create RunAsAdmin checkbox
+    as_admin_widget = create_status_widget(main_window, as_admin, row, constants.EditorCols.RUN_AS_ADMIN.value)
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.RUN_AS_ADMIN.value, as_admin_widget)
     
-    # Column 11 is Hide Taskbar, handled below
-    # Columns 12-16 are profile paths, their CEN/LC indicators are handled above
-
-    main_window.editor_table.setCellWidget(row, 17, create_status_widget(main_window, just_after_launch_enabled, row, 17))
-    main_window.editor_table.setCellWidget(row, 18, create_status_widget(main_window, just_before_exit_enabled, row, 18))
-    
-    main_window.editor_table.setCellWidget(row, 19, create_status_widget(main_window, pre1_enabled, row, 19))
-    # The text field for Pre1 (col 20) is set by the CEN/LC logic above
-
-    main_window.editor_table.setCellWidget(row, 21, create_status_widget(main_window, post1_enabled, row, 21))
-    # The text field for Post1 (col 22) is set by the CEN/LC logic above
-
-    main_window.editor_table.setCellWidget(row, 23, create_status_widget(main_window, pre2_enabled, row, 23))
-    # The text field for Pre2 (col 24) is set by the CEN/LC logic above
-
-    main_window.editor_table.setCellWidget(row, 25, create_status_widget(main_window, post2_enabled, row, 25))
-    # The text field for Post2 (col 26) is set by the CEN/LC logic above
-
-    main_window.editor_table.setCellWidget(row, 27, create_status_widget(main_window, pre3_enabled, row, 27))
-    # The text field for Pre3 (col 28) is set by the CEN/LC logic above
-
-    main_window.editor_table.setCellWidget(row, 29, create_status_widget(main_window, post3_enabled, row, 29))
-    # No text field for Post3 in the current editor_tab.py, so column 30 is not used for a text item.
-
-    # Create AsAdmin checkbox
-    as_admin_widget = create_status_widget(main_window, as_admin, row, 22)
-    main_window.editor_table.setCellWidget(row, 22, as_admin_widget)
-    
-    # Create NoTB checkbox
-    no_tb_widget = create_status_widget(main_window, no_tb, row, 23)
-    main_window.editor_table.setCellWidget(row, 23, no_tb_widget)
+    # Create HideTaskbar checkbox
+    hide_taskbar_widget = create_status_widget(main_window, no_tb, row, constants.EditorCols.HIDE_TASKBAR.value)
+    main_window.editor_table.setCellWidget(row, constants.EditorCols.HIDE_TASKBAR.value, hide_taskbar_widget)
     # Update UI if requested
     if update_ui:
         QCoreApplication.processEvents()

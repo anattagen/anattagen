@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QCursor
+from Python import constants
 
 class EditorTab(QWidget):
     """Encapsulates the UI and logic for the Editor tab."""
@@ -25,21 +26,46 @@ class EditorTab(QWidget):
 
         # --- Table ---
         self.table = QTableWidget()
-        self.table.setColumnCount(30)
+        # set column count based on EditorCols mapping
+        self.table.setColumnCount(max(c.value for c in constants.EditorCols) + 1)
         self.table.setHorizontalHeaderLabels([
-            "Create", "Name", "Directory", "SteamID", 
+            "Create", "Name", "Directory", "SteamID",
             "NameOverride", "Options", "Arguments", "RunAsAdmin",
-            "Controller Mapper", "Borderless Windowing", "Multi-monitor App", "Hide Taskbar",
+            "CM En", "Controller Mapper", "CM Rw",
+            "BW En", "Borderless Windowing", "BW Rw",
+            "MM En", "Multi-Monitor", "MM Rw",
+            "Hide Taskbar",
             "MM Game Profile", "MM Desktop Profile",
-            "Player 1 Profile", "Player 2 Profile", "MediaCenterProfile",
-            "After Launch", "Before Exit",
-            "Pre1 En", "Pre1",
-            "Post1 En", "Post1",
-            "Pre2 En", "Pre2",
-            "Post2 En", "Post2",
-            "Pre3 En", "Pre3",
-            "Post3 En", "Post3"
+            "Player 1 Profile", "Player 2 Profile", "MediaCenter Profile",
+            "JA En", "Just After Launch", "JA Rw",
+            "JB En", "Just Before Exit", "JB Rw",
+            "Pre1En", "Pre1", "Pre1Rw",
+            "Pst1En", "Post1", "Pst1Rw",
+            "Pre2En", "Pre2", "Pre2Rw",
+            "Pst2En", "Post2", "Pst2Rw",
+            "Pre3En", "Pre3", "Pre3Rw",
+            "Pst3En", "Post3", "Pst3Rw"
         ])
+        # Shorten width for Enabled (En) and Run/Wait (Rw) columns to save space
+        try:
+            en_columns = [constants.EditorCols.CM_ENABLED.value, constants.EditorCols.BW_ENABLED.value,
+                          constants.EditorCols.MM_ENABLED.value, constants.EditorCols.JA_ENABLED.value,
+                          constants.EditorCols.JB_ENABLED.value, constants.EditorCols.PRE1_ENABLED.value,
+                          constants.EditorCols.POST1_ENABLED.value, constants.EditorCols.PRE2_ENABLED.value,
+                          constants.EditorCols.POST2_ENABLED.value, constants.EditorCols.PRE3_ENABLED.value,
+                          constants.EditorCols.POST3_ENABLED.value]
+            rw_columns = [constants.EditorCols.CM_RUN_WAIT.value, constants.EditorCols.BW_RUN_WAIT.value,
+                          constants.EditorCols.MM_RUN_WAIT.value, constants.EditorCols.JA_RUN_WAIT.value,
+                          constants.EditorCols.JB_RUN_WAIT.value, constants.EditorCols.PRE1_RUN_WAIT.value,
+                          constants.EditorCols.POST1_RUN_WAIT.value, constants.EditorCols.PRE2_RUN_WAIT.value,
+                          constants.EditorCols.POST2_RUN_WAIT.value, constants.EditorCols.PRE3_RUN_WAIT.value,
+                          constants.EditorCols.POST3_RUN_WAIT.value]
+
+            for col in en_columns + rw_columns:
+                # Use a conservative small width; UI can still resize if needed
+                self.table.setColumnWidth(col, 56)
+        except Exception:
+            pass
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         header.setStretchLastSection(False)
@@ -115,89 +141,93 @@ class EditorTab(QWidget):
             self.table.insertRow(row_num)
             self.table.blockSignals(True) # Block signals during population
 
-            # Create (CheckBox) - col 0
-            self.table.setCellWidget(row_num, 0, self._create_checkbox_widget(game.get('create', False)))
+            # Create (CheckBox) - col INCLUDE
+            self.table.setCellWidget(row_num, constants.EditorCols.INCLUDE.value, self._create_checkbox_widget(game.get('create', False)))
 
-            # Name (uneditable) - col 1
+            # Name (uneditable) - col NAME
             name_item = QTableWidgetItem(game.get('name', ''))
             name_item.setFlags(name_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self.table.setItem(row_num, 1, name_item)
+            self.table.setItem(row_num, constants.EditorCols.NAME.value, name_item)
 
-            # Directory (uneditable) - col 2
+            # Directory (uneditable) - col DIRECTORY
             dir_item = QTableWidgetItem(game.get('directory', ''))
             dir_item.setFlags(dir_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self.table.setItem(row_num, 2, dir_item)
+            self.table.setItem(row_num, constants.EditorCols.DIRECTORY.value, dir_item)
 
-            # SteamID - col 3
-            self.table.setItem(row_num, 3, QTableWidgetItem(game.get('steam_id', '')))
+            # SteamID - col STEAMID
+            self.table.setItem(row_num, constants.EditorCols.STEAMID.value, QTableWidgetItem(game.get('steam_id', '')))
 
-            # NameOverride - col 4
-            self.table.setItem(row_num, 4, QTableWidgetItem(game.get('name_override', '')))
+            # NameOverride - col NAME_OVERRIDE
+            self.table.setItem(row_num, constants.EditorCols.NAME_OVERRIDE.value, QTableWidgetItem(game.get('name_override', '')))
 
-            # Options - col 5
-            self.table.setItem(row_num, 5, QTableWidgetItem(game.get('options', '')))
+            # Options - col OPTIONS
+            self.table.setItem(row_num, constants.EditorCols.OPTIONS.value, QTableWidgetItem(game.get('options', '')))
 
-            # Arguments - col 6
-            self.table.setItem(row_num, 6, QTableWidgetItem(game.get('arguments', '')))
+            # Arguments - col ARGUMENTS
+            self.table.setItem(row_num, constants.EditorCols.ARGUMENTS.value, QTableWidgetItem(game.get('arguments', '')))
 
-            # RunAsAdmin (CheckBox) - col 7
-            self.table.setCellWidget(row_num, 7, self._create_checkbox_widget(game.get('run_as_admin', False)))
+            # RunAsAdmin (CheckBox) - col RUN_AS_ADMIN
+            self.table.setCellWidget(row_num, constants.EditorCols.RUN_AS_ADMIN.value, self._create_checkbox_widget(game.get('run_as_admin', False)))
 
-            # Controller Mapper (CheckBox) - col 8
-            self.table.setCellWidget(row_num, 8, self._create_checkbox_widget(game.get('controller_mapper_enabled', True)))
+            # Controller Mapper (CheckBox, Path, RunWait)
+            self.table.setCellWidget(row_num, constants.EditorCols.CM_ENABLED.value, self._create_checkbox_widget(game.get('controller_mapper_enabled', True)))
+            self.table.setItem(row_num, constants.EditorCols.CM_PATH.value, QTableWidgetItem(game.get('controller_mapper_path', '')))
+            self.table.setCellWidget(row_num, constants.EditorCols.CM_RUN_WAIT.value, self._create_checkbox_widget(game.get('controller_mapper_run_wait', False)))
 
-            # Borderless Windowing (CheckBox) - col 9
-            self.table.setCellWidget(row_num, 9, self._create_checkbox_widget(game.get('borderless_windowing_enabled', True)))
+            # Borderless Windowing (CheckBox, Path, RunWait)
+            self.table.setCellWidget(row_num, constants.EditorCols.BW_ENABLED.value, self._create_checkbox_widget(game.get('borderless_windowing_enabled', True)))
+            self.table.setItem(row_num, constants.EditorCols.BW_PATH.value, QTableWidgetItem(game.get('borderless_windowing_path', '')))
+            self.table.setCellWidget(row_num, constants.EditorCols.BW_RUN_WAIT.value, self._create_checkbox_widget(game.get('borderless_windowing_run_wait', False)))
 
-            # Multi-monitor App (CheckBox) - col 10
-            self.table.setCellWidget(row_num, 10, self._create_checkbox_widget(game.get('multi_monitor_app_enabled', True)))
+            # Multi-monitor App (CheckBox, Path, RunWait)
+            self.table.setCellWidget(row_num, constants.EditorCols.MM_ENABLED.value, self._create_checkbox_widget(game.get('multi_monitor_app_enabled', True)))
+            self.table.setItem(row_num, constants.EditorCols.MM_PATH.value, QTableWidgetItem(game.get('multi_monitor_app_path', '')))
+            self.table.setCellWidget(row_num, constants.EditorCols.MM_RUN_WAIT.value, self._create_checkbox_widget(game.get('multi_monitor_app_run_wait', False)))
 
-            # Hide Taskbar (CheckBox) - col 11
-            self.table.setCellWidget(row_num, 11, self._create_checkbox_widget(game.get('hide_taskbar', False)))
+            # Hide Taskbar (CheckBox)
+            self.table.setCellWidget(row_num, constants.EditorCols.HIDE_TASKBAR.value, self._create_checkbox_widget(game.get('hide_taskbar', False)))
 
-            # MM Game Profile - col 12
-            self.table.setItem(row_num, 12, QTableWidgetItem(game.get('mm_game_profile', '')))
+            # Profiles
+            self.table.setItem(row_num, constants.EditorCols.MM_GAME_PROFILE.value, QTableWidgetItem(game.get('mm_game_profile', '')))
+            self.table.setItem(row_num, constants.EditorCols.MM_DESKTOP_PROFILE.value, QTableWidgetItem(game.get('mm_desktop_profile', '')))
+            self.table.setItem(row_num, constants.EditorCols.PLAYER1_PROFILE.value, QTableWidgetItem(game.get('player1_profile', '')))
+            self.table.setItem(row_num, constants.EditorCols.PLAYER2_PROFILE.value, QTableWidgetItem(game.get('player2_profile', '')))
+            self.table.setItem(row_num, constants.EditorCols.MEDIACENTER_PROFILE.value, QTableWidgetItem(game.get('mediacenter_profile', '')))
 
-            # MM Desktop Profile - col 13
-            self.table.setItem(row_num, 13, QTableWidgetItem(game.get('mm_desktop_profile', '')))
+            # Just After Launch (CheckBox, Path, RunWait)
+            self.table.setCellWidget(row_num, constants.EditorCols.JA_ENABLED.value, self._create_checkbox_widget(game.get('just_after_launch_enabled', True)))
+            self.table.setItem(row_num, constants.EditorCols.JA_PATH.value, QTableWidgetItem(game.get('just_after_launch_path', '')))
+            self.table.setCellWidget(row_num, constants.EditorCols.JA_RUN_WAIT.value, self._create_checkbox_widget(game.get('just_after_launch_run_wait', False)))
 
-            # Player 1 Profile - col 14
-            self.table.setItem(row_num, 14, QTableWidgetItem(game.get('player1_profile', '')))
+            # Just Before Exit (CheckBox, Path, RunWait)
+            self.table.setCellWidget(row_num, constants.EditorCols.JB_ENABLED.value, self._create_checkbox_widget(game.get('just_before_exit_enabled', True)))
+            self.table.setItem(row_num, constants.EditorCols.JB_PATH.value, QTableWidgetItem(game.get('just_before_exit_path', '')))
+            self.table.setCellWidget(row_num, constants.EditorCols.JB_RUN_WAIT.value, self._create_checkbox_widget(game.get('just_before_exit_run_wait', False)))
 
-            # Player 2 Profile - col 15
-            self.table.setItem(row_num, 15, QTableWidgetItem(game.get('player2_profile', '')))
+            # Pre/Post Scripts with Enabled Checkboxes and RunWait toggles
+            self.table.setCellWidget(row_num, constants.EditorCols.PRE1_ENABLED.value, self._create_checkbox_widget(game.get('pre_1_enabled', True)))
+            self.table.setItem(row_num, constants.EditorCols.PRE1_PATH.value, QTableWidgetItem(game.get('pre1_path', '')))
+            self.table.setCellWidget(row_num, constants.EditorCols.PRE1_RUN_WAIT.value, self._create_checkbox_widget(game.get('pre_1_run_wait', False)))
 
-            # MediaCenterProfile - col 16
-            self.table.setItem(row_num, 16, QTableWidgetItem(game.get('mediacenter_profile', '')))
+            self.table.setCellWidget(row_num, constants.EditorCols.POST1_ENABLED.value, self._create_checkbox_widget(game.get('post_1_enabled', True)))
+            self.table.setItem(row_num, constants.EditorCols.POST1_PATH.value, QTableWidgetItem(game.get('post1_path', '')))
+            self.table.setCellWidget(row_num, constants.EditorCols.POST1_RUN_WAIT.value, self._create_checkbox_widget(game.get('post_1_run_wait', False)))
 
-            # Just After Launch (CheckBox) - col 17
-            self.table.setCellWidget(row_num, 17, self._create_checkbox_widget(game.get('just_after_launch_enabled', True)))
+            self.table.setCellWidget(row_num, constants.EditorCols.PRE2_ENABLED.value, self._create_checkbox_widget(game.get('pre_2_enabled', True)))
+            self.table.setItem(row_num, constants.EditorCols.PRE2_PATH.value, QTableWidgetItem(game.get('pre2_path', '')))
+            self.table.setCellWidget(row_num, constants.EditorCols.PRE2_RUN_WAIT.value, self._create_checkbox_widget(game.get('pre_2_run_wait', False)))
 
-            # Just Before Exit (CheckBox) - col 18
-            self.table.setCellWidget(row_num, 18, self._create_checkbox_widget(game.get('just_before_exit_enabled', True)))
-            
-            # Pre/Post Scripts with Enabled Checkboxes
-            self.table.setCellWidget(row_num, 19, self._create_checkbox_widget(game.get('pre_1_enabled', True)))
-            self.table.setItem(row_num, 20, QTableWidgetItem(game.get('pre1_path', '')))
+            self.table.setCellWidget(row_num, constants.EditorCols.POST2_ENABLED.value, self._create_checkbox_widget(game.get('post_2_enabled', True)))
+            self.table.setItem(row_num, constants.EditorCols.POST2_PATH.value, QTableWidgetItem(game.get('post2_path', '')))
+            self.table.setCellWidget(row_num, constants.EditorCols.POST2_RUN_WAIT.value, self._create_checkbox_widget(game.get('post_2_run_wait', False)))
 
-            self.table.setCellWidget(row_num, 21, self._create_checkbox_widget(game.get('post_1_enabled', True)))
-            self.table.setItem(row_num, 22, QTableWidgetItem(game.get('post1_path', '')))
+            self.table.setCellWidget(row_num, constants.EditorCols.PRE3_ENABLED.value, self._create_checkbox_widget(game.get('pre_3_enabled', True)))
+            self.table.setItem(row_num, constants.EditorCols.PRE3_PATH.value, QTableWidgetItem(game.get('pre3_path', '')))
+            self.table.setCellWidget(row_num, constants.EditorCols.PRE3_RUN_WAIT.value, self._create_checkbox_widget(game.get('pre_3_run_wait', False)))
 
-            self.table.setCellWidget(row_num, 23, self._create_checkbox_widget(game.get('pre_2_enabled', True)))
-            self.table.setItem(row_num, 24, QTableWidgetItem(game.get('pre2_path', '')))
-
-            self.table.setCellWidget(row_num, 25, self._create_checkbox_widget(game.get('post_2_enabled', True)))
-            self.table.setItem(row_num, 26, QTableWidgetItem(game.get('post2_path', '')))
-
-            self.table.setCellWidget(row_num, 27, self._create_checkbox_widget(game.get('pre_3_enabled', True)))
-            self.table.setItem(row_num, 28, QTableWidgetItem(game.get('pre3_path', '')))
-
-            self.table.setCellWidget(row_num, 29, self._create_checkbox_widget(game.get('post_3_enabled', True)))
-            # The Post3 value column would be 30, which is out of bounds.
-            # I will assume the last column is for the Post3 checkbox.
-            # If you need a text field for Post3, you must increase column count to 31
-            # and add a header label for it.
-            # self.table.setItem(row_num, 30, QTableWidgetItem(game.get('post3_path', '')))
+            self.table.setCellWidget(row_num, constants.EditorCols.POST3_ENABLED.value, self._create_checkbox_widget(game.get('post_3_enabled', True)))
+            self.table.setItem(row_num, constants.EditorCols.POST3_PATH.value, QTableWidgetItem(game.get('post3_path', '')))
+            self.table.setCellWidget(row_num, constants.EditorCols.POST3_RUN_WAIT.value, self._create_checkbox_widget(game.get('post_3_run_wait', False)))
 
             self.table.blockSignals(False) # Unblock signals
 
@@ -208,70 +238,88 @@ class EditorTab(QWidget):
             game = {}
 
             # Column 0: Create (CheckBox)
-            game['create'] = self._get_checkbox_value(row, 0)
+            game['create'] = self._get_checkbox_value(row, constants.EditorCols.INCLUDE.value)
 
             # Column 1: Name (Text)
-            game['name'] = self.table.item(row, 1).text() if self.table.item(row, 1) else ''
+            game['name'] = self.table.item(row, constants.EditorCols.NAME.value).text() if self.table.item(row, constants.EditorCols.NAME.value) else ''
 
             # Column 2: Directory (Text)
-            game['directory'] = self.table.item(row, 2).text() if self.table.item(row, 2) else ''
+            game['directory'] = self.table.item(row, constants.EditorCols.DIRECTORY.value).text() if self.table.item(row, constants.EditorCols.DIRECTORY.value) else ''
 
             # Column 3: SteamID (Text)
-            game['steam_id'] = self.table.item(row, 3).text() if self.table.item(row, 3) else ''
+            game['steam_id'] = self.table.item(row, constants.EditorCols.STEAMID.value).text() if self.table.item(row, constants.EditorCols.STEAMID.value) else ''
 
             # Column 4: NameOverride (Text)
-            game['name_override'] = self.table.item(row, 4).text() if self.table.item(row, 4) else ''
+            game['name_override'] = self.table.item(row, constants.EditorCols.NAME_OVERRIDE.value).text() if self.table.item(row, constants.EditorCols.NAME_OVERRIDE.value) else ''
 
             # Column 5: Options (Text)
-            game['options'] = self.table.item(row, 5).text() if self.table.item(row, 5) else ''
+            game['options'] = self.table.item(row, constants.EditorCols.OPTIONS.value).text() if self.table.item(row, constants.EditorCols.OPTIONS.value) else ''
 
             # Column 6: Arguments (Text)
-            game['arguments'] = self.table.item(row, 6).text() if self.table.item(row, 6) else ''
+            game['arguments'] = self.table.item(row, constants.EditorCols.ARGUMENTS.value).text() if self.table.item(row, constants.EditorCols.ARGUMENTS.value) else ''
 
             # Column 7: RunAsAdmin (CheckBox)
-            game['run_as_admin'] = self._get_checkbox_value(row, 7)
+            game['run_as_admin'] = self._get_checkbox_value(row, constants.EditorCols.RUN_AS_ADMIN.value)
 
-            # Column 8: Controller Mapper (CheckBox)
-            game['controller_mapper_enabled'] = self._get_checkbox_value(row, 8)
+            # Controller Mapper (cols 8-10)
+            game['controller_mapper_enabled'] = self._get_checkbox_value(row, constants.EditorCols.CM_ENABLED.value)
+            game['controller_mapper_path'] = self.table.item(row, constants.EditorCols.CM_PATH.value).text() if self.table.item(row, constants.EditorCols.CM_PATH.value) else ''
+            game['controller_mapper_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.CM_RUN_WAIT.value)
 
-            # Column 9: Borderless Windowing (CheckBox)
-            game['borderless_windowing_enabled'] = self._get_checkbox_value(row, 9)
+            # Borderless Windowing (cols 11-13)
+            game['borderless_windowing_enabled'] = self._get_checkbox_value(row, constants.EditorCols.BW_ENABLED.value)
+            game['borderless_windowing_path'] = self.table.item(row, constants.EditorCols.BW_PATH.value).text() if self.table.item(row, constants.EditorCols.BW_PATH.value) else ''
+            game['borderless_windowing_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.BW_RUN_WAIT.value)
 
-            # Column 10: Multi-monitor App (CheckBox)
-            game['multi_monitor_app_enabled'] = self._get_checkbox_value(row, 10)
+            # Multi-monitor App (cols 14-16)
+            game['multi_monitor_app_enabled'] = self._get_checkbox_value(row, constants.EditorCols.MM_ENABLED.value)
+            game['multi_monitor_app_path'] = self.table.item(row, constants.EditorCols.MM_PATH.value).text() if self.table.item(row, constants.EditorCols.MM_PATH.value) else ''
+            game['multi_monitor_app_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.MM_RUN_WAIT.value)
 
-            # Column 11: Hide Taskbar (CheckBox)
-            game['hide_taskbar'] = self._get_checkbox_value(row, 11)
+            # Hide Taskbar (col 17)
+            game['hide_taskbar'] = self._get_checkbox_value(row, constants.EditorCols.HIDE_TASKBAR.value)
 
-            # Columns 12-16: Profiles (Text)
-            game['mm_game_profile'] = self.table.item(row, 12).text() if self.table.item(row, 12) else ''
-            game['mm_desktop_profile'] = self.table.item(row, 13).text() if self.table.item(row, 13) else ''
-            game['player1_profile'] = self.table.item(row, 14).text() if self.table.item(row, 14) else ''
-            game['player2_profile'] = self.table.item(row, 15).text() if self.table.item(row, 15) else ''
-            game['mediacenter_profile'] = self.table.item(row, 16).text() if self.table.item(row, 16) else ''
+            # Profiles (cols 18-22)
+            game['mm_game_profile'] = self.table.item(row, constants.EditorCols.MM_GAME_PROFILE.value).text() if self.table.item(row, constants.EditorCols.MM_GAME_PROFILE.value) else ''
+            game['mm_desktop_profile'] = self.table.item(row, constants.EditorCols.MM_DESKTOP_PROFILE.value).text() if self.table.item(row, constants.EditorCols.MM_DESKTOP_PROFILE.value) else ''
+            game['player1_profile'] = self.table.item(row, constants.EditorCols.PLAYER1_PROFILE.value).text() if self.table.item(row, constants.EditorCols.PLAYER1_PROFILE.value) else ''
+            game['player2_profile'] = self.table.item(row, constants.EditorCols.PLAYER2_PROFILE.value).text() if self.table.item(row, constants.EditorCols.PLAYER2_PROFILE.value) else ''
+            game['mediacenter_profile'] = self.table.item(row, constants.EditorCols.MEDIACENTER_PROFILE.value).text() if self.table.item(row, constants.EditorCols.MEDIACENTER_PROFILE.value) else ''
 
-            # Columns 17-23: Launch/Exit and Pre/Post scripts
-            game['just_after_launch_enabled'] = self._get_checkbox_value(row, 17)
-            game['just_before_exit_enabled'] = self._get_checkbox_value(row, 18)
+            # Just After Launch (cols 23-25)
+            game['just_after_launch_enabled'] = self._get_checkbox_value(row, constants.EditorCols.JA_ENABLED.value)
+            game['just_after_launch_path'] = self.table.item(row, constants.EditorCols.JA_PATH.value).text() if self.table.item(row, constants.EditorCols.JA_PATH.value) else ''
+            game['just_after_launch_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.JA_RUN_WAIT.value)
 
-            game['pre_1_enabled'] = self._get_checkbox_value(row, 19)
-            game['pre1_path'] = self.table.item(row, 20).text() if self.table.item(row, 20) else ''
+            # Just Before Exit (cols 26-28)
+            game['just_before_exit_enabled'] = self._get_checkbox_value(row, constants.EditorCols.JB_ENABLED.value)
+            game['just_before_exit_path'] = self.table.item(row, constants.EditorCols.JB_PATH.value).text() if self.table.item(row, constants.EditorCols.JB_PATH.value) else ''
+            game['just_before_exit_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.JB_RUN_WAIT.value)
 
-            game['post_1_enabled'] = self._get_checkbox_value(row, 21)
-            game['post1_path'] = self.table.item(row, 22).text() if self.table.item(row, 22) else ''
+            # Pre/Post scripts (cols 29-46)
+            game['pre_1_enabled'] = self._get_checkbox_value(row, constants.EditorCols.PRE1_ENABLED.value)
+            game['pre1_path'] = self.table.item(row, constants.EditorCols.PRE1_PATH.value).text() if self.table.item(row, constants.EditorCols.PRE1_PATH.value) else ''
+            game['pre_1_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.PRE1_RUN_WAIT.value)
 
-            game['pre_2_enabled'] = self._get_checkbox_value(row, 23)
-            game['pre2_path'] = self.table.item(row, 24).text() if self.table.item(row, 24) else ''
+            game['post_1_enabled'] = self._get_checkbox_value(row, constants.EditorCols.POST1_ENABLED.value)
+            game['post1_path'] = self.table.item(row, constants.EditorCols.POST1_PATH.value).text() if self.table.item(row, constants.EditorCols.POST1_PATH.value) else ''
+            game['post_1_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.POST1_RUN_WAIT.value)
 
-            game['post_2_enabled'] = self._get_checkbox_value(row, 25)
-            game['post2_path'] = self.table.item(row, 26).text() if self.table.item(row, 26) else ''
+            game['pre_2_enabled'] = self._get_checkbox_value(row, constants.EditorCols.PRE2_ENABLED.value)
+            game['pre2_path'] = self.table.item(row, constants.EditorCols.PRE2_PATH.value).text() if self.table.item(row, constants.EditorCols.PRE2_PATH.value) else ''
+            game['pre_2_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.PRE2_RUN_WAIT.value)
 
-            game['pre_3_enabled'] = self._get_checkbox_value(row, 27)
-            game['pre3_path'] = self.table.item(row, 28).text() if self.table.item(row, 28) else ''
+            game['post_2_enabled'] = self._get_checkbox_value(row, constants.EditorCols.POST2_ENABLED.value)
+            game['post2_path'] = self.table.item(row, constants.EditorCols.POST2_PATH.value).text() if self.table.item(row, constants.EditorCols.POST2_PATH.value) else ''
+            game['post_2_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.POST2_RUN_WAIT.value)
 
-            game['post_3_enabled'] = self._get_checkbox_value(row, 29)
-            # As noted in populate_from_data, there is no column for the Post3 value.
-            # game['post3'] = self.table.item(row, 30).text() if self.table.item(row, 30) else ''
+            game['pre_3_enabled'] = self._get_checkbox_value(row, constants.EditorCols.PRE3_ENABLED.value)
+            game['pre3_path'] = self.table.item(row, constants.EditorCols.PRE3_PATH.value).text() if self.table.item(row, constants.EditorCols.PRE3_PATH.value) else ''
+            game['pre_3_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.PRE3_RUN_WAIT.value)
+
+            game['post_3_enabled'] = self._get_checkbox_value(row, constants.EditorCols.POST3_ENABLED.value)
+            game['post3_path'] = self.table.item(row, constants.EditorCols.POST3_PATH.value).text() if self.table.item(row, constants.EditorCols.POST3_PATH.value) else ''
+            game['post_3_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.POST3_RUN_WAIT.value)
 
             data.append(game)
         return data
@@ -280,7 +328,7 @@ class EditorTab(QWidget):
         """Extract data for selected games in the table."""
         selected_games = []
         for item in self.table.selectedItems():
-            if item.column() == 1: # Assuming the executable name is in the first column
+            if item.column() == constants.EditorCols.NAME.value: # NAME column (column 1) contains the executable name
                 row = item.row()
                 game_data = self.get_all_game_data()[row]
                 selected_games.append(game_data)
