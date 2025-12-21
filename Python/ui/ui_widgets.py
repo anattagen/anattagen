@@ -26,7 +26,7 @@ def create_path_selection_widget(parent_window, dialog_title_text, is_directory=
     layout.addWidget(button)
     return widget, line_edit
 
-def create_app_selection_with_flyout_widget(parent_window, dialog_title_text, predefined_apps: dict = None, target_line_edit_for_add_new=None):
+def create_app_selection_with_flyout_widget(parent_window, dialog_title_text, predefined_apps: dict = None):
     widget = QWidget()
     h_layout = QHBoxLayout(widget)
     h_layout.setContentsMargins(0, 0, 0, 0)

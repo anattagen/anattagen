@@ -1,8 +1,9 @@
 import os 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QComboBox, QPushButton,
-    QLineEdit, QHBoxLayout, QFormLayout, QFileDialog, QCheckBox
+    QLineEdit, QHBoxLayout, QFormLayout, QFileDialog, QCheckBox, QAbstractItemView, QSpinBox, QRadioButton, QButtonGroup
 )
+from PyQt6.QtGui import QFontDatabase
 from .ui_widgets import (
     create_path_selection_widget,
     create_app_selection_with_flyout_widget,
@@ -11,6 +12,47 @@ from .ui_widgets import (
 )
 from .config_manager import show_import_configuration_dialog
 from .accordion import AccordionSection
+
+def create_path_with_cen_lc_widget(main_window, dialog_title, is_directory=False):
+    """Create a path selection widget with CEN/LC radio buttons."""
+    widget = QWidget()
+    layout = QHBoxLayout(widget)
+    layout.setContentsMargins(0, 0, 0, 0)
+    
+    # Line edit for path
+    line_edit = QLineEdit()
+    layout.addWidget(line_edit)
+    
+    # Browse button
+    browse_btn = QPushButton(". . .")
+    browse_btn.setFixedWidth(40)
+    def open_dialog():
+        if is_directory:
+            path = QFileDialog.getExistingDirectory(main_window, dialog_title)
+        else:
+            path, _ = QFileDialog.getOpenFileName(main_window, dialog_title)
+        if path:
+            line_edit.setText(path)
+    browse_btn.clicked.connect(open_dialog)
+    layout.addWidget(browse_btn)
+    
+    # CEN/LC radio buttons
+    cen_radio = QRadioButton("CEN")
+    lc_radio = QRadioButton("LC")
+    cen_radio.setChecked(True)
+    mode_group = QButtonGroup(widget)
+    mode_group.addButton(cen_radio)
+    mode_group.addButton(lc_radio)
+    layout.addWidget(cen_radio)
+    layout.addWidget(lc_radio)
+    
+    # Store radio buttons on the widget for later access
+    widget.line_edit = line_edit
+    widget.cen_radio = cen_radio
+    widget.lc_radio = lc_radio
+    widget.mode_group = mode_group
+    
+    return widget, line_edit, cen_radio, lc_radio
 
 def populate_setup_tab(main_window: QWidget):
     """Populate the setup tab with UI elements"""
@@ -41,43 +83,41 @@ def populate_setup_tab(main_window: QWidget):
     source_config_widget = QWidget()
     source_config_layout = QVBoxLayout(source_config_widget)
     
-    # Source directories
+    # Source (using QListWidget with drag-drop for consistency with SetupTab)
+    from PyQt6.QtWidgets import QListWidget
+    main_window.source_dirs_list = QListWidget()
+    main_window.source_dirs_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+    main_window.source_dirs_list.setMaximumHeight(80)
     source_dirs_layout = QHBoxLayout()
-    source_dirs_layout.addWidget(QLabel("Source Directories:"))
-    main_window.source_dirs_combo = QComboBox()
-    main_window.source_dirs_combo.setEditable(True)
-    main_window.source_dirs_combo.setMinimumWidth(300)
-    source_dirs_layout.addWidget(main_window.source_dirs_combo)
-    
-    # Add buttons for source directory management
-    source_dirs_add_button = QPushButton("Add")
-    source_dirs_add_button.clicked.connect(lambda: main_window._add_to_combo(main_window.source_dirs_combo, "Select Source Directory", is_directory=True))
-    source_dirs_layout.addWidget(source_dirs_add_button)
-    
+    source_dirs_layout.addWidget(QLabel("Sources:"))
+    source_dirs_layout.addWidget(main_window.source_dirs_list, 1)
+    source_dirs_add_button = QPushButton("Add...")
+    source_dirs_add_button.clicked.connect(lambda: main_window._add_to_list(main_window.source_dirs_list, "Select Source Directory", is_directory=True))
     source_dirs_remove_button = QPushButton("Remove")
-    source_dirs_remove_button.clicked.connect(lambda: main_window._remove_from_combo(main_window.source_dirs_combo))
+    source_dirs_remove_button.clicked.connect(lambda: main_window._remove_from_list(main_window.source_dirs_list))
+    source_dirs_layout.addWidget(source_dirs_add_button)
     source_dirs_layout.addWidget(source_dirs_remove_button)
-    
     source_config_layout.addLayout(source_dirs_layout)
+    main_window.source_dirs_list.setObjectName("source_dirs_list")
     
-    # Exclude items
-    exclude_items_layout = QHBoxLayout()
-    exclude_items_layout.addWidget(QLabel("Exclude Items:"))
-    main_window.exclude_items_combo = QComboBox()
-    main_window.exclude_items_combo.setEditable(True)
-    main_window.exclude_items_combo.setMinimumWidth(300)
-    exclude_items_layout.addWidget(main_window.exclude_items_combo)
-    
-    # Add buttons for exclude items management
-    exclude_items_add_button = QPushButton("Add")
-    exclude_items_add_button.clicked.connect(lambda: main_window._add_to_combo(main_window.exclude_items_combo, "Enter Item to Exclude"))
-    exclude_items_layout.addWidget(exclude_items_add_button)
-    
-    exclude_items_remove_button = QPushButton("Remove")
-    exclude_items_remove_button.clicked.connect(lambda: main_window._remove_from_combo(main_window.exclude_items_combo))
-    exclude_items_layout.addWidget(exclude_items_remove_button)
-    
-    source_config_layout.addLayout(exclude_items_layout)
+    # Excluded Items (using QListWidget with drag-drop)
+    main_window.excluded_dirs_list = QListWidget()
+    main_window.excluded_dirs_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+    main_window.excluded_dirs_list.setMaximumHeight(80)
+    excluded_layout = QHBoxLayout()
+    excluded_label = QLabel("Excluded Items:")
+    excluded_layout.addWidget(excluded_label)
+    excluded_layout.addWidget(main_window.excluded_dirs_list, 1)
+    excluded_add_button = QPushButton("+")
+    excluded_add_button.setFixedWidth(30)
+    excluded_remove_button = QPushButton("x")
+    excluded_remove_button.setFixedWidth(30)
+    excluded_add_button.clicked.connect(lambda: main_window._add_to_list(main_window.excluded_dirs_list, "Enter Item to Exclude"))
+    excluded_remove_button.clicked.connect(lambda: main_window._remove_from_list(main_window.excluded_dirs_list))
+    excluded_layout.addWidget(excluded_add_button)
+    excluded_layout.addWidget(excluded_remove_button)
+    source_config_layout.addLayout(excluded_layout)
+    main_window.excluded_dirs_list.setObjectName("excluded_dirs_list")
     
     # Game managers
     game_managers_layout = QHBoxLayout()
@@ -99,8 +139,50 @@ def populate_setup_tab(main_window: QWidget):
     main_window.logging_verbosity_combo.addItems(["None", "Low", "Medium", "High", "Debug"])
     main_window.logging_verbosity_combo.currentTextChanged.connect(main_window._on_logging_verbosity_changed)
     logging_layout.addWidget(main_window.logging_verbosity_combo)
-    logging_layout.addStretch(1)
     
+    # Font Dropdown
+    main_window.font_combo = QComboBox()
+    main_window.font_combo.addItem("System")
+    site_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "site")
+    if not os.path.exists(site_path):
+        site_path = os.path.join(os.path.dirname(__file__), "site")
+    if os.path.exists(site_path):
+        for f in os.listdir(site_path):
+            if f.lower().endswith((".ttf", ".otf")):
+                main_window.font_combo.addItem(f)
+    logging_layout.addWidget(QLabel("Font:"))
+    logging_layout.addWidget(main_window.font_combo)
+
+    # Font Size SpinBox
+    main_window.font_size_spin = QSpinBox()
+    main_window.font_size_spin.setRange(8, 24)
+    main_window.font_size_spin.setValue(10)
+    main_window.font_size_spin.valueChanged.connect(main_window._on_appearance_changed)
+    logging_layout.addWidget(QLabel("Size:"))
+    logging_layout.addWidget(main_window.font_size_spin)
+
+    # Theme Dropdown
+    main_window.theme_combo = QComboBox()
+    main_window.theme_combo.addItems(["Default", "Windows", "Vista", "MacOS", "Fusion", "Dark", "Light"])
+    main_window.theme_combo.currentTextChanged.connect(main_window._on_appearance_changed)
+    logging_layout.addWidget(QLabel("Theme:"))
+    logging_layout.addWidget(main_window.theme_combo)
+
+    # Restart Button
+    main_window.restart_btn = QPushButton("*")
+    main_window.restart_btn.setToolTip("Reset application configuration to defaults")
+    main_window.restart_btn.setFixedWidth(25)
+    main_window.restart_btn.clicked.connect(main_window._reset_to_defaults)
+    logging_layout.addWidget(main_window.restart_btn)
+    
+    # Set object names for persistence
+    main_window.logging_verbosity_combo.setObjectName("logging_verbosity_combo")
+    main_window.font_combo.setObjectName("font_combo")
+    main_window.font_size_spin.setObjectName("font_size_spin")
+    main_window.theme_combo.setObjectName("theme_combo")
+    main_window.restart_btn.setObjectName("restart_btn")
+    
+    logging_layout.addStretch(1)
     source_config_layout.addLayout(logging_layout)
     
     # --- Section 1: Directories ---
@@ -125,11 +207,11 @@ def populate_setup_tab(main_window: QWidget):
         "Add New...": main_window._add_new_app_dialog
     }
     
-    # Add directory selection widgets
+    # Add path selection widgets
     widget, main_window.profiles_dir_edit = create_path_selection_widget(main_window, "Select Profiles Directory", is_directory=True)
-    directories_layout.addRow(QLabel("Profiles Directory:"), widget)
+    directories_layout.addRow(QLabel("Profiles:"), widget)
     widget, main_window.launchers_dir_edit = create_path_selection_widget(main_window, "Select Launchers Directory", is_directory=True)
-    directories_layout.addRow(QLabel("Launchers Directory:"), widget)
+    directories_layout.addRow(QLabel("Launchers:"), widget)
     
     # --- Section 2: Applications ---
     applications_widget = QWidget()
@@ -151,24 +233,19 @@ def populate_setup_tab(main_window: QWidget):
     )
     applications_layout.addRow(QLabel("Multi-Monitor Application:"), widget)
     
-    # --- Section 3: Profiles ---
-    profiles_widget = QWidget()
-    profiles_layout = QFormLayout(profiles_widget)
-    
-    # Add profile selection widgets
-    widget, main_window.p1_profile_edit = create_path_selection_widget(main_window, "Select Player 1 Profile File", is_directory=False)
-    profiles_layout.addRow(QLabel("Player 1 Profile File:"), widget)
-    widget, main_window.p2_profile_edit = create_path_selection_widget(main_window, "Select Player 2 Profile File", is_directory=False)
-    profiles_layout.addRow(QLabel("Player 2 Profile File:"), widget)
-    widget, main_window.mediacenter_profile_edit = create_path_selection_widget(main_window, "Select Media Center/Desktop Profile File", is_directory=False)
-    profiles_layout.addRow(QLabel("Media Center/Desktop Profile File:"), widget)
-    
-    widget, main_window.multimonitor_gaming_config_edit = create_path_selection_widget(main_window, "Select Multi-Monitor Gaming Config File", is_directory=False)
-    profiles_layout.addRow(QLabel("Multi-Monitor Gaming Config File:"), widget)
-    widget, main_window.multimonitor_media_config_edit = create_path_selection_widget(main_window, "Select Multi-Monitor Media/Desktop Config File", is_directory=False)
-    profiles_layout.addRow(QLabel("Multi-Monitor Media/Desktop Config File:"), widget)
-    
-    # Create pre-launch and post-launch app lists
+    # Add Just After Launch App
+    widget, main_window.after_launch_app_line_edit, main_window.after_launch_run_wait_checkbox = create_app_selection_with_run_wait_widget(
+        main_window, "Select Just After Launch App", main_window.predefined_controller_apps
+    )
+    applications_layout.addRow(QLabel("Just After Launch App:"), widget)
+
+    # Add Just Before Exit App
+    widget, main_window.before_exit_app_line_edit, main_window.before_exit_run_wait_checkbox = create_app_selection_with_run_wait_widget(
+        main_window, "Select Just Before Exit App", main_window.predefined_controller_apps
+    )
+    applications_layout.addRow(QLabel("Just Before Exit App:"), widget)
+
+    # Create pre-launch and post-launch app lists (placed in Applications section)
     main_window.pre_launch_app_line_edits = []
     main_window.pre_launch_run_wait_checkboxes = []
     main_window.post_launch_app_line_edits = []
@@ -185,7 +262,7 @@ def populate_setup_tab(main_window: QWidget):
         )
         main_window.pre_launch_app_line_edits.append(line_edit)
         main_window.pre_launch_run_wait_checkboxes.append(run_wait_cb)
-        profiles_layout.addRow(QLabel(f"Pre-Launch App {i}:"), widget)
+        applications_layout.addRow(QLabel(f"Pre-Launch App {i}:"), widget)
     
     for i in range(1, 4):
         widget, line_edit, run_wait_cb = create_app_selection_with_run_wait_widget(
@@ -193,11 +270,30 @@ def populate_setup_tab(main_window: QWidget):
         )
         main_window.post_launch_app_line_edits.append(line_edit)
         main_window.post_launch_run_wait_checkboxes.append(run_wait_cb)
-        profiles_layout.addRow(QLabel(f"Post-Launch App {i}:"), widget)
+        applications_layout.addRow(QLabel(f"Post-Launch App {i}:"), widget)
+
+    # --- Section 3: Profiles ---
+    profiles_widget = QWidget()
+    profiles_layout = QFormLayout(profiles_widget)
+    
+    # Add profile selection widgets with CEN/LC
+    p1_widget, main_window.p1_profile_edit, main_window.p1_cen_radio, main_window.p1_lc_radio = create_path_with_cen_lc_widget(main_window, "Select Player 1 Profile File", is_directory=False)
+    profiles_layout.addRow(QLabel("Player 1 Profile File:"), p1_widget)
+    p2_widget, main_window.p2_profile_edit, main_window.p2_cen_radio, main_window.p2_lc_radio = create_path_with_cen_lc_widget(main_window, "Select Player 2 Profile File", is_directory=False)
+    profiles_layout.addRow(QLabel("Player 2 Profile File:"), p2_widget)
+    mediacenter_widget, main_window.mediacenter_profile_edit, main_window.mediacenter_cen_radio, main_window.mediacenter_lc_radio = create_path_with_cen_lc_widget(main_window, "Select Media Center/Desktop Profile File", is_directory=False)
+    profiles_layout.addRow(QLabel("Media Center/Desktop Profile File:"), mediacenter_widget)
+    
+    multimonitor_gaming_widget, main_window.multimonitor_gaming_config_edit, main_window.multimonitor_gaming_cen_radio, main_window.multimonitor_gaming_lc_radio = create_path_with_cen_lc_widget(main_window, "Select Multi-Monitor Gaming Config File", is_directory=False)
+    profiles_layout.addRow(QLabel("Multi-Monitor Gaming Config File:"), multimonitor_gaming_widget)
+    multimonitor_media_widget, main_window.multimonitor_media_config_edit, main_window.multimonitor_media_cen_radio, main_window.multimonitor_media_lc_radio = create_path_with_cen_lc_widget(main_window, "Select Multi-Monitor Media/Desktop Config File", is_directory=False)
+    profiles_layout.addRow(QLabel("Multi-Monitor Media/Desktop Config File:"), multimonitor_media_widget)
+    
+    # (Pre/Post launch app widgets moved into Applications section)
     
     # Create accordion sections
     source_config_section = AccordionSection("Source Configuration", source_config_widget)
-    directories_section = AccordionSection("Directories", directories_widget)
+    directories_section = AccordionSection("Paths", directories_widget)
     applications_section = AccordionSection("Applications", applications_widget)
     profiles_section = AccordionSection("Profiles", profiles_widget)
     
@@ -209,16 +305,22 @@ def populate_setup_tab(main_window: QWidget):
     main_layout.addStretch(1)
     
     # Set object names for config saving/loading
-    main_window.source_dirs_combo.setObjectName("source_dirs_combo")
-    main_window.exclude_items_combo.setObjectName("exclude_items_combo")
-    main_window.other_managers_combo.setObjectName("other_managers_combo")
+    main_window.source_dirs_list.setObjectName("source_dirs_list")
+    main_window.excluded_dirs_list.setObjectName("excluded_dirs_list")
     main_window.logging_verbosity_combo.setObjectName("logging_verbosity_combo")
-    main_window.exclude_manager_checkbox.setObjectName("exclude_manager_checkbox")
+    main_window.font_combo.setObjectName("font_combo")
+    main_window.font_size_spin.setObjectName("font_size_spin")
+    main_window.theme_combo.setObjectName("theme_combo")
+    main_window.restart_btn.setObjectName("restart_btn")
     main_window.profiles_dir_edit.setObjectName("profiles_dir_edit")
     main_window.launchers_dir_edit.setObjectName("launchers_dir_edit")
     main_window.controller_mapper_app_line_edit.setObjectName("controller_mapper_app_line_edit")
     main_window.borderless_app_line_edit.setObjectName("borderless_app_line_edit")
     main_window.multimonitor_app_line_edit.setObjectName("multimonitor_app_line_edit")
+    main_window.after_launch_app_line_edit.setObjectName("after_launch_app_line_edit")
+    main_window.before_exit_app_line_edit.setObjectName("before_exit_app_line_edit")
+    main_window.after_launch_run_wait_checkbox.setObjectName("after_launch_run_wait_checkbox")
+    main_window.before_exit_run_wait_checkbox.setObjectName("before_exit_run_wait_checkbox")
     main_window.p1_profile_edit.setObjectName("p1_profile_edit")
     main_window.p2_profile_edit.setObjectName("p2_profile_edit")
     main_window.mediacenter_profile_edit.setObjectName("mediacenter_profile_edit")

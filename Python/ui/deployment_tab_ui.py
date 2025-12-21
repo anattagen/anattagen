@@ -37,7 +37,8 @@ def populate_deployment_tab(main_window):
     # Create Steam DB button with dropdown menu
     steam_db_button = QPushButton("STEAM DB")
     steam_db_button.setToolTip("Steam database operations")
-    steam_db_button.setStyleSheet("QPushButton { min-width: 144px; }")
+    # Increase the dropdown button width by 2x for easier access
+    steam_db_button.setStyleSheet("QPushButton { min-width: 288px; }")
     
     # Create a menu for the Steam DB button
     steam_db_menu = QMenu()
@@ -55,6 +56,19 @@ def populate_deployment_tab(main_window):
     delete_json_action.triggered.connect(main_window.steam_manager.delete_steam_json)
     delete_cache_action = steam_db_menu.addAction("Delete Steam Caches")
     delete_cache_action.triggered.connect(main_window.steam_cache_manager.delete_cache_files)
+    
+    steam_db_menu.addSeparator()
+    # Add Index Sources action (moved from Creation Options). Make it more prominent.
+    index_sources_action = steam_db_menu.addAction("INDEX SOURCES")
+    try:
+        # Try to make the action font bold and slightly larger
+        f = index_sources_action.font()
+        f.setBold(True)
+        f.setPointSize(max(10, f.pointSize() + 1))
+        index_sources_action.setFont(f)
+    except Exception:
+        pass
+    index_sources_action.triggered.connect(lambda: main_window.data_manager.index_sources())
     # Set the menu for the button
     steam_db_button.setMenu(steam_db_menu)
     
@@ -79,11 +93,11 @@ def populate_deployment_tab(main_window):
     main_window.apply_mapper_profiles_checkbox = QCheckBox("Apply Mapper Profiles")
     main_window.apply_mapper_profiles_checkbox.setToolTip("If checked, the launcher will apply controller mapper profiles.")
     
-    main_window.enable_borderless_windowing_checkbox = QCheckBox("Enable Borderless Windowing")
-    main_window.enable_borderless_windowing_checkbox.setToolTip("If checked, the launcher will enable borderless windowing for the game.")
+    main_window.enable_borderless_windowing_checkbox = QCheckBox("Enable Windowing")
+    main_window.enable_borderless_windowing_checkbox.setToolTip("If checked, the launcher will enable windowing for the game.")
     
-    main_window.terminate_bw_on_exit_checkbox = QCheckBox("Terminate Borderless on Exit")
-    main_window.terminate_bw_on_exit_checkbox.setToolTip("If checked, the launcher will terminate the borderless windowing application when the game exits.")
+    main_window.terminate_bw_on_exit_checkbox = QCheckBox("Terminate Windowing on Exit")
+    main_window.terminate_bw_on_exit_checkbox.setToolTip("If checked, the launcher will terminate the windowing application when the game exits.")
     
     # Create a layout for the checkboxes in two columns
     general_options_columns_layout = QHBoxLayout()
@@ -123,8 +137,8 @@ def populate_deployment_tab(main_window):
         ("Player 1 Profile File:", main_window.p1_profile_edit if hasattr(main_window, 'p1_profile_edit') else None),
         ("Player 2 Profile File:", main_window.p2_profile_edit if hasattr(main_window, 'p2_profile_edit') else None),
         ("Media Center/Desktop Profile File:", main_window.mediacenter_profile_edit if hasattr(main_window, 'mediacenter_profile_edit') else None),
-        ("MM Gaming Config File:", main_window.multimonitor_gaming_config_edit if hasattr(main_window, 'multimonitor_gaming_config_edit') else None),
-        ("MM Media/Desktop Config File:", main_window.multimonitor_media_config_edit if hasattr(main_window, 'multimonitor_media_config_edit') else None),
+        ("Game Display File:", main_window.multimonitor_gaming_config_edit if hasattr(main_window, 'multimonitor_gaming_config_edit') else None),
+        ("Desktop Display File:", main_window.multimonitor_media_config_edit if hasattr(main_window, 'multimonitor_media_config_edit') else None),
     ]
     
     # Initialize the deployment path options dictionary if it doesn't exist
@@ -182,9 +196,11 @@ def populate_deployment_tab(main_window):
     # Create a splitter to allow resizing
     splitter = QSplitter(Qt.Orientation.Horizontal)
     
-    # Launch sequence group
-    launch_sequence_group = QGroupBox("Launch Sequence")
+    # Launch/Exit sequence title and lists
+    launch_sequence_group = QGroupBox("")
     launch_sequence_layout = QVBoxLayout(launch_sequence_group)
+    sequence_title = QLabel("<b>Launch/Exit Sequence</b>")
+    sequence_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
     
     # Create the launch sequence list with improved styling
     main_window.launch_sequence_list = DragDropListWidget()
@@ -207,12 +223,13 @@ def populate_deployment_tab(main_window):
     launch_buttons_layout.addWidget(reset_launch_btn)
     launch_buttons_layout.addStretch(1)
     
+    launch_sequence_layout.addWidget(sequence_title)
     launch_sequence_layout.addWidget(QLabel("Drag to reorder:"))
     launch_sequence_layout.addWidget(main_window.launch_sequence_list)
     launch_sequence_layout.addLayout(launch_buttons_layout)
     
-    # Exit sequence group
-    exit_sequence_group = QGroupBox("Exit Sequence")
+    # Exit sequence group (paired visually with launch)
+    exit_sequence_group = QGroupBox("")
     exit_sequence_layout = QVBoxLayout(exit_sequence_group)
     
     # Create the exit sequence list with improved styling
@@ -235,7 +252,6 @@ def populate_deployment_tab(main_window):
     exit_buttons_layout.addWidget(reset_exit_btn)
     exit_buttons_layout.addStretch(1)
     
-    exit_sequence_layout.addWidget(QLabel("Drag to reorder:"))
     exit_sequence_layout.addWidget(main_window.exit_sequence_list)
     exit_sequence_layout.addLayout(exit_buttons_layout)
     
@@ -255,22 +271,97 @@ def populate_deployment_tab(main_window):
     main_window.create_overwrite_joystick_profiles_checkbox = QCheckBox("Create/Overwrite Joystick Profiles")
     main_window.create_overwrite_joystick_profiles_checkbox.setToolTip("If checked, joystick profiles will be created or overwritten.")
     
-    # Add the checkboxes to the layout
-    creation_options_layout.addWidget(main_window.create_overwrite_launcher_checkbox)
-    creation_options_layout.addWidget(main_window.create_profile_folders_checkbox)
-    creation_options_layout.addWidget(main_window.create_overwrite_joystick_profiles_checkbox)
+    # Enable toggles for Applications (populated from Setup -> Applications)
+    main_window.enable_controller_mapper_checkbox = QCheckBox("Enable Controller Mapper")
+    main_window.enable_borderless_app_checkbox = QCheckBox("Enable Borderless App")
+    main_window.enable_multimonitor_app_checkbox = QCheckBox("Enable Multi-Monitor App")
+    main_window.enable_after_launch_app_checkbox = QCheckBox("Enable Just After Launch App")
+    main_window.enable_before_exit_app_checkbox = QCheckBox("Enable Just Before Exit App")
+    main_window.enable_pre1_checkbox = QCheckBox("Enable Pre-Launch App 1")
+    main_window.enable_pre2_checkbox = QCheckBox("Enable Pre-Launch App 2")
+    main_window.enable_pre3_checkbox = QCheckBox("Enable Pre-Launch App 3")
+    main_window.enable_post1_checkbox = QCheckBox("Enable Post-Launch App 1")
+    main_window.enable_post2_checkbox = QCheckBox("Enable Post-Launch App 2")
+    main_window.enable_post3_checkbox = QCheckBox("Enable Post-Launch App 3")
 
-    # Add Index Sources button
-    index_sources_button = QPushButton("Index Sources")
-    index_sources_button.clicked.connect(main_window._index_sources)
-    index_sources_button.setStyleSheet("QPushButton { background-color: #2196F3; color: white; padding: 8px; }")
-    creation_options_layout.addWidget(index_sources_button)
+    # Create a two-column layout for creation options
+    creation_columns_layout = QHBoxLayout()
+    left_col = QVBoxLayout()
+    right_col = QVBoxLayout()
+
+    # Left column: creation options + enable toggles
+    left_col.addWidget(main_window.create_overwrite_launcher_checkbox)
+    left_col.addWidget(main_window.create_profile_folders_checkbox)
+    left_col.addWidget(main_window.create_overwrite_joystick_profiles_checkbox)
+    left_col.addSpacing(6)
+    left_col.addWidget(main_window.enable_controller_mapper_checkbox)
+    left_col.addWidget(main_window.enable_borderless_app_checkbox)
+    left_col.addWidget(main_window.enable_multimonitor_app_checkbox)
+    left_col.addWidget(main_window.enable_after_launch_app_checkbox)
+    left_col.addWidget(main_window.enable_before_exit_app_checkbox)
+    left_col.addWidget(main_window.enable_pre1_checkbox)
+    left_col.addWidget(main_window.enable_pre2_checkbox)
+    left_col.addWidget(main_window.enable_pre3_checkbox)
+    left_col.addWidget(main_window.enable_post1_checkbox)
+    left_col.addWidget(main_window.enable_post2_checkbox)
+    left_col.addWidget(main_window.enable_post3_checkbox)
+    left_col.addStretch(1)
+
+    # Right column: runtime flags and create button (requested to be on right)
+    main_window.hide_taskbar_checkbox = QCheckBox("Hide Taskbar")
+    main_window.hide_taskbar_checkbox.setToolTip("If checked, the launcher will hide the taskbar when the game launches.")
+    main_window.run_as_admin_checkbox = QCheckBox("Run As Admin")
+    main_window.run_as_admin_checkbox.setToolTip("If checked, the launcher will run the game with administrator privileges.")
+    main_window.use_kill_list_checkbox = QCheckBox("Use Kill List")
+    main_window.terminate_bw_on_exit_checkbox = QCheckBox("Terminate Windowing on Exit")
+    main_window.terminate_bw_on_exit_checkbox.setToolTip("If checked, the launcher will terminate the windowing application when the game exits.")
+
+    # Index Sources moved to General Options dropdown (see steam_db_menu)
     
-    # Add Create button
-    create_button = QPushButton("Create Selected")
-    create_button.clicked.connect(main_window.on_create_button_clicked)  # Remove the underscore
+    # Add Create button with dynamic count
+    def update_create_button_text():
+        """Update create button text with count of selected items"""
+        try:
+            if hasattr(main_window, 'editor_tab') and hasattr(main_window.editor_tab, 'table'):
+                selected_items = main_window.editor_tab.table.selectedItems()
+                # Count unique rows in selected items
+                selected_rows = set()
+                for item in selected_items:
+                    selected_rows.add(item.row())
+                selected_count = len(selected_rows)
+                create_button.setText(f"<b>CREATE  [{selected_count}]  ITEMS</b>")
+            else:
+                create_button.setText("<b>CREATE  [0]  ITEMS</b>")
+        except Exception:
+            create_button.setText("<b>CREATE  [0]  ITEMS</b>")
+    
+    create_button = QPushButton()
+    create_button.clicked.connect(main_window.on_create_button_clicked)
     create_button.setStyleSheet("QPushButton { font-weight: bold; background-color: #4CAF50; color: white; padding: 8px; }")
-    creation_options_layout.addWidget(create_button)
+    
+    # Store the update function for later use
+    create_button.update_text = update_create_button_text
+    
+    # Initial text
+    update_create_button_text()
+    
+    # Connect to editor tab table selection changes for dynamic updates
+    try:
+        if hasattr(main_window, 'editor_tab') and hasattr(main_window.editor_tab, 'table'):
+            main_window.editor_tab.table.itemSelectionChanged.connect(update_create_button_text)
+    except Exception:
+        pass
+
+    right_col.addWidget(main_window.hide_taskbar_checkbox)
+    right_col.addWidget(main_window.run_as_admin_checkbox)
+    right_col.addWidget(main_window.use_kill_list_checkbox)
+    right_col.addWidget(main_window.terminate_bw_on_exit_checkbox)
+    right_col.addStretch(1)
+    right_col.addWidget(create_button)
+
+    creation_columns_layout.addLayout(left_col)
+    creation_columns_layout.addLayout(right_col)
+    creation_options_layout.addLayout(creation_columns_layout)
     
     # Add the groups to the splitter
     splitter.addWidget(launch_sequence_group)
@@ -281,7 +372,7 @@ def populate_deployment_tab(main_window):
     sequences_layout.addWidget(splitter)
     
     # Create accordion sections
-    general_options_section = AccordionSection("General Options", general_options_widget)
+    general_options_section = AccordionSection("Database Indexing", general_options_widget)
     path_config_section = AccordionSection("Path Configurations", path_config_widget)
     sequences_section = AccordionSection("Sequences and Creation", sequences_widget)
     
@@ -305,6 +396,22 @@ def populate_deployment_tab(main_window):
     main_window.create_overwrite_joystick_profiles_checkbox.setObjectName("create_overwrite_joystick_profiles_checkbox")
     main_window.launch_sequence_list.setObjectName("launch_sequence_list")
     main_window.exit_sequence_list.setObjectName("exit_sequence_list")
+    # New creation/enable flags
+    main_window.enable_controller_mapper_checkbox.setObjectName("enable_controller_mapper_checkbox")
+    main_window.enable_borderless_app_checkbox.setObjectName("enable_borderless_app_checkbox")
+    main_window.enable_multimonitor_app_checkbox.setObjectName("enable_multimonitor_app_checkbox")
+    main_window.enable_after_launch_app_checkbox.setObjectName("enable_after_launch_app_checkbox")
+    main_window.enable_before_exit_app_checkbox.setObjectName("enable_before_exit_app_checkbox")
+    main_window.enable_pre1_checkbox.setObjectName("enable_pre1_checkbox")
+    main_window.enable_pre2_checkbox.setObjectName("enable_pre2_checkbox")
+    main_window.enable_pre3_checkbox.setObjectName("enable_pre3_checkbox")
+    main_window.enable_post1_checkbox.setObjectName("enable_post1_checkbox")
+    main_window.enable_post2_checkbox.setObjectName("enable_post2_checkbox")
+    main_window.enable_post3_checkbox.setObjectName("enable_post3_checkbox")
+    main_window.hide_taskbar_checkbox.setObjectName("hide_taskbar_checkbox")
+    main_window.run_as_admin_checkbox.setObjectName("run_as_admin_checkbox")
+    main_window.use_kill_list_checkbox.setObjectName("use_kill_list_checkbox")
+    main_window.terminate_bw_on_exit_checkbox.setObjectName("terminate_bw_on_exit_checkbox")
     
     # Add the main layout to the deployment tab layout
     main_window.deployment_tab_layout.addLayout(main_layout)

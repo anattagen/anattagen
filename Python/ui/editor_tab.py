@@ -169,65 +169,116 @@ class EditorTab(QWidget):
             # RunAsAdmin (CheckBox) - col RUN_AS_ADMIN
             self.table.setCellWidget(row_num, constants.EditorCols.RUN_AS_ADMIN.value, self._create_checkbox_widget(game.get('run_as_admin', False)))
 
-            # Controller Mapper (CheckBox, Path, RunWait)
+            # Helper to get propagation status symbol and run_wait default
+            def _get_propagation_symbol_and_run_wait(config_key):
+                """Get propagation status symbol (< or >) and default run_wait state from config"""
+                config = self.main_window.config
+                # Get the propagation mode (CEN or LC)
+                mode = config.deployment_path_modes.get(config_key, 'CEN')
+                symbol = '<' if mode == 'CEN' else '>'
+                
+                # Get the run_wait default state
+                run_wait_key = f"{config_key}_run_wait"
+                run_wait = config.run_wait_states.get(run_wait_key, False)
+                
+                return symbol, run_wait
+
+            # Controller Mapper (CheckBox, Path with symbol, RunWait)
             self.table.setCellWidget(row_num, constants.EditorCols.CM_ENABLED.value, self._create_checkbox_widget(game.get('controller_mapper_enabled', True)))
-            self.table.setItem(row_num, constants.EditorCols.CM_PATH.value, QTableWidgetItem(game.get('controller_mapper_path', '')))
-            self.table.setCellWidget(row_num, constants.EditorCols.CM_RUN_WAIT.value, self._create_checkbox_widget(game.get('controller_mapper_run_wait', False)))
+            cm_symbol, cm_run_wait = _get_propagation_symbol_and_run_wait('controller_mapper')
+            cm_path = f"{cm_symbol} {game.get('controller_mapper_path', '')}"
+            self.table.setItem(row_num, constants.EditorCols.CM_PATH.value, QTableWidgetItem(cm_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.CM_RUN_WAIT.value, self._create_checkbox_widget(game.get('controller_mapper_run_wait', cm_run_wait)))
 
-            # Borderless Windowing (CheckBox, Path, RunWait)
+            # Borderless Windowing (CheckBox, Path with symbol, RunWait)
             self.table.setCellWidget(row_num, constants.EditorCols.BW_ENABLED.value, self._create_checkbox_widget(game.get('borderless_windowing_enabled', True)))
-            self.table.setItem(row_num, constants.EditorCols.BW_PATH.value, QTableWidgetItem(game.get('borderless_windowing_path', '')))
-            self.table.setCellWidget(row_num, constants.EditorCols.BW_RUN_WAIT.value, self._create_checkbox_widget(game.get('borderless_windowing_run_wait', False)))
+            bw_symbol, bw_run_wait = _get_propagation_symbol_and_run_wait('borderless_app')
+            bw_path = f"{bw_symbol} {game.get('borderless_windowing_path', '')}"
+            self.table.setItem(row_num, constants.EditorCols.BW_PATH.value, QTableWidgetItem(bw_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.BW_RUN_WAIT.value, self._create_checkbox_widget(game.get('borderless_windowing_run_wait', bw_run_wait)))
 
-            # Multi-monitor App (CheckBox, Path, RunWait)
+            # Multi-monitor App (CheckBox, Path with symbol, RunWait)
             self.table.setCellWidget(row_num, constants.EditorCols.MM_ENABLED.value, self._create_checkbox_widget(game.get('multi_monitor_app_enabled', True)))
-            self.table.setItem(row_num, constants.EditorCols.MM_PATH.value, QTableWidgetItem(game.get('multi_monitor_app_path', '')))
-            self.table.setCellWidget(row_num, constants.EditorCols.MM_RUN_WAIT.value, self._create_checkbox_widget(game.get('multi_monitor_app_run_wait', False)))
+            mm_symbol, mm_run_wait = _get_propagation_symbol_and_run_wait('multimonitor_app')
+            mm_path = f"{mm_symbol} {game.get('multi_monitor_app_path', '')}"
+            self.table.setItem(row_num, constants.EditorCols.MM_PATH.value, QTableWidgetItem(mm_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.MM_RUN_WAIT.value, self._create_checkbox_widget(game.get('multi_monitor_app_run_wait', mm_run_wait)))
 
             # Hide Taskbar (CheckBox)
             self.table.setCellWidget(row_num, constants.EditorCols.HIDE_TASKBAR.value, self._create_checkbox_widget(game.get('hide_taskbar', False)))
 
-            # Profiles
-            self.table.setItem(row_num, constants.EditorCols.MM_GAME_PROFILE.value, QTableWidgetItem(game.get('mm_game_profile', '')))
-            self.table.setItem(row_num, constants.EditorCols.MM_DESKTOP_PROFILE.value, QTableWidgetItem(game.get('mm_desktop_profile', '')))
-            self.table.setItem(row_num, constants.EditorCols.PLAYER1_PROFILE.value, QTableWidgetItem(game.get('player1_profile', '')))
-            self.table.setItem(row_num, constants.EditorCols.PLAYER2_PROFILE.value, QTableWidgetItem(game.get('player2_profile', '')))
-            self.table.setItem(row_num, constants.EditorCols.MEDIACENTER_PROFILE.value, QTableWidgetItem(game.get('mediacenter_profile', '')))
+            # Profiles with propagation symbols
+            config = self.main_window.config
+            mm_game_symbol, _ = _get_propagation_symbol_and_run_wait('multimonitor_gaming_config')
+            mm_game_profile = f"{mm_game_symbol} {game.get('mm_game_profile', '')}"
+            self.table.setItem(row_num, constants.EditorCols.MM_GAME_PROFILE.value, QTableWidgetItem(mm_game_profile))
+            
+            mm_desktop_symbol, _ = _get_propagation_symbol_and_run_wait('multimonitor_media_config')
+            mm_desktop_profile = f"{mm_desktop_symbol} {game.get('mm_desktop_profile', '')}"
+            self.table.setItem(row_num, constants.EditorCols.MM_DESKTOP_PROFILE.value, QTableWidgetItem(mm_desktop_profile))
+            
+            p1_symbol, _ = _get_propagation_symbol_and_run_wait('p1_profile')
+            player1_profile = f"{p1_symbol} {game.get('player1_profile', '')}"
+            self.table.setItem(row_num, constants.EditorCols.PLAYER1_PROFILE.value, QTableWidgetItem(player1_profile))
+            
+            p2_symbol, _ = _get_propagation_symbol_and_run_wait('p2_profile')
+            player2_profile = f"{p2_symbol} {game.get('player2_profile', '')}"
+            self.table.setItem(row_num, constants.EditorCols.PLAYER2_PROFILE.value, QTableWidgetItem(player2_profile))
+            
+            mc_symbol, _ = _get_propagation_symbol_and_run_wait('mediacenter_profile')
+            mediacenter_profile = f"{mc_symbol} {game.get('mediacenter_profile', '')}"
+            self.table.setItem(row_num, constants.EditorCols.MEDIACENTER_PROFILE.value, QTableWidgetItem(mediacenter_profile))
 
-            # Just After Launch (CheckBox, Path, RunWait)
+            # Just After Launch (CheckBox, Path with symbol, RunWait)
             self.table.setCellWidget(row_num, constants.EditorCols.JA_ENABLED.value, self._create_checkbox_widget(game.get('just_after_launch_enabled', True)))
-            self.table.setItem(row_num, constants.EditorCols.JA_PATH.value, QTableWidgetItem(game.get('just_after_launch_path', '')))
-            self.table.setCellWidget(row_num, constants.EditorCols.JA_RUN_WAIT.value, self._create_checkbox_widget(game.get('just_after_launch_run_wait', False)))
+            ja_symbol, ja_run_wait = _get_propagation_symbol_and_run_wait('just_after_launch')
+            ja_path = f"{ja_symbol} {game.get('just_after_launch_path', '')}"
+            self.table.setItem(row_num, constants.EditorCols.JA_PATH.value, QTableWidgetItem(ja_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.JA_RUN_WAIT.value, self._create_checkbox_widget(game.get('just_after_launch_run_wait', ja_run_wait)))
 
-            # Just Before Exit (CheckBox, Path, RunWait)
+            # Just Before Exit (CheckBox, Path with symbol, RunWait)
             self.table.setCellWidget(row_num, constants.EditorCols.JB_ENABLED.value, self._create_checkbox_widget(game.get('just_before_exit_enabled', True)))
-            self.table.setItem(row_num, constants.EditorCols.JB_PATH.value, QTableWidgetItem(game.get('just_before_exit_path', '')))
-            self.table.setCellWidget(row_num, constants.EditorCols.JB_RUN_WAIT.value, self._create_checkbox_widget(game.get('just_before_exit_run_wait', False)))
+            jb_symbol, jb_run_wait = _get_propagation_symbol_and_run_wait('just_before_exit')
+            jb_path = f"{jb_symbol} {game.get('just_before_exit_path', '')}"
+            self.table.setItem(row_num, constants.EditorCols.JB_PATH.value, QTableWidgetItem(jb_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.JB_RUN_WAIT.value, self._create_checkbox_widget(game.get('just_before_exit_run_wait', jb_run_wait)))
 
             # Pre/Post Scripts with Enabled Checkboxes and RunWait toggles
+            pre1_symbol, pre1_run_wait = _get_propagation_symbol_and_run_wait('pre1')
             self.table.setCellWidget(row_num, constants.EditorCols.PRE1_ENABLED.value, self._create_checkbox_widget(game.get('pre_1_enabled', True)))
-            self.table.setItem(row_num, constants.EditorCols.PRE1_PATH.value, QTableWidgetItem(game.get('pre1_path', '')))
-            self.table.setCellWidget(row_num, constants.EditorCols.PRE1_RUN_WAIT.value, self._create_checkbox_widget(game.get('pre_1_run_wait', False)))
+            pre1_path = f"{pre1_symbol} {game.get('pre1_path', '')}"
+            self.table.setItem(row_num, constants.EditorCols.PRE1_PATH.value, QTableWidgetItem(pre1_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.PRE1_RUN_WAIT.value, self._create_checkbox_widget(game.get('pre_1_run_wait', pre1_run_wait)))
 
+            post1_symbol, post1_run_wait = _get_propagation_symbol_and_run_wait('post1')
             self.table.setCellWidget(row_num, constants.EditorCols.POST1_ENABLED.value, self._create_checkbox_widget(game.get('post_1_enabled', True)))
-            self.table.setItem(row_num, constants.EditorCols.POST1_PATH.value, QTableWidgetItem(game.get('post1_path', '')))
-            self.table.setCellWidget(row_num, constants.EditorCols.POST1_RUN_WAIT.value, self._create_checkbox_widget(game.get('post_1_run_wait', False)))
+            post1_path = f"{post1_symbol} {game.get('post1_path', '')}"
+            self.table.setItem(row_num, constants.EditorCols.POST1_PATH.value, QTableWidgetItem(post1_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.POST1_RUN_WAIT.value, self._create_checkbox_widget(game.get('post_1_run_wait', post1_run_wait)))
 
+            pre2_symbol, pre2_run_wait = _get_propagation_symbol_and_run_wait('pre2')
             self.table.setCellWidget(row_num, constants.EditorCols.PRE2_ENABLED.value, self._create_checkbox_widget(game.get('pre_2_enabled', True)))
-            self.table.setItem(row_num, constants.EditorCols.PRE2_PATH.value, QTableWidgetItem(game.get('pre2_path', '')))
-            self.table.setCellWidget(row_num, constants.EditorCols.PRE2_RUN_WAIT.value, self._create_checkbox_widget(game.get('pre_2_run_wait', False)))
+            pre2_path = f"{pre2_symbol} {game.get('pre2_path', '')}"
+            self.table.setItem(row_num, constants.EditorCols.PRE2_PATH.value, QTableWidgetItem(pre2_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.PRE2_RUN_WAIT.value, self._create_checkbox_widget(game.get('pre_2_run_wait', pre2_run_wait)))
 
+            post2_symbol, post2_run_wait = _get_propagation_symbol_and_run_wait('post2')
             self.table.setCellWidget(row_num, constants.EditorCols.POST2_ENABLED.value, self._create_checkbox_widget(game.get('post_2_enabled', True)))
-            self.table.setItem(row_num, constants.EditorCols.POST2_PATH.value, QTableWidgetItem(game.get('post2_path', '')))
-            self.table.setCellWidget(row_num, constants.EditorCols.POST2_RUN_WAIT.value, self._create_checkbox_widget(game.get('post_2_run_wait', False)))
+            post2_path = f"{post2_symbol} {game.get('post2_path', '')}"
+            self.table.setItem(row_num, constants.EditorCols.POST2_PATH.value, QTableWidgetItem(post2_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.POST2_RUN_WAIT.value, self._create_checkbox_widget(game.get('post_2_run_wait', post2_run_wait)))
 
+            pre3_symbol, pre3_run_wait = _get_propagation_symbol_and_run_wait('pre3')
             self.table.setCellWidget(row_num, constants.EditorCols.PRE3_ENABLED.value, self._create_checkbox_widget(game.get('pre_3_enabled', True)))
-            self.table.setItem(row_num, constants.EditorCols.PRE3_PATH.value, QTableWidgetItem(game.get('pre3_path', '')))
-            self.table.setCellWidget(row_num, constants.EditorCols.PRE3_RUN_WAIT.value, self._create_checkbox_widget(game.get('pre_3_run_wait', False)))
+            pre3_path = f"{pre3_symbol} {game.get('pre3_path', '')}"
+            self.table.setItem(row_num, constants.EditorCols.PRE3_PATH.value, QTableWidgetItem(pre3_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.PRE3_RUN_WAIT.value, self._create_checkbox_widget(game.get('pre_3_run_wait', pre3_run_wait)))
 
+            post3_symbol, post3_run_wait = _get_propagation_symbol_and_run_wait('post3')
             self.table.setCellWidget(row_num, constants.EditorCols.POST3_ENABLED.value, self._create_checkbox_widget(game.get('post_3_enabled', True)))
-            self.table.setItem(row_num, constants.EditorCols.POST3_PATH.value, QTableWidgetItem(game.get('post3_path', '')))
-            self.table.setCellWidget(row_num, constants.EditorCols.POST3_RUN_WAIT.value, self._create_checkbox_widget(game.get('post_3_run_wait', False)))
+            post3_path = f"{post3_symbol} {game.get('post3_path', '')}"
+            self.table.setItem(row_num, constants.EditorCols.POST3_PATH.value, QTableWidgetItem(post3_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.POST3_RUN_WAIT.value, self._create_checkbox_widget(game.get('post_3_run_wait', post3_run_wait)))
 
             self.table.blockSignals(False) # Unblock signals
 

@@ -3,7 +3,10 @@ class AppConfig:
     def __init__(self):
         # Setup Tab: Main Settings
         self.source_dirs = []
+        self.excluded_dirs = []
         self.logging_verbosity = "Low"
+        self.game_managers_present = "None"
+        self.exclude_selected_manager_games = False
 
         # Setup Tab: Element & Application Locations
         self.profiles_dir = ""
@@ -16,6 +19,8 @@ class AppConfig:
         self.mediacenter_profile_path = ""
         self.multimonitor_gaming_path = ""
         self.multimonitor_media_path = ""
+        self.steam_json_path = ""
+        self.filtered_steam_cache_path = ""
         
         # Pre/Post launch apps
         self.pre1_path = ""
@@ -31,6 +36,18 @@ class AppConfig:
 
         # Setup Tab: Propagation Status (CEN/LC modes)
         self.deployment_path_modes = {}
+        
+        # CEN/LC states for profile paths
+        self.p1_profile_mode = "CEN"  # or "LC"
+        self.p2_profile_mode = "CEN"
+        self.mediacenter_profile_mode = "CEN"
+        self.multimonitor_gaming_mode = "CEN"
+        self.multimonitor_media_mode = "CEN"
+
+        # Setup Tab: Appearance
+        self.app_font = "System"
+        self.app_theme = "Default"
+        self.font_size = 10
 
         # Setup Tab: Execution Sequences
         self.launch_sequence = []
@@ -42,11 +59,29 @@ class AppConfig:
         self.run_as_admin = False
         self.enable_name_matching = False
         self.steam_json_version = 2
+        self.use_kill_list = False
+        self.enable_launcher = False
+        self.apply_mapper_profiles = False
+        self.enable_borderless_windowing = False
+        self.terminate_borderless_on_exit = False
 
         # Deployment Tab: Creation Options
         self.create_profile_folders = False
         self.create_overwrite_launcher = False
         self.create_overwrite_joystick_profiles = False
+
+        # Enable toggles for applications defined in Setup -> Applications
+        self.enable_controller_mapper = False
+        self.enable_borderless_app = False
+        self.enable_multimonitor_app = False
+        self.enable_after_launch_app = False
+        self.enable_before_exit_app = False
+        self.enable_pre1 = False
+        self.enable_pre2 = False
+        self.enable_pre3 = False
+        self.enable_post1 = False
+        self.enable_post2 = False
+        self.enable_post3 = False
 
         # Other settings not directly on UI
         self.app_directory = ""

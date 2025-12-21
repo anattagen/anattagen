@@ -3,7 +3,13 @@ from Python.ui.name_utils import normalize_name_for_matching
 
 def locate_and_exclude_manager_config(main_window):
     """Locate and exclude games from other managers' configurations"""
-    selected_manager = main_window.other_managers_combo.currentText()
+    if hasattr(main_window, 'setup_tab') and hasattr(main_window.setup_tab, 'other_managers_combo'):
+        selected_manager = main_window.setup_tab.other_managers_combo.currentText()
+    elif hasattr(main_window, 'other_managers_combo'):
+        selected_manager = main_window.other_managers_combo.currentText()
+    else:
+        return
+        
     main_window.statusBar().showMessage(f"Looking for {selected_manager} configuration...", 5000)
     
     # TODO: This method would need to be expanded based on what game managers
@@ -133,4 +139,3 @@ def debug_steam_cache_loading(main_window):
 
     
     print("--- END DEBUG ---\n")
-

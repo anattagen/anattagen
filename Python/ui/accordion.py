@@ -10,7 +10,6 @@ class AccordionSection(QWidget):
         super().__init__()
 
         self.toggle_button = QToolButton(text=title, checkable=True, checked=False)
-        self.toggle_button.setStyleSheet("QToolButton { font-weight: bold; }")
         self.toggle_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         self.toggle_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.toggle_button.clicked.connect(self.toggle)
@@ -39,6 +38,19 @@ class AccordionSection(QWidget):
     @pyqtSlot()
     def toggle(self):
         checked = self.toggle_button.isChecked()
+
+        # If opening this section, close other sibling AccordionSection instances
+        if checked:
+            parent_widget = self.parent()
+            if parent_widget is not None:
+                try:
+                    for sibling in parent_widget.findChildren(AccordionSection):
+                        if sibling is not self and sibling.toggle_button.isChecked():
+                            sibling.toggle_button.setChecked(False)
+                            sibling.toggle()
+                except Exception:
+                    pass
+
         start_height = self.content_area.maximumHeight()
         end_height = self.content_height if checked else 0
 

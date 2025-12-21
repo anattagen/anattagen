@@ -1,6 +1,6 @@
 import configparser
 import os
-from PyQt6.QtWidgets import QFileDialog, QComboBox, QCheckBox, QLineEdit
+from PyQt6.QtWidgets import QFileDialog
 
 def to_snake_case(name):
     """Convert a string to snake_case format"""
@@ -66,6 +66,18 @@ def gather_current_configuration(main_window) -> configparser.ConfigParser:
     if hasattr(main_window, 'multimonitor_media_config_edit'):
         config["Element Locations"]["multimonitor_media_desktop_config_file"] = main_window.multimonitor_media_config_edit.text()
     
+        # Save CEN/LC modes for profile paths
+        if hasattr(main_window, 'p1_cen_radio'):
+            config["Element Locations"]["p1_profile_mode"] = "CEN" if main_window.p1_cen_radio.isChecked() else "LC"
+        if hasattr(main_window, 'p2_cen_radio'):
+            config["Element Locations"]["p2_profile_mode"] = "CEN" if main_window.p2_cen_radio.isChecked() else "LC"
+        if hasattr(main_window, 'mediacenter_cen_radio'):
+            config["Element Locations"]["mediacenter_profile_mode"] = "CEN" if main_window.mediacenter_cen_radio.isChecked() else "LC"
+        if hasattr(main_window, 'multimonitor_gaming_cen_radio'):
+            config["Element Locations"]["multimonitor_gaming_mode"] = "CEN" if main_window.multimonitor_gaming_cen_radio.isChecked() else "LC"
+        if hasattr(main_window, 'multimonitor_media_cen_radio'):
+            config["Element Locations"]["multimonitor_media_mode"] = "CEN" if main_window.multimonitor_media_cen_radio.isChecked() else "LC"
+    
     # Convert to string explicitly
     config["Element Locations"]["steam_json_path"] = str(getattr(main_window, 'steam_json_file_path', ''))
     config["Element Locations"]["filtered_steam_cache_path"] = str(getattr(main_window, 'filtered_steam_cache_file_path', ''))
@@ -127,6 +139,56 @@ def gather_current_configuration(main_window) -> configparser.ConfigParser:
         config["Current Settings"]["deployment_enable_borderless_windowing"] = str(main_window.enable_borderless_windowing_checkbox.isChecked())
     if hasattr(main_window, 'terminate_bw_on_exit_checkbox'):
         config["Current Settings"]["deployment_terminate_borderless_on_exit"] = str(main_window.terminate_bw_on_exit_checkbox.isChecked())
+    # Save enable toggles for applications
+    if hasattr(main_window, 'enable_controller_mapper_checkbox'):
+        config["Current Settings"]["enable_controller_mapper"] = str(main_window.enable_controller_mapper_checkbox.isChecked())
+    if hasattr(main_window, 'enable_borderless_app_checkbox'):
+        config["Current Settings"]["enable_borderless_app"] = str(main_window.enable_borderless_app_checkbox.isChecked())
+    if hasattr(main_window, 'enable_multimonitor_app_checkbox'):
+        config["Current Settings"]["enable_multimonitor_app"] = str(main_window.enable_multimonitor_app_checkbox.isChecked())
+    if hasattr(main_window, 'enable_after_launch_app_checkbox'):
+        config["Current Settings"]["enable_after_launch_app"] = str(main_window.enable_after_launch_app_checkbox.isChecked())
+    if hasattr(main_window, 'enable_before_exit_app_checkbox'):
+        config["Current Settings"]["enable_before_exit_app"] = str(main_window.enable_before_exit_app_checkbox.isChecked())
+    if hasattr(main_window, 'enable_pre1_checkbox'):
+        config["Current Settings"]["enable_pre1"] = str(main_window.enable_pre1_checkbox.isChecked())
+    if hasattr(main_window, 'enable_pre2_checkbox'):
+        config["Current Settings"]["enable_pre2"] = str(main_window.enable_pre2_checkbox.isChecked())
+    if hasattr(main_window, 'enable_pre3_checkbox'):
+        config["Current Settings"]["enable_pre3"] = str(main_window.enable_pre3_checkbox.isChecked())
+    if hasattr(main_window, 'enable_post1_checkbox'):
+        config["Current Settings"]["enable_post1"] = str(main_window.enable_post1_checkbox.isChecked())
+    if hasattr(main_window, 'enable_post2_checkbox'):
+        config["Current Settings"]["enable_post2"] = str(main_window.enable_post2_checkbox.isChecked())
+    if hasattr(main_window, 'enable_post3_checkbox'):
+        config["Current Settings"]["enable_post3"] = str(main_window.enable_post3_checkbox.isChecked())
+
+    # --- Paths (Sync with Python/config_manager.py) ---
+    config["Paths"] = {}
+    
+    # Map Element Locations to Paths
+    el = config["Element Locations"]
+    if "profiles_directory" in el: config["Paths"]["ProfilesDir"] = el["profiles_directory"]
+    if "launchers_directory" in el: config["Paths"]["LaunchersDir"] = el["launchers_directory"]
+    if "player_1_profile_file" in el: config["Paths"]["P1ProfilePath"] = el["player_1_profile_file"]
+    if "player_2_profile_file" in el: config["Paths"]["P2ProfilePath"] = el["player_2_profile_file"]
+    if "mediacenter_desktop_profile_file" in el: config["Paths"]["MediacenterProfilePath"] = el["mediacenter_desktop_profile_file"]
+    if "multimonitor_gaming_config_file" in el: config["Paths"]["MultimonitorGamingPath"] = el["multimonitor_gaming_config_file"]
+    if "multimonitor_media_desktop_config_file" in el: config["Paths"]["MultimonitorMediaPath"] = el["multimonitor_media_desktop_config_file"]
+    if "steam_json_path" in el: config["Paths"]["SteamJsonPath"] = el["steam_json_path"]
+    if "filtered_steam_cache_path" in el: config["Paths"]["FilteredSteamCachePath"] = el["filtered_steam_cache_path"]
+    
+    # Map App Locations to Paths
+    al = config["App Locations"]
+    if "controller_mapper_app" in al: config["Paths"]["ControllerMapperPath"] = al["controller_mapper_app"]
+    if "borderless_windowing_app" in al: config["Paths"]["BorderlessGamingPath"] = al["borderless_windowing_app"]
+    if "multi_monitor_app" in al: config["Paths"]["MultiMonitorToolPath"] = al["multi_monitor_app"]
+    if "just_after_launch_app" in al: config["Paths"]["JustAfterLaunchPath"] = al["just_after_launch_app"]
+    if "just_before_exit_app" in al: config["Paths"]["JustBeforeExitPath"] = al["just_before_exit_app"]
+    
+    for i in range(1, 4):
+        if f"pre_launch_app_{i}" in al: config["Paths"][f"Pre{i}Path"] = al[f"pre_launch_app_{i}"]
+        if f"post_launch_app_{i}" in al: config["Paths"][f"Post{i}Path"] = al[f"post_launch_app_{i}"]
 
     return config
 
@@ -248,16 +310,13 @@ def load_configuration(main_window, config_path=None):
         # --- Current Settings ---
         if "Current Settings" in config:
             cs = config["Current Settings"]
+            
             set_combo_items(main_window.source_dirs_combo, cs.get("source_directories", ''))
             set_combo_items(main_window.exclude_items_combo, cs.get("exclude_items", ''))
-            
-            # Set current text for combo boxes only if the value exists
             if cs.get("game_managers_present", ''):
                 main_window.other_managers_combo.setCurrentText(cs.get("game_managers_present"))
             if cs.get("logging_verbosity", ''):
                 main_window.logging_verbosity_combo.setCurrentText(cs.get("logging_verbosity"))
-            
-            # Set checkboxes
             if hasattr(main_window, 'exclude_manager_checkbox'):
                 main_window.exclude_manager_checkbox.setChecked(get_bool("Current Settings", "exclude_selected_manager_games"))
             
@@ -284,6 +343,30 @@ def load_configuration(main_window, config_path=None):
                 main_window.terminate_bw_on_exit_checkbox.setChecked(get_bool("Current Settings", "deployment_terminate_borderless_on_exit"))
             if hasattr(main_window, 'create_overwrite_joystick_profiles_checkbox'):
                 main_window.create_overwrite_joystick_profiles_checkbox.setChecked(get_bool("Current Settings", "deployment_create_overwrite_joystick_profiles"))
+            
+            # Load new enable toggles for applications
+            if hasattr(main_window, 'enable_controller_mapper_checkbox'):
+                main_window.enable_controller_mapper_checkbox.setChecked(get_bool("Current Settings", "enable_controller_mapper"))
+            if hasattr(main_window, 'enable_borderless_app_checkbox'):
+                main_window.enable_borderless_app_checkbox.setChecked(get_bool("Current Settings", "enable_borderless_app"))
+            if hasattr(main_window, 'enable_multimonitor_app_checkbox'):
+                main_window.enable_multimonitor_app_checkbox.setChecked(get_bool("Current Settings", "enable_multimonitor_app"))
+            if hasattr(main_window, 'enable_after_launch_app_checkbox'):
+                main_window.enable_after_launch_app_checkbox.setChecked(get_bool("Current Settings", "enable_after_launch_app"))
+            if hasattr(main_window, 'enable_before_exit_app_checkbox'):
+                main_window.enable_before_exit_app_checkbox.setChecked(get_bool("Current Settings", "enable_before_exit_app"))
+            if hasattr(main_window, 'enable_pre1_checkbox'):
+                main_window.enable_pre1_checkbox.setChecked(get_bool("Current Settings", "enable_pre1"))
+            if hasattr(main_window, 'enable_pre2_checkbox'):
+                main_window.enable_pre2_checkbox.setChecked(get_bool("Current Settings", "enable_pre2"))
+            if hasattr(main_window, 'enable_pre3_checkbox'):
+                main_window.enable_pre3_checkbox.setChecked(get_bool("Current Settings", "enable_pre3"))
+            if hasattr(main_window, 'enable_post1_checkbox'):
+                main_window.enable_post1_checkbox.setChecked(get_bool("Current Settings", "enable_post1"))
+            if hasattr(main_window, 'enable_post2_checkbox'):
+                main_window.enable_post2_checkbox.setChecked(get_bool("Current Settings", "enable_post2"))
+            if hasattr(main_window, 'enable_post3_checkbox'):
+                main_window.enable_post3_checkbox.setChecked(get_bool("Current Settings", "enable_post3"))
 
         # Load CEN/LC options
         if "Deployment Options" in config and hasattr(main_window, 'deployment_path_options'):
@@ -320,6 +403,38 @@ def load_configuration(main_window, config_path=None):
             if hasattr(main_window, 'multimonitor_media_config_edit'): 
                 set_text_if_not_empty(main_window.multimonitor_media_config_edit, el.get("multimonitor_media_desktop_config_file", ''))
             
+            # Load CEN/LC modes for profile paths
+            if hasattr(main_window, 'p1_cen_radio'):
+                p1_mode = el.get("p1_profile_mode", "CEN")
+                if p1_mode == "LC":
+                    main_window.p1_lc_radio.setChecked(True)
+                else:
+                    main_window.p1_cen_radio.setChecked(True)
+            if hasattr(main_window, 'p2_cen_radio'):
+                p2_mode = el.get("p2_profile_mode", "CEN")
+                if p2_mode == "LC":
+                    main_window.p2_lc_radio.setChecked(True)
+                else:
+                    main_window.p2_cen_radio.setChecked(True)
+            if hasattr(main_window, 'mediacenter_cen_radio'):
+                mc_mode = el.get("mediacenter_profile_mode", "CEN")
+                if mc_mode == "LC":
+                    main_window.mediacenter_lc_radio.setChecked(True)
+                else:
+                    main_window.mediacenter_cen_radio.setChecked(True)
+            if hasattr(main_window, 'multimonitor_gaming_cen_radio'):
+                mg_mode = el.get("multimonitor_gaming_mode", "CEN")
+                if mg_mode == "LC":
+                    main_window.multimonitor_gaming_lc_radio.setChecked(True)
+                else:
+                    main_window.multimonitor_gaming_cen_radio.setChecked(True)
+            if hasattr(main_window, 'multimonitor_media_cen_radio'):
+                mm_mode = el.get("multimonitor_media_mode", "CEN")
+                if mm_mode == "LC":
+                    main_window.multimonitor_media_lc_radio.setChecked(True)
+                else:
+                    main_window.multimonitor_media_cen_radio.setChecked(True)
+            
             # Set steam paths only if they exist in the config
             if el.get("steam_json_path", ''):
                 main_window.steam_json_file_path = el.get("steam_json_path", '')
@@ -355,6 +470,12 @@ def load_configuration(main_window, config_path=None):
             if hasattr(main_window, 'post_launch_run_wait_checkboxes'):
                 for i, cb in enumerate(main_window.post_launch_run_wait_checkboxes):
                     cb.setChecked(get_bool("App Locations", f"post_launch_app_{i+1}_run_wait"))
+            
+            # Set run-wait checkboxes for Just After/Before
+            if hasattr(main_window, 'after_launch_run_wait_checkbox'):
+                main_window.after_launch_run_wait_checkbox.setChecked(get_bool("App Locations", "just_after_launch_app_run_wait"))
+            if hasattr(main_window, 'before_exit_run_wait_checkbox'):
+                main_window.before_exit_run_wait_checkbox.setChecked(get_bool("App Locations", "just_before_exit_app_run_wait"))
 
         # --- Sequence Options ---
         load_sequence_options(main_window, config)
@@ -463,6 +584,12 @@ def connect_dynamic_config_saving(main_window):
     if hasattr(main_window, 'multimonitor_media_config_edit') and main_window.multimonitor_media_config_edit is not None:
         line_edits.append(main_window.multimonitor_media_config_edit)
     
+    # Add Just After/Before line edits
+    if hasattr(main_window, 'after_launch_app_line_edit') and main_window.after_launch_app_line_edit is not None:
+        line_edits.append(main_window.after_launch_app_line_edit)
+    if hasattr(main_window, 'before_exit_app_line_edit') and main_window.before_exit_app_line_edit is not None:
+        line_edits.append(main_window.before_exit_app_line_edit)
+    
     # Add pre-launch and post-launch app line edits
     if hasattr(main_window, 'pre_launch_app_line_edits'):
         for le in main_window.pre_launch_app_line_edits:
@@ -481,7 +608,7 @@ def connect_dynamic_config_saving(main_window):
     
     # Connect combo boxes
     combo_boxes = []
-    
+
     if hasattr(main_window, 'source_dirs_combo') and main_window.source_dirs_combo is not None:
         combo_boxes.append(main_window.source_dirs_combo)
     if hasattr(main_window, 'exclude_items_combo') and main_window.exclude_items_combo is not None:
@@ -687,7 +814,7 @@ def validate_and_repair_config(main_window):
     required_keys = {
         "Current Settings": ["app_directory", "source_directories", "exclude_items", 
                             "game_managers_present", "exclude_selected_manager_games", 
-                            "logging_verbosity"],
+                            "logging_verbosity", "app_font", "app_theme"],
         "Element Locations": ["profiles_directory", "launchers_directory"],
         "App Locations": []
     }

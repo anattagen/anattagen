@@ -1,75 +1,151 @@
+import os
+import sys
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QGroupBox, QLabel, QLineEdit, QFormLayout,
     QPushButton, QComboBox, QListWidget, QAbstractItemView, QHBoxLayout, QCheckBox,
-    QRadioButton, QFileDialog, QButtonGroup
+    QRadioButton, QFileDialog, QButtonGroup, QApplication, QStyleFactory, QSpinBox, QFrame
 )
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtGui import QFontDatabase, QFont
+from PyQt6.QtCore import pyqtSignal, Qt
 from Python.models import AppConfig
-from Python.ui.name_utils import to_snake_case
 from Python.ui.widgets import DragDropListWidget
 from Python.ui.accordion import AccordionSection
-import os
+
+class PathConfigRow(QWidget):
+    """Custom widget for a path configuration row with options."""
+    
+    valueChanged = pyqtSignal()
+
+    def __init__(self, config_key, is_directory=False, add_enabled=True, add_run_wait=False, parent=None):
+        super().__init__(parent)
+        self.config_key = config_key
+        self.is_directory = is_directory
+        self.add_enabled = add_enabled
+        self.add_run_wait = add_run_wait
+        
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        # Enabled Checkbox
+        if self.add_enabled:
+            self.enabled_cb = QCheckBox()
+            self.enabled_cb.setChecked(True)
+            self.enabled_cb.stateChanged.connect(self.valueChanged.emit)
+            layout.addWidget(self.enabled_cb)
+        else:
+            spacer = QWidget()
+            spacer.setFixedWidth(20)
+            layout.addWidget(spacer)
+            self.enabled_cb = None
+
+        # Line Edit
+        self.line_edit = QLineEdit()
+        self.line_edit.textChanged.connect(self.valueChanged.emit)
+        layout.addWidget(self.line_edit)
+
+        # Browse Button
+        self.browse_btn = QPushButton(". . .")
+        self.browse_btn.setFixedWidth(40)
+        self.browse_btn.clicked.connect(self._on_browse)
+        layout.addWidget(self.browse_btn)
+
+        # Radio Buttons
+        self.cen_radio = QRadioButton("CEN")
+        self.lc_radio = QRadioButton("LC")
+        self.cen_radio.setChecked(True)
+        self.mode_group = QButtonGroup(self)
+        self.mode_group.addButton(self.cen_radio)
+        self.mode_group.addButton(self.lc_radio)
+        self.mode_group.buttonClicked.connect(self.valueChanged.emit)
+        layout.addWidget(self.cen_radio)
+        layout.addWidget(self.lc_radio)
+
+        # Run Wait Checkbox
+        if self.add_run_wait:
+            self.run_wait_cb = QCheckBox("Wait")
+            self.run_wait_cb.stateChanged.connect(self.valueChanged.emit)
+            layout.addWidget(self.run_wait_cb)
+        else:
+            self.run_wait_cb = None
+
+    def _on_browse(self):
+        current_path = self.line_edit.text()
+        if self.is_directory:
+            directory = QFileDialog.getExistingDirectory(self, "Select Directory", current_path)
+            if directory:
+                self.line_edit.setText(directory)
+        else:
+            file, _ = QFileDialog.getOpenFileName(self, "Select File", current_path)
+            if file:
+                self.line_edit.setText(file)
+
+    @property
+    def path(self):
+        return self.line_edit.text()
+
+    @path.setter
+    def path(self, value):
+        self.line_edit.setText(value)
+
+    @property
+    def mode(self):
+        return "LC" if self.lc_radio.isChecked() else "CEN"
+
+    @mode.setter
+    def mode(self, value):
+        if value == "LC":
+            self.lc_radio.setChecked(True)
+        else:
+            self.cen_radio.setChecked(True)
+
+    @property
+    def enabled(self):
+        return self.enabled_cb.isChecked() if self.enabled_cb else True
+
+    @enabled.setter
+    def enabled(self, value):
+        if self.enabled_cb:
+            self.enabled_cb.setChecked(value)
+
+    @property
+    def run_wait(self):
+        return self.run_wait_cb.isChecked() if self.run_wait_cb else False
+
+    @run_wait.setter
+    def run_wait(self, value):
+        if self.run_wait_cb:
+            self.run_wait_cb.setChecked(value)
 
 class SetupTab(QWidget):
     """A QWidget that encapsulates all UI and logic for the Setup tab."""
     
     config_changed = pyqtSignal()
 
+    PATH_MAPPINGS = {
+        "profiles_directory": "profiles_dir",
+        "launchers_directory": "launchers_dir",
+        "controller_mapper": "controller_mapper_path",
+        "p1_profile": "p1_profile_path",
+        "p2_profile": "p2_profile_path",
+        "mediacenter_profile": "mediacenter_profile_path",
+        "multi_monitor_app": "multi_monitor_tool_path",
+        "mm_gaming_config": "multimonitor_gaming_path",
+        "mm_media_config": "multimonitor_media_path",
+        "borderless_windowing": "borderless_gaming_path",
+        "pre_1": "pre1_path",
+        "pre_2": "pre2_path",
+        "pre_3": "pre3_path",
+        "just_after_launch": "just_after_launch_path",
+        "just_before_exit": "just_before_exit_path",
+        "post_1": "post1_path",
+        "post_2": "post2_path",
+        "post_3": "post3_path",
+    }
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.deployment_path_options = {}
-        self.default_enabled_checkboxes = {}
-        self.default_run_wait_checkboxes = {}
+        self.path_rows = {}
         self._setup_ui()
-
-    def _create_path_row_with_cen_lc(self, label_text, line_edit_attr, is_directory=False, add_enabled=True, add_run_wait=False):
-        """Helper to create a path row with CEN/LC radio buttons."""
-        line_edit = QLineEdit()
-        browse_button = QPushButton("Browse...")
-        setattr(self, line_edit_attr, line_edit)
-
-        cen_radio = QRadioButton("CEN")
-        lc_radio = QRadioButton("LC")
-        cen_radio.setChecked(True)
-        button_group = QButtonGroup(self)
-        button_group.addButton(cen_radio)
-        button_group.addButton(lc_radio)
-
-        field_layout = QHBoxLayout()
-
-        # 'Enabled' checkbox
-        if add_enabled:
-            enabled_checkbox = QCheckBox()
-            enabled_checkbox.setChecked(True)
-            field_layout.addWidget(enabled_checkbox)
-            snake_case_key = to_snake_case(label_text.replace(":", ""))
-            self.default_enabled_checkboxes[snake_case_key] = enabled_checkbox
-        else:
-            # Add a spacer to keep alignment consistent
-            spacer = QWidget()
-            spacer.setFixedWidth(20) # Approx width of a checkbox
-            field_layout.addWidget(spacer)
-
-        field_layout.addWidget(line_edit)
-        field_layout.addWidget(browse_button)
-        field_layout.addWidget(cen_radio)
-        field_layout.addWidget(lc_radio)
-
-        # 'Run-Wait' checkbox
-        if add_run_wait:
-            run_wait_checkbox = QCheckBox("Wait")
-            field_layout.addWidget(run_wait_checkbox)
-            snake_case_key = to_snake_case(label_text.replace(":", ""))
-            self.default_run_wait_checkboxes[snake_case_key] = run_wait_checkbox
-
-        if is_directory:
-            browse_button.clicked.connect(lambda checked, le=line_edit: self._browse_for_directory(le))
-        else:
-            browse_button.clicked.connect(lambda checked, le=line_edit: self._browse_for_file(le))
-
-        snake_case_key = to_snake_case(label_text.replace(":", ""))
-        self.deployment_path_options[snake_case_key] = button_group
-        return field_layout
 
     def _setup_ui(self):
         """Create and arrange all widgets for the Setup tab."""
@@ -79,29 +155,98 @@ class SetupTab(QWidget):
         main_settings_group = QGroupBox("Main Settings")
         main_settings_layout = QFormLayout()
 
-        # Source Directories
+        # Sources
         self.source_dirs_list = QListWidget()
         self.source_dirs_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self.source_dirs_list.setMaximumHeight(100)
         source_buttons_layout = QHBoxLayout()
         self.add_source_dir_button = QPushButton("Add...")
         self.remove_source_dir_button = QPushButton("Remove")
         source_buttons_layout.addWidget(self.add_source_dir_button)
         source_buttons_layout.addWidget(self.remove_source_dir_button)
-        main_settings_layout.addRow("Source Directories:", self.source_dirs_list)
+        main_settings_layout.addRow("Sources:", self.source_dirs_list)
         main_settings_layout.addRow("", source_buttons_layout)
 
-        # Profiles Directory with CEN/LC
-        profiles_layout = self._create_path_row_with_cen_lc("Profiles Directory:", "profiles_dir_edit", is_directory=True, add_enabled=False)
-        main_settings_layout.addRow("Profiles Directory:", profiles_layout)
+        # Excluded Items
+        self.excluded_dirs_list = QListWidget()
+        self.excluded_dirs_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self.excluded_dirs_list.setMaximumHeight(100)
+        excluded_buttons_layout = QHBoxLayout()
+        self.add_excluded_dir_button = QPushButton("+")
+        self.add_excluded_dir_button.setFixedWidth(30)
+        self.remove_excluded_dir_button = QPushButton("x")
+        self.remove_excluded_dir_button.setFixedWidth(30)
+        excluded_buttons_layout.addStretch(1)
+        excluded_buttons_layout.addWidget(self.add_excluded_dir_button)
+        excluded_buttons_layout.addWidget(self.remove_excluded_dir_button)
+        excluded_label = QLabel("Excluded Items:")
+        excluded_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        main_settings_layout.addRow(excluded_label, self.excluded_dirs_list)
+        main_settings_layout.addRow("", excluded_buttons_layout)
 
-        # Launchers Directory with CEN/LC
-        launchers_layout = self._create_path_row_with_cen_lc("Launchers Directory:", "launchers_dir_edit", is_directory=True, add_enabled=False)
-        main_settings_layout.addRow("Launchers Directory:", launchers_layout)
+        # Profiles with CEN/LC
+        self.path_rows["profiles_directory"] = PathConfigRow("profiles_directory", is_directory=True, add_enabled=False)
+        main_settings_layout.addRow("Profiles:", self.path_rows["profiles_directory"])
+
+        # Launchers with CEN/LC
+        self.path_rows["launchers_directory"] = PathConfigRow("launchers_directory", is_directory=True, add_enabled=False)
+        main_settings_layout.addRow("Launchers:", self.path_rows["launchers_directory"])
 
         # Logging Verbosity
         self.logging_verbosity_combo = QComboBox()
         self.logging_verbosity_combo.addItems(["None", "Low", "Medium", "High"])
-        main_settings_layout.addRow("Logging Verbosity:", self.logging_verbosity_combo)
+
+        # Font Dropdown
+        self.font_combo = QComboBox()
+        self.font_combo.addItem("System")
+        # Try to find site folder
+        site_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "site")
+        if not os.path.exists(site_path):
+            site_path = os.path.join(os.path.dirname(__file__), "site")
+        if os.path.exists(site_path):
+            for f in os.listdir(site_path):
+                if f.lower().endswith((".ttf", ".otf")):
+                    self.font_combo.addItem(f)
+
+        # Font Size SpinBox
+        self.font_size_spin = QSpinBox()
+        self.font_size_spin.setRange(8, 24)
+        self.font_size_spin.setValue(10)
+        self.font_size_spin.valueChanged.connect(self._on_appearance_changed)
+
+        # Theme Dropdown
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItems(["Default", "Windows", "Vista", "MacOS", "Fusion", "Dark", "Light"])
+
+        # Restart Button
+        self.restart_btn = QPushButton("*")
+        self.restart_btn.setToolTip("Reset application configuration to defaults")
+        self.restart_btn.setFixedWidth(25)
+
+        appearance_layout = QHBoxLayout()
+        appearance_layout.addWidget(self.logging_verbosity_combo)
+        appearance_layout.addStretch()
+
+        # set object names for persistence
+        self.logging_verbosity_combo.setObjectName("logging_verbosity_combo")
+        self.font_combo.setObjectName("font_combo")
+        self.theme_combo.setObjectName("theme_combo")
+        self.font_size_spin.setObjectName("font_size_spin")
+        self.restart_btn.setObjectName("restart_btn")
+
+        main_settings_layout.addRow("Log/Reset:", appearance_layout)
+
+        # Theme options (right aligned / upper-right)
+        theme_layout = QHBoxLayout()
+        theme_layout.addStretch()
+        theme_layout.addWidget(QLabel("Font:"))
+        theme_layout.addWidget(self.font_combo)
+        theme_layout.addWidget(QLabel("Size:"))
+        theme_layout.addWidget(self.font_size_spin)
+        theme_layout.addWidget(QLabel("Theme:"))
+        theme_layout.addWidget(self.theme_combo)
+        theme_layout.addWidget(self.restart_btn)
+        main_settings_layout.addRow("", theme_layout)
 
         main_settings_group.setLayout(main_settings_layout)
 
@@ -110,30 +255,124 @@ class SetupTab(QWidget):
         paths_layout = QFormLayout()
 
         # Application paths
-        paths_layout.addRow("Controller Mapper:", self._create_path_row_with_cen_lc("Controller Mapper:", "controller_mapper_app_edit", add_run_wait=True))
-        paths_layout.addRow("Borderless Windowing:", self._create_path_row_with_cen_lc("Borderless Windowing:", "borderless_app_edit", add_run_wait=True))
-        paths_layout.addRow("Multi-Monitor App:", self._create_path_row_with_cen_lc("Multi-Monitor App:", "multimonitor_app_edit", add_run_wait=True))
+        self.path_rows["controller_mapper"] = PathConfigRow("controller_mapper", add_run_wait=True)
+        mapper_label = QLabel("<b>Mapper:</b>")
+        paths_layout.addRow(mapper_label, self.path_rows["controller_mapper"])
+        self.path_rows["p1_profile"] = PathConfigRow("p1_profile", add_enabled=False)
+        p1_label = QLabel("Player 1 Profile:")
+        p1_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        paths_layout.addRow(p1_label, self.path_rows["p1_profile"])
+        self.path_rows["p2_profile"] = PathConfigRow("p2_profile", add_enabled=False)
+        p2_label = QLabel("Player 2 Profile:")
+        p2_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        paths_layout.addRow(p2_label, self.path_rows["p2_profile"])
+        self.path_rows["mediacenter_profile"] = PathConfigRow("mediacenter_profile", add_enabled=False)
+        mediacenter_label = QLabel("Media Center Profile:")
+        mediacenter_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        paths_layout.addRow(mediacenter_label, self.path_rows["mediacenter_profile"])
+        
+        # Add divider line
+        divider1 = QFrame()
+        divider1.setFrameShape(QFrame.Shape.HLine)
+        divider1.setFrameShadow(QFrame.Shadow.Sunken)
+        paths_layout.addRow(divider1)
+        
+        self.path_rows["multi_monitor_app"] = PathConfigRow("multi_monitor_app", add_run_wait=True)
+        mm_app_label = QLabel("<b>Multi-Monitor App:</b>")
+        paths_layout.addRow(mm_app_label, self.path_rows["multi_monitor_app"])
+        self.path_rows["mm_gaming_config"] = PathConfigRow("mm_gaming_config", add_enabled=False)
+        game_display_label = QLabel("Game Display:")
+        game_display_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        paths_layout.addRow(game_display_label, self.path_rows["mm_gaming_config"])
+        self.path_rows["mm_media_config"] = PathConfigRow("mm_media_config", add_enabled=False)
+        desktop_display_label = QLabel("Desktop Display:")
+        desktop_display_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        paths_layout.addRow(desktop_display_label, self.path_rows["mm_media_config"])
+        
+        # Add divider line
+        divider2 = QFrame()
+        divider2.setFrameShape(QFrame.Shape.HLine)
+        divider2.setFrameShadow(QFrame.Shadow.Sunken)
+        paths_layout.addRow(divider2)
+        
+        self.path_rows["borderless_windowing"] = PathConfigRow("borderless_windowing", add_run_wait=True)
+        windowing_label = QLabel("<b>Windowing:</b>")
+        windowing_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        paths_layout.addRow(windowing_label, self.path_rows["borderless_windowing"])
+        # Divider after Windowing
+        div_w = QFrame()
+        div_w.setFrameShape(QFrame.Shape.HLine)
+        div_w.setFrameShadow(QFrame.Shadow.Sunken)
+        paths_layout.addRow(div_w)
         
         # Profile paths
-        paths_layout.addRow("P1 Profile:", self._create_path_row_with_cen_lc("P1 Profile:", "p1_profile_edit", add_enabled=False))
-        paths_layout.addRow("P2 Profile:", self._create_path_row_with_cen_lc("P2 Profile:", "p2_profile_edit", add_enabled=False))
-        paths_layout.addRow("Mediacenter Profile:", self._create_path_row_with_cen_lc("Mediacenter Profile:", "mediacenter_profile_edit", add_enabled=False))
-        paths_layout.addRow("MM Gaming Config:", self._create_path_row_with_cen_lc("MM Gaming Config:", "multimonitor_gaming_config_edit", add_enabled=False))
-        paths_layout.addRow("MM Media Config:", self._create_path_row_with_cen_lc("MM Media Config:", "multimonitor_media_config_edit", add_enabled=False))
 
         # Pre-launch apps
-        paths_layout.addRow("Pre 1:", self._create_path_row_with_cen_lc("Pre 1:", "pre1_edit", add_run_wait=True))
-        paths_layout.addRow("Pre 2:", self._create_path_row_with_cen_lc("Pre 2:", "pre2_edit", add_run_wait=True))
-        paths_layout.addRow("Pre 3:", self._create_path_row_with_cen_lc("Pre 3:", "pre3_edit", add_run_wait=True))
+        self.path_rows["pre_1"] = PathConfigRow("pre_1", add_run_wait=True)
+        pre1_label = QLabel("<b>Pre 1:</b>")
+        pre1_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        paths_layout.addRow(pre1_label, self.path_rows["pre_1"])
+        div_pre1 = QFrame()
+        div_pre1.setFrameShape(QFrame.Shape.HLine)
+        div_pre1.setFrameShadow(QFrame.Shadow.Sunken)
+        paths_layout.addRow(div_pre1)
+        self.path_rows["pre_2"] = PathConfigRow("pre_2", add_run_wait=True)
+        pre2_label = QLabel("<b>Pre 2:</b>")
+        pre2_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        paths_layout.addRow(pre2_label, self.path_rows["pre_2"])
+        div_pre2 = QFrame()
+        div_pre2.setFrameShape(QFrame.Shape.HLine)
+        div_pre2.setFrameShadow(QFrame.Shadow.Sunken)
+        paths_layout.addRow(div_pre2)
+        self.path_rows["pre_3"] = PathConfigRow("pre_3", add_run_wait=True)
+        pre3_label = QLabel("<b>Pre 3:</b>")
+        pre3_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        paths_layout.addRow(pre3_label, self.path_rows["pre_3"])
+        div_pre3 = QFrame()
+        div_pre3.setFrameShape(QFrame.Shape.HLine)
+        div_pre3.setFrameShadow(QFrame.Shadow.Sunken)
+        paths_layout.addRow(div_pre3)
+        # Just After app
+        self.path_rows["just_after_launch"] = PathConfigRow("just_after_launch", add_run_wait=True)
+        after_label = QLabel("<b>Just After Launch:</b>")
+        after_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        paths_layout.addRow(after_label, self.path_rows["just_after_launch"])
+        div_after = QFrame()
+        div_after.setFrameShape(QFrame.Shape.HLine)
+        div_after.setFrameShadow(QFrame.Shadow.Sunken)
+        paths_layout.addRow(div_after)
 
+        # Just Before app
+        self.path_rows["just_before_exit"] = PathConfigRow("just_before_exit", add_run_wait=True)
+        before_label = QLabel("<b>Just Before Exit:</b>")
+        before_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        paths_layout.addRow(before_label, self.path_rows["just_before_exit"])
+        div_before = QFrame()
+        div_before.setFrameShape(QFrame.Shape.HLine)
+        div_before.setFrameShadow(QFrame.Shadow.Sunken)
+        paths_layout.addRow(div_before)
         # Post-launch apps
-        paths_layout.addRow("Post 1:", self._create_path_row_with_cen_lc("Post 1:", "post1_edit", add_run_wait=True))
-        paths_layout.addRow("Post 2:", self._create_path_row_with_cen_lc("Post 2:", "post2_edit", add_run_wait=True))
-        paths_layout.addRow("Post 3:", self._create_path_row_with_cen_lc("Post 3:", "post3_edit", add_run_wait=True))
+        self.path_rows["post_1"] = PathConfigRow("post_1", add_run_wait=True)
+        post1_label = QLabel("<b>Post 1:</b>")
+        post1_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        paths_layout.addRow(post1_label, self.path_rows["post_1"])
+        div_post1 = QFrame()
+        div_post1.setFrameShape(QFrame.Shape.HLine)
+        div_post1.setFrameShadow(QFrame.Shadow.Sunken)
+        paths_layout.addRow(div_post1)
+        self.path_rows["post_2"] = PathConfigRow("post_2", add_run_wait=True)
+        post2_label = QLabel("<b>Post 2:</b>")
+        post2_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        paths_layout.addRow(post2_label, self.path_rows["post_2"])
+        div_post2 = QFrame()
+        div_post2.setFrameShape(QFrame.Shape.HLine)
+        div_post2.setFrameShadow(QFrame.Shadow.Sunken)
+        paths_layout.addRow(div_post2)
+        self.path_rows["post_3"] = PathConfigRow("post_3", add_run_wait=True)
+        post3_label = QLabel("<b>Post 3:</b>")
+        post3_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        paths_layout.addRow(post3_label, self.path_rows["post_3"])
 
-        # Just Before/After apps
-        paths_layout.addRow("Just After Launch:", self._create_path_row_with_cen_lc("Just After Launch:", "just_after_launch_edit", add_run_wait=True))
-        paths_layout.addRow("Just Before Exit:", self._create_path_row_with_cen_lc("Just Before Exit:", "just_before_exit_edit", add_run_wait=True))
 
         paths_group.setLayout(paths_layout)
 
@@ -142,21 +381,27 @@ class SetupTab(QWidget):
         sequences_layout = QHBoxLayout(sequences_widget)
 
         # Launch Sequence
-        launch_sequence_group = QGroupBox("Launch Sequence")
+        launch_sequence_group = QGroupBox("")
         launch_sequence_layout = QVBoxLayout(launch_sequence_group)
+        launch_title = QLabel("<b>Launch Order</b>")
+        launch_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.launch_sequence_list = DragDropListWidget()
         self.reset_launch_btn = QPushButton("Reset")
+        # keep 'Drag to reorder' label as-is (exception)
+        launch_sequence_layout.addWidget(launch_title)
         launch_sequence_layout.addWidget(QLabel("Drag to reorder:"))
         launch_sequence_layout.addWidget(self.launch_sequence_list)
         launch_sequence_layout.addWidget(self.reset_launch_btn)
         sequences_layout.addWidget(launch_sequence_group)
 
         # Exit Sequence
-        exit_sequence_group = QGroupBox("Exit Sequence")
+        exit_sequence_group = QGroupBox("")
         exit_sequence_layout = QVBoxLayout(exit_sequence_group)
+        exit_title = QLabel("<b>Exit Order</b>")
+        exit_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.exit_sequence_list = DragDropListWidget()
         self.reset_exit_btn = QPushButton("Reset")
-        exit_sequence_layout.addWidget(QLabel("Drag to reorder:"))
+        exit_sequence_layout.addWidget(exit_title)
         exit_sequence_layout.addWidget(self.exit_sequence_list)
         exit_sequence_layout.addWidget(self.reset_exit_btn)
         sequences_layout.addWidget(exit_sequence_group)
@@ -175,34 +420,19 @@ class SetupTab(QWidget):
     def _connect_signals(self):
         self.add_source_dir_button.clicked.connect(self._add_source_dir)
         self.remove_source_dir_button.clicked.connect(self._remove_source_dir)
+        self.add_excluded_dir_button.clicked.connect(self._add_excluded_dir)
+        self.remove_excluded_dir_button.clicked.connect(self._remove_excluded_dir)
         self.reset_launch_btn.clicked.connect(self._reset_launch_sequence)
         self.reset_exit_btn.clicked.connect(self._reset_exit_sequence)
 
         self.source_dirs_list.model().rowsMoved.connect(self.config_changed.emit)
         self.source_dirs_list.model().dataChanged.connect(self.config_changed.emit)
+        self.excluded_dirs_list.model().rowsMoved.connect(self.config_changed.emit)
+        self.excluded_dirs_list.model().dataChanged.connect(self.config_changed.emit)
 
-        # Path edits
-        path_attrs = [
-            "profiles_dir_edit", "launchers_dir_edit", "controller_mapper_app_edit",
-            "borderless_app_edit", "multimonitor_app_edit", "p1_profile_edit",
-            "p2_profile_edit", "mediacenter_profile_edit", "multimonitor_gaming_config_edit",
-            "multimonitor_media_config_edit", "pre1_edit", "pre2_edit", "pre3_edit",
-            "post1_edit", "post2_edit", "post3_edit", "just_after_launch_edit", "just_before_exit_edit"
-        ]
-        for attr in path_attrs:
-            getattr(self, attr).textChanged.connect(self.config_changed.emit)
-
-        # CEN/LC radio buttons
-        for group in self.deployment_path_options.values():
-            group.buttonClicked.connect(self.config_changed.emit)
-
-        # Default enabled checkboxes
-        for checkbox in self.default_enabled_checkboxes.values():
-            checkbox.stateChanged.connect(self.config_changed.emit)
-
-        # Default run-wait checkboxes
-        for checkbox in self.default_run_wait_checkboxes.values():
-            checkbox.stateChanged.connect(self.config_changed.emit)
+        # Path rows
+        for row in self.path_rows.values():
+            row.valueChanged.connect(self.config_changed.emit)
 
         # Sequences
         self.launch_sequence_list.model().rowsMoved.connect(self.config_changed.emit)
@@ -210,6 +440,30 @@ class SetupTab(QWidget):
 
         # Logging
         self.logging_verbosity_combo.currentTextChanged.connect(self.config_changed.emit)
+        self.font_combo.currentTextChanged.connect(self._on_appearance_changed)
+        self.theme_combo.currentTextChanged.connect(self._on_appearance_changed)
+        self.restart_btn.clicked.connect(self._reset_to_defaults)
+
+    def _reset_to_defaults(self):
+        """Reset the application's configuration to the shipped defaults."""
+        from PyQt6.QtWidgets import QMessageBox
+        from Python.ui.config_manager import load_default_config
+
+        reply = QMessageBox.question(self, "Reset to Defaults",
+                                     "This will reset all configuration to the application's default values. Continue?",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                     QMessageBox.StandardButton.No)
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # load_default_config expects the main_window object; pass the top-level window
+        success = load_default_config(self.window())
+        if success:
+            # Notify user and emit change so other UI can refresh
+            QMessageBox.information(self, "Defaults Loaded", "Default configuration has been loaded.")
+            self.config_changed.emit()
+        else:
+            QMessageBox.warning(self, "Reset Failed", "Failed to load default configuration.")
 
     def _add_source_dir(self):
         directory = QFileDialog.getExistingDirectory(self, "Select Source Directory")
@@ -225,17 +479,19 @@ class SetupTab(QWidget):
             self.source_dirs_list.takeItem(self.source_dirs_list.row(item))
         self.config_changed.emit()
 
-    def _browse_for_directory(self, line_edit: QLineEdit):
-        directory = QFileDialog.getExistingDirectory(self, "Select Directory", line_edit.text())
+    def _add_excluded_dir(self):
+        directory = QFileDialog.getExistingDirectory(self, "Select Directory to Exclude")
         if directory:
-            line_edit.setText(directory)
+            self.excluded_dirs_list.addItem(directory)
             self.config_changed.emit()
-            
-    def _browse_for_file(self, line_edit: QLineEdit):
-        file, _ = QFileDialog.getOpenFileName(self, "Select File", line_edit.text())
-        if file:
-            line_edit.setText(file)
-            self.config_changed.emit()
+
+    def _remove_excluded_dir(self):
+        selected_items = self.excluded_dirs_list.selectedItems()
+        if not selected_items:
+            return
+        for item in selected_items:
+            self.excluded_dirs_list.takeItem(self.excluded_dirs_list.row(item))
+        self.config_changed.emit()
 
     def _reset_launch_sequence(self):
         self.launch_sequence_list.clear()
@@ -247,48 +503,66 @@ class SetupTab(QWidget):
         self.exit_sequence_list.addItems(["Post1", "Post2", "Post3", "Monitor-Config", "Taskbar", "Controller-Mapper"])
         self.config_changed.emit()
 
+    def _on_appearance_changed(self):
+        self.config_changed.emit()
+        
+        # Apply Theme
+        theme = self.theme_combo.currentText()
+        if theme in QStyleFactory.keys():
+            QApplication.setStyle(theme)
+        elif theme == "Vista" and "WindowsVista" in QStyleFactory.keys():
+            QApplication.setStyle("WindowsVista")
+        elif theme == "MacOS" and "Macintosh" in QStyleFactory.keys():
+            QApplication.setStyle("Macintosh")
+
+        # Apply Font
+        font_name = self.font_combo.currentText()
+        font_size = self.font_size_spin.value()
+        if font_name != "System":
+            # Locate site folder
+            site_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "site")
+            if not os.path.exists(site_path):
+                site_path = os.path.join(os.path.dirname(__file__), "site")
+            
+            font_path = os.path.join(site_path, font_name)
+            if os.path.exists(font_path):
+                font_id = QFontDatabase.addApplicationFont(font_path)
+                if font_id != -1:
+                    families = QFontDatabase.applicationFontFamilies(font_id)
+                    if families:
+                        font = QFont(families[0])
+                        font.setPointSize(font_size)
+                        QApplication.setFont(font)
+        else:
+            font = QApplication.font()
+            font.setPointSize(font_size)
+            QApplication.setFont(font)
+
+    def _restart_app(self):
+        QApplication.quit()
+        os.execl(sys.executable, sys.executable, *sys.argv)
+
     def sync_ui_from_config(self, config: AppConfig):
         self.blockSignals(True)
 
         self.source_dirs_list.clear()
         self.source_dirs_list.addItems(config.source_dirs)
+        self.excluded_dirs_list.clear()
+        self.excluded_dirs_list.addItems(config.excluded_dirs)
         self.logging_verbosity_combo.setCurrentText(config.logging_verbosity)
+        self.font_combo.setCurrentText(config.app_font)
+        self.theme_combo.setCurrentText(config.app_theme)
+        self.font_size_spin.setValue(config.font_size)
 
-        self.profiles_dir_edit.setText(config.profiles_dir)
-        self.launchers_dir_edit.setText(config.launchers_dir)
-        self.controller_mapper_app_edit.setText(config.controller_mapper_path)
-        self.borderless_app_edit.setText(config.borderless_gaming_path)
-        self.multimonitor_app_edit.setText(config.multi_monitor_tool_path)
-        self.p1_profile_edit.setText(config.p1_profile_path)
-        self.p2_profile_edit.setText(config.p2_profile_path)
-        self.mediacenter_profile_edit.setText(config.mediacenter_profile_path)
-        self.multimonitor_gaming_config_edit.setText(config.multimonitor_gaming_path)
-        self.multimonitor_media_config_edit.setText(config.multimonitor_media_path)
-        self.pre1_edit.setText(config.pre1_path)
-        self.pre2_edit.setText(config.pre2_path)
-        self.pre3_edit.setText(config.pre3_path)
-        self.post1_edit.setText(config.post1_path)
-        self.post2_edit.setText(config.post2_path)
-        self.post3_edit.setText(config.post3_path)
-        self.just_after_launch_edit.setText(config.just_after_launch_path)
-        self.just_before_exit_edit.setText(config.just_before_exit_path)
-
-        for key, group in self.deployment_path_options.items():
-            mode = config.deployment_path_modes.get(key, "CEN")
-            for button in group.buttons():
-                if button.text() == mode:
-                    button.setChecked(True)
-                    break
-        
-        for key, checkbox in self.default_enabled_checkboxes.items():
-            # The key for AppConfig.defaults is like 'controller_mapper_enabled'
-            enabled_key = f"{key}_enabled"
-            checkbox.setChecked(config.defaults.get(enabled_key, True))
-
-        for key, checkbox in self.default_run_wait_checkboxes.items():
-            # The key for AppConfig.run_wait_states is like 'controller_mapper_run_wait'
-            run_wait_key = f"{key}_run_wait"
-            checkbox.setChecked(config.run_wait_states.get(run_wait_key, False))
+        for key, row in self.path_rows.items():
+            if key in self.PATH_MAPPINGS:
+                attr_name = self.PATH_MAPPINGS[key]
+                if hasattr(config, attr_name):
+                    row.path = getattr(config, attr_name)
+            
+            row.mode = config.deployment_path_modes.get(key, "CEN")
+            row.enabled = config.defaults.get(f"{key}_enabled", True)
+            row.run_wait = config.run_wait_states.get(f"{key}_run_wait", False)
 
         self.launch_sequence_list.clear()
         self.launch_sequence_list.addItems(config.launch_sequence if config.launch_sequence else 
@@ -301,39 +575,20 @@ class SetupTab(QWidget):
 
     def sync_config_from_ui(self, config: AppConfig):
         config.source_dirs = [self.source_dirs_list.item(i).text() for i in range(self.source_dirs_list.count())]
+        config.excluded_dirs = [self.excluded_dirs_list.item(i).text() for i in range(self.excluded_dirs_list.count())]
         config.logging_verbosity = self.logging_verbosity_combo.currentText()
+        config.app_font = self.font_combo.currentText()
+        config.app_theme = self.theme_combo.currentText()
+        config.font_size = self.font_size_spin.value()
 
-        config.profiles_dir = self.profiles_dir_edit.text()
-        config.launchers_dir = self.launchers_dir_edit.text()
-        config.controller_mapper_path = self.controller_mapper_app_edit.text()
-        config.borderless_gaming_path = self.borderless_app_edit.text()
-        config.multi_monitor_tool_path = self.multimonitor_app_edit.text()
-        config.p1_profile_path = self.p1_profile_edit.text()
-        config.p2_profile_path = self.p2_profile_edit.text()
-        config.mediacenter_profile_path = self.mediacenter_profile_edit.text()
-        config.multimonitor_gaming_path = self.multimonitor_gaming_config_edit.text()
-        config.multimonitor_media_path = self.multimonitor_media_config_edit.text()
-        config.pre1_path = self.pre1_edit.text()
-        config.pre2_path = self.pre2_edit.text()
-        config.pre3_path = self.pre3_edit.text()
-        config.post1_path = self.post1_edit.text()
-        config.post2_path = self.post2_edit.text()
-        config.post3_path = self.post3_edit.text()
-        config.just_after_launch_path = self.just_after_launch_edit.text()
-        config.just_before_exit_path = self.just_before_exit_edit.text()
+        for key, attr_name in self.PATH_MAPPINGS.items():
+            if key in self.path_rows:
+                setattr(config, attr_name, self.path_rows[key].path)
 
-        for key, group in self.deployment_path_options.items():
-            checked_button = group.checkedButton()
-            if checked_button:
-                config.deployment_path_modes[key] = checked_button.text()
-
-        for key, checkbox in self.default_enabled_checkboxes.items():
-            enabled_key = f"{key}_enabled"
-            config.defaults[enabled_key] = checkbox.isChecked()
-
-        for key, checkbox in self.default_run_wait_checkboxes.items():
-            run_wait_key = f"{key}_run_wait"
-            config.run_wait_states[run_wait_key] = checkbox.isChecked()
+        for key, row in self.path_rows.items():
+            config.deployment_path_modes[key] = row.mode
+            config.defaults[f"{key}_enabled"] = row.enabled
+            config.run_wait_states[f"{key}_run_wait"] = row.run_wait
 
         config.launch_sequence = [self.launch_sequence_list.item(i).text() for i in range(self.launch_sequence_list.count())]
         config.exit_sequence = [self.exit_sequence_list.item(i).text() for i in range(self.exit_sequence_list.count())]

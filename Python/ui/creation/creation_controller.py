@@ -438,12 +438,4 @@ class CreationController:
                 
         except Exception as e:
             self.logger.error(f"Error creating {profile_type} joystick profile: {str(e)}")
-        launcher_path = self.propagator.create_launcher(
-            game_name=game_name,
-            executable_path=game_data.get('executable', ''),
-            working_dir=game_data.get('directory', ''),
-            arguments=game_data.get('arguments', ''),
-            profile_dir=profile_folder
-        )
-        if launcher_path:
-            self.propagator.create_shortcut(game_name, launcher_path)
+        

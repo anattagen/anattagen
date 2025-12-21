@@ -1,6 +1,5 @@
 import configparser
 import os
-from PyQt6.QtWidgets import QFileDialog, QComboBox, QCheckBox, QLineEdit
 import logging
 from Python.models import AppConfig
 from Python import constants
@@ -31,7 +30,13 @@ def load_configuration(config_model: AppConfig):
         # --- Main Settings ---
         if config.has_section("MainSettings"):
             config_model.source_dirs = [d for d in config.get("MainSettings", "SourceDirs", fallback="").splitlines() if d]
+            config_model.excluded_dirs = [d for d in config.get("MainSettings", "ExcludedDirs", fallback="").splitlines() if d]
             config_model.logging_verbosity = config.get("MainSettings", "LoggingVerbosity", fallback="Low")
+            config_model.app_font = config.get("MainSettings", "AppFont", fallback="System")
+            config_model.app_theme = config.get("MainSettings", "AppTheme", fallback="Default")
+            config_model.font_size = config.getint("MainSettings", "FontSize", fallback=10)
+            config_model.game_managers_present = config.get("MainSettings", "GameManagersPresent", fallback="None")
+            config_model.exclude_selected_manager_games = config.getboolean("MainSettings", "ExcludeSelectedManagerGames", fallback=False)
 
         # --- Paths ---
         if config.has_section("Paths"):
@@ -45,6 +50,10 @@ def load_configuration(config_model: AppConfig):
             config_model.mediacenter_profile_path = config.get("Paths", "MediacenterProfilePath", fallback="")
             config_model.multimonitor_gaming_path = config.get("Paths", "MultimonitorGamingPath", fallback="")
             config_model.multimonitor_media_path = config.get("Paths", "MultimonitorMediaPath", fallback="")
+            config_model.steam_json_path = config.get("Paths", "SteamJsonPath", fallback="")
+            config_model.filtered_steam_cache_path = config.get("Paths", "FilteredSteamCachePath", fallback="")
+            config_model.just_after_launch_path = config.get("Paths", "JustAfterLaunchPath", fallback="")
+            config_model.just_before_exit_path = config.get("Paths", "JustBeforeExitPath", fallback="")
             config_model.pre1_path = config.get("Paths", "Pre1Path", fallback="")
             config_model.pre2_path = config.get("Paths", "Pre2Path", fallback="")
             config_model.pre3_path = config.get("Paths", "Pre3Path", fallback="")
@@ -74,6 +83,11 @@ def load_configuration(config_model: AppConfig):
             config_model.create_profile_folders = config.getboolean("Deployment", "CreateProfileFolders", fallback=False)
             config_model.create_overwrite_launcher = config.getboolean("Deployment", "CreateOverwriteLauncher", fallback=False)
             config_model.create_overwrite_joystick_profiles = config.getboolean("Deployment", "CreateOverwriteJoystickProfiles", fallback=False)
+            config_model.use_kill_list = config.getboolean("Deployment", "UseKillList", fallback=False)
+            config_model.enable_launcher = config.getboolean("Deployment", "EnableLauncher", fallback=False)
+            config_model.apply_mapper_profiles = config.getboolean("Deployment", "ApplyMapperProfiles", fallback=False)
+            config_model.enable_borderless_windowing = config.getboolean("Deployment", "EnableBorderlessWindowing", fallback=False)
+            config_model.terminate_borderless_on_exit = config.getboolean("Deployment", "TerminateBorderlessOnExit", fallback=False)
 
         # --- Default Enabled States ---
         if config.has_section("DefaultEnabledStates") and config.options("DefaultEnabledStates"):
@@ -127,7 +141,13 @@ def save_configuration(config_model: AppConfig):
     # --- Main Settings ---
     config.add_section("MainSettings")
     config.set("MainSettings", "SourceDirs", "\n".join(config_model.source_dirs))
+    config.set("MainSettings", "ExcludedDirs", "\n".join(config_model.excluded_dirs))
     config.set("MainSettings", "LoggingVerbosity", config_model.logging_verbosity)
+    config.set("MainSettings", "AppFont", config_model.app_font)
+    config.set("MainSettings", "AppTheme", config_model.app_theme)
+    config.set("MainSettings", "FontSize", str(config_model.font_size))
+    config.set("MainSettings", "GameManagersPresent", config_model.game_managers_present)
+    config.set("MainSettings", "ExcludeSelectedManagerGames", str(config_model.exclude_selected_manager_games))
 
     # --- Paths ---
     config.add_section("Paths")
@@ -141,6 +161,10 @@ def save_configuration(config_model: AppConfig):
     config.set("Paths", "MediacenterProfilePath", config_model.mediacenter_profile_path)
     config.set("Paths", "MultimonitorGamingPath", config_model.multimonitor_gaming_path)
     config.set("Paths", "MultimonitorMediaPath", config_model.multimonitor_media_path)
+    config.set("Paths", "SteamJsonPath", config_model.steam_json_path)
+    config.set("Paths", "FilteredSteamCachePath", config_model.filtered_steam_cache_path)
+    config.set("Paths", "JustAfterLaunchPath", config_model.just_after_launch_path)
+    config.set("Paths", "JustBeforeExitPath", config_model.just_before_exit_path)
     config.set("Paths", "Pre1Path", config_model.pre1_path)
     config.set("Paths", "Pre2Path", config_model.pre2_path)
     config.set("Paths", "Pre3Path", config_model.pre3_path)
@@ -168,6 +192,11 @@ def save_configuration(config_model: AppConfig):
     config.set("Deployment", "CreateProfileFolders", str(config_model.create_profile_folders))
     config.set("Deployment", "CreateOverwriteLauncher", str(config_model.create_overwrite_launcher))
     config.set("Deployment", "CreateOverwriteJoystickProfiles", str(config_model.create_overwrite_joystick_profiles))
+    config.set("Deployment", "UseKillList", str(config_model.use_kill_list))
+    config.set("Deployment", "EnableLauncher", str(config_model.enable_launcher))
+    config.set("Deployment", "ApplyMapperProfiles", str(config_model.apply_mapper_profiles))
+    config.set("Deployment", "EnableBorderlessWindowing", str(config_model.enable_borderless_windowing))
+    config.set("Deployment", "TerminateBorderlessOnExit", str(config_model.terminate_borderless_on_exit))
 
     # --- Default Enabled States ---
     config.add_section("DefaultEnabledStates")

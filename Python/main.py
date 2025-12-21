@@ -13,10 +13,12 @@ if project_root not in sys.path:
 from Python.main_window_new import MainWindow
 
 def setup_logging():
-    """Set up logging to file and console."""
+    """Set up logging to file and console. Honor ANATTAGEN_LOG_LEVEL environment variable for verbosity."""
     log_file = os.path.join(script_dir, 'app.log')
+    level_name = os.environ.get('ANATTAGEN_LOG_LEVEL', 'INFO').upper()
+    level = getattr(logging, level_name, logging.INFO)
     logging.basicConfig(
-        level=logging.INFO,
+        level=level,
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
             logging.FileHandler(log_file, mode='w', encoding='utf-8'),

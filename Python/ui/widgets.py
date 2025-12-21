@@ -11,25 +11,6 @@ class DragDropListWidget(QListWidget):
         self.setAcceptDrops(True)
         self.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.setStyleSheet("""
-            QListWidget {
-                background-color: #E0E0E0;
-                color: black;
-                border: 1px solid #A0A0A0;
-                border-radius: 4px;
-            }
-            QListWidget::item {
-                padding: 4px;
-                border-bottom: 1px solid #C0C0C0;
-            }
-            QListWidget::item:selected {
-                background-color: #B0B0FF;
-                color: black;
-            }
-            QListWidget::item:hover {
-                background-color: #D0D0FF;
-            }
-        """)
     
     def mousePressEvent(self, event):
         """Handle mouse press events"""

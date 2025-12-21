@@ -12,7 +12,8 @@ from Python.ui.name_utils import normalize_name_for_matching, make_safe_filename
 from Python.ui.steam_utils import locate_and_exclude_manager_config
 from Python import constants
 
-def index_games(main_window, enable_name_matching=False):
+def index_games(main_window, source_dirs=None, excluded_dirs=None, exclude_exe_set=None, folder_exclude_set=None, 
+                demoted_set=None, folder_demoted_set=None, release_groups_set=None, enable_name_matching=False):
     """
     Index games from the source directories
     
@@ -35,8 +36,15 @@ def index_games(main_window, enable_name_matching=False):
     main_window.indexing_progress.canceled.connect(lambda: setattr(main_window, 'indexing_cancelled', True))
     main_window.indexing_progress.show()
     
+    # Inject sets into main_window if provided
+    if exclude_exe_set is not None: main_window.exclude_exe_set = exclude_exe_set
+    if folder_exclude_set is not None: main_window.folder_exclude_set = folder_exclude_set
+    if demoted_set is not None: main_window.demoted_set = demoted_set
+    if folder_demoted_set is not None: main_window.folder_demoted_set = folder_demoted_set
+    if release_groups_set is not None: main_window.release_groups_set = release_groups_set
+    
     # Perform indexing
-    result = _perform_indexing_with_updates(main_window, enable_name_matching)
+    result = _perform_indexing_with_updates(main_window, source_dirs, excluded_dirs, enable_name_matching)
     
     # Clean up
     if hasattr(main_window, 'indexing_progress'):
@@ -45,7 +53,7 @@ def index_games(main_window, enable_name_matching=False):
     
     return result
 
-def _perform_indexing_with_updates(main_window, enable_name_matching=False):
+def _perform_indexing_with_updates(main_window, source_dirs=None, excluded_dirs=None, enable_name_matching=False):
     """
     Perform the actual indexing with UI updates
     
@@ -57,23 +65,35 @@ def _perform_indexing_with_updates(main_window, enable_name_matching=False):
         Number of executables found
     """
     # If requested, exclude games from selected manager
-    selected_manager = main_window.other_managers_combo.currentText()
-    if selected_manager != "(None)" and main_window.exclude_manager_checkbox.isChecked():
-        main_window._locate_and_exclude_manager_config()
+    if hasattr(main_window, 'setup_tab') and hasattr(main_window.setup_tab, 'other_managers_combo'):
+        selected_manager = main_window.setup_tab.other_managers_combo.currentText()
+        if selected_manager != "(None)" and main_window.setup_tab.exclude_manager_checkbox.isChecked():
+            main_window._locate_and_exclude_manager_config()
+    elif hasattr(main_window, 'other_managers_combo'):
+        selected_manager = main_window.other_managers_combo.currentText()
+        if selected_manager != "(None)" and main_window.exclude_manager_checkbox.isChecked():
+            main_window._locate_and_exclude_manager_config()
     
     # Clear the existing table
-    main_window.editor_table.setRowCount(0)
+    main_window.editor_tab.table.setRowCount(0)
     main_window.found_executables_cache = set()  # Reset cache
     
     # Process each source directory
     source_count = 0
-    for i in range(main_window.source_dirs_combo.count()):
-        if main_window.indexing_cancelled:
-            break
-        
-        source_dir = main_window.source_dirs_combo.itemText(i)
-        if os.path.exists(source_dir):
-            source_count += traverse_source_directory(main_window, source_dir, source_dir, enable_name_matching)
+    
+    if source_dirs:
+        for source_dir in source_dirs:
+            if main_window.indexing_cancelled:
+                break
+            if os.path.exists(source_dir):
+                source_count += traverse_source_directory(main_window, source_dir, source_dir, excluded_dirs, enable_name_matching)
+    elif hasattr(main_window, 'source_dirs_combo'):
+        for i in range(main_window.source_dirs_combo.count()):
+            if main_window.indexing_cancelled:
+                break
+            source_dir = main_window.source_dirs_combo.itemText(i)
+            if os.path.exists(source_dir):
+                source_count += traverse_source_directory(main_window, source_dir, source_dir, excluded_dirs, enable_name_matching)
     
     # Update status bar
     main_window.statusBar().showMessage(f"Indexed {source_count} executables", 3000)
@@ -97,7 +117,7 @@ def _confirm_cancel_indexing(main_window):
 def _finish_indexing(main_window):
     """Clean up after indexing is complete or cancelled"""
     main_window.indexing_in_progress = False
-    main_window.editor_table.setEnabled(True)
+    main_window.editor_tab.table.setEnabled(True)
     
     # Hide cancel button
     if hasattr(main_window, 'cancel_indexing_button'):
@@ -148,7 +168,7 @@ def get_filtered_directory_name(main_window, exec_full_path):
         
         current_path = parent_path
 
-def traverse_source_directory(main_window, current_dir_path, source_root_path, enable_name_matching=False):
+def traverse_source_directory(main_window, current_dir_path, source_root_path, excluded_dirs=None, enable_name_matching=False):
     """
     Traverse a source directory looking for executables
     
@@ -171,6 +191,13 @@ def traverse_source_directory(main_window, current_dir_path, source_root_path, e
     # Process UI events periodically
     QCoreApplication.processEvents()
     
+    # Check if current directory is excluded
+    if excluded_dirs:
+        norm_current = os.path.normpath(current_dir_path).lower()
+        for excluded in excluded_dirs:
+            if norm_current == os.path.normpath(excluded).lower():
+                return 0
+
     # Create a name processor
     name_processor = NameProcessor(
         release_groups_set=main_window.release_groups_set,
@@ -197,7 +224,7 @@ def traverse_source_directory(main_window, current_dir_path, source_root_path, e
                 # Process subdirectories recursively
                 if entry.is_dir():
                     # Recursively process all subdirectories without filtering
-                    added_exe_count += traverse_source_directory(main_window, entry_path, source_root_path, enable_name_matching)
+                    added_exe_count += traverse_source_directory(main_window, entry_path, source_root_path, excluded_dirs, enable_name_matching)
                 
                 # Process executable files
                 elif entry.is_file() and entry.name.lower().endswith('.exe'):
@@ -375,12 +402,12 @@ def add_executable_to_editor_table(main_window, include_checked=True, exec_name=
 
     
     # Get current row count
-    row = main_window.editor_table.rowCount()
-    main_window.editor_table.insertRow(row)
+    row = main_window.editor_tab.table.rowCount()
+    main_window.editor_tab.table.insertRow(row)
     
     # Create include checkbox
     include_widget = create_status_widget(main_window, include_checked, row, constants.EditorCols.INCLUDE.value)
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.INCLUDE.value, include_widget)
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.INCLUDE.value, include_widget)
 
     # Retrieve global default enabled states from AppConfig
     config_defaults = main_window.config.defaults
@@ -388,40 +415,40 @@ def add_executable_to_editor_table(main_window, include_checked=True, exec_name=
     no_tb = main_window.config.hide_taskbar # From Deployment tab
     
     # Set text items
-    main_window.editor_table.setItem(row, constants.EditorCols.NAME.value, QTableWidgetItem(exec_name))
-    main_window.editor_table.setItem(row, constants.EditorCols.DIRECTORY.value, QTableWidgetItem(directory))
-    main_window.editor_table.setItem(row, constants.EditorCols.STEAMID.value, QTableWidgetItem(steam_name))
-    main_window.editor_table.setItem(row, constants.EditorCols.NAME_OVERRIDE.value, QTableWidgetItem(name_override))
-    main_window.editor_table.setItem(row, constants.EditorCols.OPTIONS.value, QTableWidgetItem(options))
-    main_window.editor_table.setItem(row, constants.EditorCols.ARGUMENTS.value, QTableWidgetItem(arguments))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.NAME.value, QTableWidgetItem(exec_name))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.DIRECTORY.value, QTableWidgetItem(directory))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.STEAMID.value, QTableWidgetItem(steam_name))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.NAME_OVERRIDE.value, QTableWidgetItem(name_override))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.OPTIONS.value, QTableWidgetItem(options))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.ARGUMENTS.value, QTableWidgetItem(arguments))
     # steam_id field placed in STEAMID column; additional IDs stored in name/override as needed
     
     # Populate path text fields from current setup config so they are editable in the table
     # Controller Mapper path
-    main_window.editor_table.setItem(row, constants.EditorCols.CM_PATH.value, QTableWidgetItem(getattr(main_window.config, 'controller_mapper_path', '')))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.CM_PATH.value, QTableWidgetItem(getattr(main_window.config, 'controller_mapper_path', '')))
     # Borderless Windowing path
-    main_window.editor_table.setItem(row, constants.EditorCols.BW_PATH.value, QTableWidgetItem(getattr(main_window.config, 'borderless_gaming_path', '')))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.BW_PATH.value, QTableWidgetItem(getattr(main_window.config, 'borderless_gaming_path', '')))
     # Multi-monitor App path
-    main_window.editor_table.setItem(row, constants.EditorCols.MM_PATH.value, QTableWidgetItem(getattr(main_window.config, 'multi_monitor_tool_path', '')))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.MM_PATH.value, QTableWidgetItem(getattr(main_window.config, 'multi_monitor_tool_path', '')))
 
     # Profile and MM config paths
-    main_window.editor_table.setItem(row, constants.EditorCols.MM_GAME_PROFILE.value, QTableWidgetItem(getattr(main_window.config, 'multimonitor_gaming_path', '')))
-    main_window.editor_table.setItem(row, constants.EditorCols.MM_DESKTOP_PROFILE.value, QTableWidgetItem(getattr(main_window.config, 'multimonitor_media_path', '')))
-    main_window.editor_table.setItem(row, constants.EditorCols.PLAYER1_PROFILE.value, QTableWidgetItem(getattr(main_window.config, 'p1_profile_path', '')))
-    main_window.editor_table.setItem(row, constants.EditorCols.PLAYER2_PROFILE.value, QTableWidgetItem(getattr(main_window.config, 'p2_profile_path', '')))
-    main_window.editor_table.setItem(row, constants.EditorCols.MEDIACENTER_PROFILE.value, QTableWidgetItem(getattr(main_window.config, 'mediacenter_profile_path', '')))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.MM_GAME_PROFILE.value, QTableWidgetItem(getattr(main_window.config, 'multimonitor_gaming_path', '')))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.MM_DESKTOP_PROFILE.value, QTableWidgetItem(getattr(main_window.config, 'multimonitor_media_path', '')))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.PLAYER1_PROFILE.value, QTableWidgetItem(getattr(main_window.config, 'p1_profile_path', '')))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.PLAYER2_PROFILE.value, QTableWidgetItem(getattr(main_window.config, 'p2_profile_path', '')))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.MEDIACENTER_PROFILE.value, QTableWidgetItem(getattr(main_window.config, 'mediacenter_profile_path', '')))
 
     # Just After/Before paths
-    main_window.editor_table.setItem(row, constants.EditorCols.JA_PATH.value, QTableWidgetItem(getattr(main_window.config, 'just_after_launch_path', '')))
-    main_window.editor_table.setItem(row, constants.EditorCols.JB_PATH.value, QTableWidgetItem(getattr(main_window.config, 'just_before_exit_path', '')))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.JA_PATH.value, QTableWidgetItem(getattr(main_window.config, 'just_after_launch_path', '')))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.JB_PATH.value, QTableWidgetItem(getattr(main_window.config, 'just_before_exit_path', '')))
 
     # Pre/Post default paths
-    main_window.editor_table.setItem(row, constants.EditorCols.PRE1_PATH.value, QTableWidgetItem(getattr(main_window.config, 'pre1_path', '')))
-    main_window.editor_table.setItem(row, constants.EditorCols.POST1_PATH.value, QTableWidgetItem(getattr(main_window.config, 'post1_path', '')))
-    main_window.editor_table.setItem(row, constants.EditorCols.PRE2_PATH.value, QTableWidgetItem(getattr(main_window.config, 'pre2_path', '')))
-    main_window.editor_table.setItem(row, constants.EditorCols.POST2_PATH.value, QTableWidgetItem(getattr(main_window.config, 'post2_path', '')))
-    main_window.editor_table.setItem(row, constants.EditorCols.PRE3_PATH.value, QTableWidgetItem(getattr(main_window.config, 'pre3_path', '')))
-    main_window.editor_table.setItem(row, constants.EditorCols.POST3_PATH.value, QTableWidgetItem(getattr(main_window.config, 'post3_path', '')))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.PRE1_PATH.value, QTableWidgetItem(getattr(main_window.config, 'pre1_path', '')))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.POST1_PATH.value, QTableWidgetItem(getattr(main_window.config, 'post1_path', '')))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.PRE2_PATH.value, QTableWidgetItem(getattr(main_window.config, 'pre2_path', '')))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.POST2_PATH.value, QTableWidgetItem(getattr(main_window.config, 'post2_path', '')))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.PRE3_PATH.value, QTableWidgetItem(getattr(main_window.config, 'pre3_path', '')))
+    main_window.editor_tab.table.setItem(row, constants.EditorCols.POST3_PATH.value, QTableWidgetItem(getattr(main_window.config, 'post3_path', '')))
     
     # Retrieve default enabled states and run_wait states for specific features from config.defaults
     controller_mapper_enabled = config_defaults.get('controller_mapper_enabled', True)
@@ -448,53 +475,53 @@ def add_executable_to_editor_table(main_window, include_checked=True, exec_name=
     post3_run_wait = config_defaults.get('post_3_run_wait', False)
 
     # Create checkboxes for Controller Mapper
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.CM_ENABLED.value, create_status_widget(main_window, controller_mapper_enabled, row, constants.EditorCols.CM_ENABLED.value))
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.CM_RUN_WAIT.value, create_status_widget(main_window, controller_mapper_run_wait, row, constants.EditorCols.CM_RUN_WAIT.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.CM_ENABLED.value, create_status_widget(main_window, controller_mapper_enabled, row, constants.EditorCols.CM_ENABLED.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.CM_RUN_WAIT.value, create_status_widget(main_window, controller_mapper_run_wait, row, constants.EditorCols.CM_RUN_WAIT.value))
 
     # Create checkboxes for Borderless Windowing
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.BW_ENABLED.value, create_status_widget(main_window, borderless_windowing_enabled, row, constants.EditorCols.BW_ENABLED.value))
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.BW_RUN_WAIT.value, create_status_widget(main_window, borderless_windowing_run_wait, row, constants.EditorCols.BW_RUN_WAIT.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.BW_ENABLED.value, create_status_widget(main_window, borderless_windowing_enabled, row, constants.EditorCols.BW_ENABLED.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.BW_RUN_WAIT.value, create_status_widget(main_window, borderless_windowing_run_wait, row, constants.EditorCols.BW_RUN_WAIT.value))
 
     # Create checkboxes for Multi-Monitor App
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.MM_ENABLED.value, create_status_widget(main_window, multi_monitor_app_enabled, row, constants.EditorCols.MM_ENABLED.value))
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.MM_RUN_WAIT.value, create_status_widget(main_window, multi_monitor_app_run_wait, row, constants.EditorCols.MM_RUN_WAIT.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.MM_ENABLED.value, create_status_widget(main_window, multi_monitor_app_enabled, row, constants.EditorCols.MM_ENABLED.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.MM_RUN_WAIT.value, create_status_widget(main_window, multi_monitor_app_run_wait, row, constants.EditorCols.MM_RUN_WAIT.value))
 
     # Column 17 is Hide Taskbar (checkbox created later)
 
     # Create checkboxes for Just After Launch
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.JA_ENABLED.value, create_status_widget(main_window, just_after_launch_enabled, row, constants.EditorCols.JA_ENABLED.value))
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.JA_RUN_WAIT.value, create_status_widget(main_window, just_after_launch_run_wait, row, constants.EditorCols.JA_RUN_WAIT.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.JA_ENABLED.value, create_status_widget(main_window, just_after_launch_enabled, row, constants.EditorCols.JA_ENABLED.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.JA_RUN_WAIT.value, create_status_widget(main_window, just_after_launch_run_wait, row, constants.EditorCols.JA_RUN_WAIT.value))
 
     # Create checkboxes for Just Before Exit
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.JB_ENABLED.value, create_status_widget(main_window, just_before_exit_enabled, row, constants.EditorCols.JB_ENABLED.value))
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.JB_RUN_WAIT.value, create_status_widget(main_window, just_before_exit_run_wait, row, constants.EditorCols.JB_RUN_WAIT.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.JB_ENABLED.value, create_status_widget(main_window, just_before_exit_enabled, row, constants.EditorCols.JB_ENABLED.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.JB_RUN_WAIT.value, create_status_widget(main_window, just_before_exit_run_wait, row, constants.EditorCols.JB_RUN_WAIT.value))
 
     # Pre/Post default enabled/run-wait checkboxes
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.PRE1_ENABLED.value, create_status_widget(main_window, pre1_enabled, row, constants.EditorCols.PRE1_ENABLED.value))
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.PRE1_RUN_WAIT.value, create_status_widget(main_window, pre1_run_wait, row, constants.EditorCols.PRE1_RUN_WAIT.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.PRE1_ENABLED.value, create_status_widget(main_window, pre1_enabled, row, constants.EditorCols.PRE1_ENABLED.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.PRE1_RUN_WAIT.value, create_status_widget(main_window, pre1_run_wait, row, constants.EditorCols.PRE1_RUN_WAIT.value))
 
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.POST1_ENABLED.value, create_status_widget(main_window, post1_enabled, row, constants.EditorCols.POST1_ENABLED.value))
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.POST1_RUN_WAIT.value, create_status_widget(main_window, post1_run_wait, row, constants.EditorCols.POST1_RUN_WAIT.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.POST1_ENABLED.value, create_status_widget(main_window, post1_enabled, row, constants.EditorCols.POST1_ENABLED.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.POST1_RUN_WAIT.value, create_status_widget(main_window, post1_run_wait, row, constants.EditorCols.POST1_RUN_WAIT.value))
 
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.PRE2_ENABLED.value, create_status_widget(main_window, pre2_enabled, row, constants.EditorCols.PRE2_ENABLED.value))
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.PRE2_RUN_WAIT.value, create_status_widget(main_window, pre2_run_wait, row, constants.EditorCols.PRE2_RUN_WAIT.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.PRE2_ENABLED.value, create_status_widget(main_window, pre2_enabled, row, constants.EditorCols.PRE2_ENABLED.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.PRE2_RUN_WAIT.value, create_status_widget(main_window, pre2_run_wait, row, constants.EditorCols.PRE2_RUN_WAIT.value))
 
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.POST2_ENABLED.value, create_status_widget(main_window, post2_enabled, row, constants.EditorCols.POST2_ENABLED.value))
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.POST2_RUN_WAIT.value, create_status_widget(main_window, post2_run_wait, row, constants.EditorCols.POST2_RUN_WAIT.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.POST2_ENABLED.value, create_status_widget(main_window, post2_enabled, row, constants.EditorCols.POST2_ENABLED.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.POST2_RUN_WAIT.value, create_status_widget(main_window, post2_run_wait, row, constants.EditorCols.POST2_RUN_WAIT.value))
 
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.PRE3_ENABLED.value, create_status_widget(main_window, pre3_enabled, row, constants.EditorCols.PRE3_ENABLED.value))
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.PRE3_RUN_WAIT.value, create_status_widget(main_window, pre3_run_wait, row, constants.EditorCols.PRE3_RUN_WAIT.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.PRE3_ENABLED.value, create_status_widget(main_window, pre3_enabled, row, constants.EditorCols.PRE3_ENABLED.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.PRE3_RUN_WAIT.value, create_status_widget(main_window, pre3_run_wait, row, constants.EditorCols.PRE3_RUN_WAIT.value))
 
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.POST3_ENABLED.value, create_status_widget(main_window, post3_enabled, row, constants.EditorCols.POST3_ENABLED.value))
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.POST3_RUN_WAIT.value, create_status_widget(main_window, post3_run_wait, row, constants.EditorCols.POST3_RUN_WAIT.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.POST3_ENABLED.value, create_status_widget(main_window, post3_enabled, row, constants.EditorCols.POST3_ENABLED.value))
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.POST3_RUN_WAIT.value, create_status_widget(main_window, post3_run_wait, row, constants.EditorCols.POST3_RUN_WAIT.value))
 
     # Create RunAsAdmin checkbox
     as_admin_widget = create_status_widget(main_window, as_admin, row, constants.EditorCols.RUN_AS_ADMIN.value)
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.RUN_AS_ADMIN.value, as_admin_widget)
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.RUN_AS_ADMIN.value, as_admin_widget)
     
     # Create HideTaskbar checkbox
     hide_taskbar_widget = create_status_widget(main_window, no_tb, row, constants.EditorCols.HIDE_TASKBAR.value)
-    main_window.editor_table.setCellWidget(row, constants.EditorCols.HIDE_TASKBAR.value, hide_taskbar_widget)
+    main_window.editor_tab.table.setCellWidget(row, constants.EditorCols.HIDE_TASKBAR.value, hide_taskbar_widget)
     # Update UI if requested
     if update_ui:
         QCoreApplication.processEvents()

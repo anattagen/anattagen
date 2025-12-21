@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget, QStatusBar, 
     QMessageBox, QMenu, QFileDialog, QTableWidgetItem, QCheckBox,
-    QProgressDialog, QVBoxLayout, QHBoxLayout, QHeaderView, QMessageBox
+    QProgressDialog, QVBoxLayout, QHBoxLayout, QHeaderView, QMessageBox, QInputDialog
 )
 from PyQt6.QtCore import Qt, QCoreApplication, pyqtSlot, QEvent, QObject
 from PyQt6.QtGui import QCursor
@@ -15,9 +15,10 @@ import threading
 import requests
 # Import tab population functions
 from Python.setup_tab import SetupTab
+from Python.ui.setup_tab_ui import populate_setup_tab
 from Python.ui.deployment_tab import DeploymentTab
 from Python.ui.editor_tab_ui import populate_editor_tab
-from Python.ui.steam_cache import SteamCacheManager
+from Python.ui.steam_cache import SteamCacheManager, STEAM_FILTERED_TXT, NORMALIZED_INDEX_CACHE
 from Python.ui.editor_tab import EditorTab
 from Python.models import AppConfig
 from Python import config_manager
@@ -66,8 +67,10 @@ class DataManager:
         
         self.main_window.statusBar().showMessage("Indexing source directories...", 0)
         
-        found_games = index_games(
+        found_count = index_games(
+            self.main_window,
             source_dirs=self.config.source_dirs,
+            excluded_dirs=self.config.excluded_dirs,
             exclude_exe_set=self.exclude_exe_set,
             folder_exclude_set=self.folder_exclude_set,
             demoted_set=self.demoted_set,
@@ -76,13 +79,11 @@ class DataManager:
             enable_name_matching=self.config.enable_name_matching
         )
         
-        self.main_window.editor_tab.populate_from_data(found_games)
-        
-        if found_games:
+        if found_count > 0:
             data = self.main_window.editor_tab.get_all_game_data()
             save_index(self.main_window, constants.APP_ROOT_DIR, data)
         
-        self.main_window.statusBar().showMessage(f"Indexed {len(found_games)} executables", 5000)
+        self.main_window.statusBar().showMessage(f"Indexed {found_count} executables", 5000)
 
     def load_index(self):
         """Load an index file into the editor table."""
@@ -257,6 +258,9 @@ class SteamManager:
         """Re-enable UI elements after download."""
         # Re-enable the tab widget
         self.main_window.tabs.setEnabled(True)
+        # Also ensure all tabs are enabled (in case SteamProcessor disabled them)
+        for i in range(self.main_window.tabs.count()):
+            self.main_window.tabs.widget(i).setEnabled(True)
 
     def prompt_and_process_steam_json(self, file_path=None):
         """Prompt the user to select a Steam JSON file and process it."""
@@ -268,7 +272,7 @@ class SteamManager:
         
         # Now that we're sure it exists, use it
         if file_path:
-            self.steam_processor.process_steam_json_file(file_path)
+            self.steam_processor.start_processing(file_path)
         else:
             self.steam_processor.prompt_and_process_steam_json()
 
@@ -281,6 +285,51 @@ class SteamManager:
                 os.remove(constants.STEAM_JSON_FILE)
                 self.main_window.statusBar().showMessage("Steam JSON file deleted", 3000)
 
+    def process_existing_json(self):
+        """Process the existing steam.json file with UI handling and confirmation."""
+        # Disable UI immediately
+        self._disable_ui_during_download()
+        
+        steam_json_path = constants.STEAM_JSON_FILE
+        
+        # Check if file exists
+        if not os.path.exists(steam_json_path):
+            self.main_window.statusBar().showMessage("steam.json not found.", 5000)
+            self._enable_ui_after_download()
+            return
+
+        # Check if cache files exist
+        filtered_cache = os.path.join(constants.APP_ROOT_DIR, STEAM_FILTERED_TXT)
+        normalized_cache = os.path.join(constants.APP_ROOT_DIR, NORMALIZED_INDEX_CACHE)
+        
+        should_prompt = False
+        if os.path.exists(filtered_cache) or os.path.exists(normalized_cache):
+            should_prompt = True
+            
+            # Check file sizes - skip prompt if either file exists and is less than 100KB
+            if os.path.exists(filtered_cache) and os.path.getsize(filtered_cache) < 102400:
+                should_prompt = False
+            elif os.path.exists(normalized_cache) and os.path.getsize(normalized_cache) < 102400:
+                should_prompt = False
+
+        if should_prompt:
+            reply = QMessageBox.question(
+                self.main_window,
+                "Confirm Processing",
+                "This will overwrite/delete existing Steam cache files. Are you sure you want to proceed?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                self._enable_ui_after_download()
+                return
+
+        # Ensure processor exists and start processing
+        if not hasattr(self, 'steam_processor'):
+            from Python.ui.steam_processor import SteamProcessor
+            self.steam_processor = SteamProcessor(self.main_window, self.steam_cache_manager)
+        
+        self.steam_processor.start_processing(steam_json_path)
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -331,6 +380,15 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.deployment_tab, "Deployment")
         self.tabs.addTab(self.editor_tab, "Editor")
 
+        # Note: SetupTab is the class-based implementation with full UI features.
+        # populate_setup_tab() is the alternative function-based implementation.
+        # Only use one or the other, not both.
+        populate_setup_tab(self)
+        self._connect_setup_tab_signals()
+
+        # Highlight unpopulated items in deployment tab with red color
+        self.deployment_tab.highlight_unpopulated_items(self)
+
         # Connect the setup tab's signal to our save logic
         self.setup_tab.config_changed.connect(self._sync_config_from_ui_and_save)
         
@@ -341,6 +399,7 @@ class MainWindow(QMainWindow):
         self.deployment_tab.download_steam_json_requested.connect(self.steam_manager.download_steam_json)
         self.deployment_tab.delete_steam_json_requested.connect(self.steam_manager.delete_steam_json)
         self.deployment_tab.delete_steam_cache_requested.connect(self.steam_cache_manager.delete_cache_files)
+        self.deployment_tab.process_steam_json_requested.connect(self.steam_manager.process_existing_json)
 
         # Connect the editor tab's signals
         self.editor_tab.save_index_requested.connect(self._save_editor_table_to_index)
@@ -371,12 +430,83 @@ class MainWindow(QMainWindow):
             return True
         return super().eventFilter(obj, event)
 
+    def _connect_setup_tab_signals(self):
+        """Connect signals from Setup Tab widgets to save logic."""
+        widgets_to_connect = [
+            getattr(self, 'exclude_manager_checkbox', None),
+            getattr(self, 'after_launch_run_wait_checkbox', None),
+            getattr(self, 'before_exit_run_wait_checkbox', None)
+        ]
+        
+        # Add run-wait checkboxes
+        if hasattr(self, 'pre_launch_run_wait_checkboxes'):
+            widgets_to_connect.extend(self.pre_launch_run_wait_checkboxes)
+        if hasattr(self, 'post_launch_run_wait_checkboxes'):
+            widgets_to_connect.extend(self.post_launch_run_wait_checkboxes)
+            
+        for widget in widgets_to_connect:
+            if widget:
+                widget.clicked.connect(self._sync_config_from_ui_and_save)
+        
+        # Connect line edits to save on editing finished
+        line_edits = [
+            getattr(self, 'profiles_dir_edit', None),
+            getattr(self, 'launchers_dir_edit', None),
+            getattr(self, 'controller_mapper_app_line_edit', None),
+            getattr(self, 'borderless_app_line_edit', None),
+            getattr(self, 'multimonitor_app_line_edit', None),
+            getattr(self, 'after_launch_app_line_edit', None),
+            getattr(self, 'before_exit_app_line_edit', None),
+            getattr(self, 'p1_profile_edit', None),
+            getattr(self, 'p2_profile_edit', None),
+            getattr(self, 'mediacenter_profile_edit', None),
+            getattr(self, 'multimonitor_gaming_config_edit', None),
+            getattr(self, 'multimonitor_media_config_edit', None),
+        ]
+        if hasattr(self, 'pre_launch_app_line_edits'):
+            line_edits.extend(self.pre_launch_app_line_edits)
+        if hasattr(self, 'post_launch_app_line_edits'):
+            line_edits.extend(self.post_launch_app_line_edits)
+            
+        for le in line_edits:
+            if le:
+                le.editingFinished.connect(self._sync_config_from_ui_and_save)
+                
+        # Connect line edits and combos if needed, though they usually trigger on specific events or focus loss
+        # For now, we rely on explicit save points or specific signals connected in populate_setup_tab
+        # But we should ensure text changes in critical paths trigger updates if desired.
+        # populate_setup_tab connects some buttons to methods, but not necessarily text changes to save.
+        # We will rely on the user actions (Add/Remove) or explicit save for now, 
+        # or add textChanged connections here if auto-save on type is desired.
+
     def _add_new_app_dialog(self, line_edit):
         """Handle the 'Add New...' option in app selection dropdowns"""
         # This is a placeholder for the actual implementation
         # It will be called when the user selects 'Add New...' in a dropdown
         pass
         
+    def _add_to_combo(self, combo, title, is_directory=False):
+        """Add an item to a combo box."""
+        text = ""
+        if is_directory:
+            text = QFileDialog.getExistingDirectory(self, title)
+        else:
+            text, ok = QInputDialog.getText(self, title, "Enter item:")
+            if not ok: return
+            
+        if text:
+            if combo.findText(text) == -1:
+                combo.addItem(text)
+            combo.setCurrentText(text)
+            self._sync_config_from_ui_and_save()
+
+    def _remove_from_combo(self, combo):
+        """Remove the current item from a combo box."""
+        idx = combo.currentIndex()
+        if idx >= 0:
+            combo.removeItem(idx)
+            self._sync_config_from_ui_and_save()
+
     def _update_steam_json_cache(self):
         """Update the Steam JSON cache"""
         # This method should update the Steam JSON cache
@@ -468,7 +598,6 @@ class MainWindow(QMainWindow):
     def _setup_creation_controller(self):
         """Initialize the creation controller"""
         from Python.ui.creation.creation_controller import CreationController
-        from Python.ui.creation.creation_controller import CreationController
         self.creation_controller = CreationController(self)
 
     @pyqtSlot(str)
@@ -499,18 +628,322 @@ class MainWindow(QMainWindow):
         
     def sync_ui_from_config(self):
         """Updates the UI widgets with values from the AppConfig model."""
-        # Delegate syncing the setup tab to its own class
-        self.setup_tab.sync_ui_from_config(self.config)
+        # Sync Setup Tab widgets directly
+        self._sync_setup_tab_ui_from_config(self.config)
+        
         self.deployment_tab.sync_ui_from_config(self.config)
+        
+        # Apply visual settings (Theme/Font)
+        self._apply_visual_settings()
+
+    def _sync_setup_tab_ui_from_config(self, config):
+        """Sync Setup Tab UI widgets from AppConfig."""
+        # Source Configuration
+        if hasattr(self, 'source_dirs_combo'):
+            self.source_dirs_combo.clear()
+            self.source_dirs_combo.addItems(config.source_dirs)
+        if hasattr(self, 'exclude_items_combo'):
+            self.exclude_items_combo.clear()
+            self.exclude_items_combo.addItems(config.excluded_dirs)
+        if hasattr(self, 'other_managers_combo'):
+            self.other_managers_combo.setCurrentText(config.game_managers_present)
+        if hasattr(self, 'exclude_manager_checkbox'):
+            self.exclude_manager_checkbox.setChecked(config.exclude_selected_manager_games)
+        if hasattr(self, 'logging_verbosity_combo'):
+            self.logging_verbosity_combo.setCurrentText(config.logging_verbosity)
+            
+        # Directories
+        if hasattr(self, 'profiles_dir_edit'): self.profiles_dir_edit.setText(config.profiles_dir)
+        if hasattr(self, 'launchers_dir_edit'): self.launchers_dir_edit.setText(config.launchers_dir)
+        
+        # Applications
+        if hasattr(self, 'controller_mapper_app_line_edit'): self.controller_mapper_app_line_edit.setText(config.controller_mapper_path)
+        if hasattr(self, 'borderless_app_line_edit'): self.borderless_app_line_edit.setText(config.borderless_gaming_path)
+        if hasattr(self, 'multimonitor_app_line_edit'): self.multimonitor_app_line_edit.setText(config.multi_monitor_tool_path)
+        if hasattr(self, 'after_launch_app_line_edit'): self.after_launch_app_line_edit.setText(config.just_after_launch_path)
+        if hasattr(self, 'before_exit_app_line_edit'): self.before_exit_app_line_edit.setText(config.just_before_exit_path)
+        
+        if hasattr(self, 'after_launch_run_wait_checkbox'): self.after_launch_run_wait_checkbox.setChecked(config.run_wait_states.get('just_after_launch_run_wait', False))
+        if hasattr(self, 'before_exit_run_wait_checkbox'): self.before_exit_run_wait_checkbox.setChecked(config.run_wait_states.get('just_before_exit_run_wait', True))
+        
+        # Profiles
+        if hasattr(self, 'p1_profile_edit'): self.p1_profile_edit.setText(config.p1_profile_path)
+        if hasattr(self, 'p2_profile_edit'): self.p2_profile_edit.setText(config.p2_profile_path)
+        if hasattr(self, 'mediacenter_profile_edit'): self.mediacenter_profile_edit.setText(config.mediacenter_profile_path)
+        if hasattr(self, 'multimonitor_gaming_config_edit'): self.multimonitor_gaming_config_edit.setText(config.multimonitor_gaming_path)
+        if hasattr(self, 'multimonitor_media_config_edit'): self.multimonitor_media_config_edit.setText(config.multimonitor_media_path)
+        
+        # Pre/Post Launch Apps
+        if hasattr(self, 'pre_launch_app_line_edits'):
+            paths = [config.pre1_path, config.pre2_path, config.pre3_path]
+            for i, le in enumerate(self.pre_launch_app_line_edits):
+                if i < len(paths): le.setText(paths[i])
+        if hasattr(self, 'post_launch_app_line_edits'):
+            paths = [config.post1_path, config.post2_path, config.post3_path]
+            for i, le in enumerate(self.post_launch_app_line_edits):
+                if i < len(paths): le.setText(paths[i])
+                
+        # Run-Wait Checkboxes
+        if hasattr(self, 'pre_launch_run_wait_checkboxes'):
+            for i, cb in enumerate(self.pre_launch_run_wait_checkboxes):
+                cb.setChecked(config.run_wait_states.get(f'pre_{i+1}_run_wait', True))
+        if hasattr(self, 'post_launch_run_wait_checkboxes'):
+            for i, cb in enumerate(self.post_launch_run_wait_checkboxes):
+                cb.setChecked(config.run_wait_states.get(f'post_{i+1}_run_wait', True))
 
     @pyqtSlot()
     def _sync_config_from_ui_and_save(self):
         """Updates the AppConfig model from the UI and saves it to disk."""
-        # Delegate syncing the setup tab to its own class
-        self.setup_tab.sync_config_from_ui(self.config)
+        # Sync Setup Tab widgets directly
+        self._sync_config_from_setup_tab_ui(self.config)
+        
         self.deployment_tab.sync_config_from_ui(self.config)
         
+        # Apply visual settings immediately
+        self._apply_visual_settings()
+        
         config_manager.save_configuration(self.config)
+
+    def _sync_config_from_setup_tab_ui(self, config):
+        """Sync AppConfig from Setup Tab UI widgets."""
+        # Support both list widget and combo box implementations
+        if hasattr(self, 'source_dirs_list'):
+            config.source_dirs = [self.source_dirs_list.item(i).text() for i in range(self.source_dirs_list.count())]
+        elif hasattr(self, 'source_dirs_combo'):
+            config.source_dirs = [self.source_dirs_combo.itemText(i) for i in range(self.source_dirs_combo.count())]
+        if hasattr(self, 'excluded_dirs_list'):
+            config.excluded_dirs = [self.excluded_dirs_list.item(i).text() for i in range(self.excluded_dirs_list.count())]
+        elif hasattr(self, 'exclude_items_combo'):
+            config.excluded_dirs = [self.exclude_items_combo.itemText(i) for i in range(self.exclude_items_combo.count())]
+        if hasattr(self, 'other_managers_combo'): config.game_managers_present = self.other_managers_combo.currentText()
+        if hasattr(self, 'exclude_manager_checkbox'): config.exclude_selected_manager_games = self.exclude_manager_checkbox.isChecked()
+        if hasattr(self, 'logging_verbosity_combo'): config.logging_verbosity = self.logging_verbosity_combo.currentText()
+        
+        # Theme and font settings
+        if hasattr(self, 'theme_combo'): config.app_theme = self.theme_combo.currentText()
+        if hasattr(self, 'font_combo'): config.app_font = self.font_combo.currentText()
+        if hasattr(self, 'font_size_spin'): config.font_size = self.font_size_spin.value()
+        
+        if hasattr(self, 'profiles_dir_edit'): config.profiles_dir = self.profiles_dir_edit.text()
+        if hasattr(self, 'launchers_dir_edit'): config.launchers_dir = self.launchers_dir_edit.text()
+        
+        if hasattr(self, 'controller_mapper_app_line_edit'): config.controller_mapper_path = self.controller_mapper_app_line_edit.text()
+        if hasattr(self, 'borderless_app_line_edit'): config.borderless_gaming_path = self.borderless_app_line_edit.text()
+        if hasattr(self, 'multimonitor_app_line_edit'): config.multi_monitor_tool_path = self.multimonitor_app_line_edit.text()
+        if hasattr(self, 'after_launch_app_line_edit'): config.just_after_launch_path = self.after_launch_app_line_edit.text()
+        if hasattr(self, 'before_exit_app_line_edit'): config.just_before_exit_path = self.before_exit_app_line_edit.text()
+        
+        if hasattr(self, 'after_launch_run_wait_checkbox'): config.run_wait_states['just_after_launch_run_wait'] = self.after_launch_run_wait_checkbox.isChecked()
+        if hasattr(self, 'before_exit_run_wait_checkbox'): config.run_wait_states['just_before_exit_run_wait'] = self.before_exit_run_wait_checkbox.isChecked()
+        
+        if hasattr(self, 'p1_profile_edit'): config.p1_profile_path = self.p1_profile_edit.text()
+        if hasattr(self, 'p2_profile_edit'): config.p2_profile_path = self.p2_profile_edit.text()
+        if hasattr(self, 'mediacenter_profile_edit'): config.mediacenter_profile_path = self.mediacenter_profile_edit.text()
+        if hasattr(self, 'multimonitor_gaming_config_edit'): config.multimonitor_gaming_path = self.multimonitor_gaming_config_edit.text()
+        if hasattr(self, 'multimonitor_media_config_edit'): config.multimonitor_media_path = self.multimonitor_media_config_edit.text()
+        
+        if hasattr(self, 'pre_launch_app_line_edits'):
+            if len(self.pre_launch_app_line_edits) > 0: config.pre1_path = self.pre_launch_app_line_edits[0].text()
+            if len(self.pre_launch_app_line_edits) > 1: config.pre2_path = self.pre_launch_app_line_edits[1].text()
+            if len(self.pre_launch_app_line_edits) > 2: config.pre3_path = self.pre_launch_app_line_edits[2].text()
+            
+        if hasattr(self, 'post_launch_app_line_edits'):
+            if len(self.post_launch_app_line_edits) > 0: config.post1_path = self.post_launch_app_line_edits[0].text()
+            if len(self.post_launch_app_line_edits) > 1: config.post2_path = self.post_launch_app_line_edits[1].text()
+            if len(self.post_launch_app_line_edits) > 2: config.post3_path = self.post_launch_app_line_edits[2].text()
+            
+        if hasattr(self, 'pre_launch_run_wait_checkboxes'):
+            for i, cb in enumerate(self.pre_launch_run_wait_checkboxes):
+                config.run_wait_states[f'pre_{i+1}_run_wait'] = cb.isChecked()
+                
+        if hasattr(self, 'post_launch_run_wait_checkboxes'):
+            for i, cb in enumerate(self.post_launch_run_wait_checkboxes):
+                config.run_wait_states[f'post_{i+1}_run_wait'] = cb.isChecked()
+        
+        # Sync CEN/LC modes for profile paths
+        if hasattr(self, 'p1_cen_radio'):
+            config.p1_profile_mode = "CEN" if self.p1_cen_radio.isChecked() else "LC"
+        if hasattr(self, 'p2_cen_radio'):
+            config.p2_profile_mode = "CEN" if self.p2_cen_radio.isChecked() else "LC"
+        if hasattr(self, 'mediacenter_cen_radio'):
+            config.mediacenter_profile_mode = "CEN" if self.mediacenter_cen_radio.isChecked() else "LC"
+        if hasattr(self, 'multimonitor_gaming_cen_radio'):
+            config.multimonitor_gaming_mode = "CEN" if self.multimonitor_gaming_cen_radio.isChecked() else "LC"
+        if hasattr(self, 'multimonitor_media_cen_radio'):
+            config.multimonitor_media_mode = "CEN" if self.multimonitor_media_cen_radio.isChecked() else "LC"
+
+    def _add_to_list(self, list_widget, dialog_title, is_directory=False):
+        """Add item to a QListWidget."""
+        if is_directory:
+            path = QFileDialog.getExistingDirectory(self, dialog_title)
+        else:
+            path, _ = QFileDialog.getOpenFileName(self, dialog_title)
+        if path:
+            list_widget.addItem(path)
+            self._sync_config_from_ui_and_save()
+
+    def _remove_from_list(self, list_widget):
+        """Remove selected item from a QListWidget."""
+        selected_items = list_widget.selectedItems()
+        for item in selected_items:
+            list_widget.takeItem(list_widget.row(item))
+        self._sync_config_from_ui_and_save()
+
+    def _on_appearance_changed(self):
+        """Handle theme/font/size changes."""
+        self._apply_visual_settings()
+        self._sync_config_from_ui_and_save()
+
+    def _apply_visual_settings(self):
+        """Apply theme and font settings from configuration."""
+        # Use getattr to safely get values, defaulting to System/10 if not in config yet
+        theme = getattr(self.config, 'app_theme', 'System')
+        font_size = getattr(self.config, 'font_size', 10)
+        
+        if theme == 'Dark':
+            self._apply_dark_theme(font_size)
+        else:
+            self._apply_system_theme(font_size)
+
+    def _apply_dark_theme(self, font_size):
+        self.setStyleSheet(f"""
+            QMainWindow, QWidget {{
+                background-color: #2b2b2b;
+                color: #e0e0e0;
+                font-family: "Segoe UI", Arial, sans-serif;
+                font-size: {font_size}pt;
+            }}
+            QTabWidget::pane {{
+                border: 1px solid #3d3d3d;
+                background: #323232;
+                border-radius: 4px;
+            }}
+            QTabBar::tab {{
+                background: #2b2b2b;
+                color: #a0a0a0;
+                padding: 8px 20px;
+                border: 1px solid #3d3d3d;
+                border-bottom: none;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
+                margin-right: 2px;
+            }}
+            QTabBar::tab:selected {{
+                background: #323232;
+                color: #ffffff;
+                border-bottom: 1px solid #323232;
+            }}
+            QTabBar::tab:hover {{
+                background: #3a3a3a;
+                color: #ffffff;
+            }}
+            QLineEdit, QComboBox, QTableWidget {{
+                background-color: #1e1e1e;
+                color: #ffffff;
+                border: 1px solid #3d3d3d;
+                padding: 4px;
+                border-radius: 3px;
+            }}
+            QPushButton, QToolButton {{
+                background-color: #3a3a3a;
+                color: #ffffff;
+                border: 1px solid #555;
+                padding: 6px 12px;
+                border-radius: 3px;
+            }}
+            QPushButton:hover, QToolButton:hover {{
+                background-color: #4a4a4a;
+            }}
+            QPushButton:pressed, QToolButton:pressed {{
+                background-color: #2a2a2a;
+            }}
+            /* Specific styles for custom widgets */
+            DragDropListWidget {{
+                background-color: #1e1e1e;
+                color: #e0e0e0;
+                border: 1px solid #3d3d3d;
+            }}
+            DragDropListWidget::item:selected {{
+                background-color: #0078d7;
+                color: white;
+            }}
+            DragDropListWidget::item:hover {{
+                background-color: #3a3a3a;
+            }}
+            AccordionSection QToolButton {{
+                font-weight: bold;
+                text-align: left;
+            }}
+        """)
+
+    def _apply_system_theme(self, font_size):
+        """Apply system theme with user-defined font size."""
+        self.setStyleSheet(f"""
+            QMainWindow, QWidget {{
+                font-family: "Segoe UI", Arial, sans-serif;
+                font-size: {font_size}pt;
+            }}
+            /* Restore original DragDropListWidget styles */
+            DragDropListWidget {{
+                background-color: #E0E0E0;
+                color: black;
+                border: 1px solid #A0A0A0;
+                border-radius: 4px;
+            }}
+            DragDropListWidget::item {{
+                padding: 4px;
+                border-bottom: 1px solid #C0C0C0;
+            }}
+            DragDropListWidget::item:selected {{
+                background-color: #B0B0FF;
+                color: black;
+            }}
+            DragDropListWidget::item:hover {{
+                background-color: #D0D0FF;
+            }}
+            AccordionSection QToolButton {{
+                font-weight: bold;
+            }}
+        """)
+
+    def _add_to_list(self, list_widget, dialog_title, is_directory=False):
+        """Add item to a QListWidget."""
+        if is_directory:
+            path = QFileDialog.getExistingDirectory(self, dialog_title)
+        else:
+            path, _ = QFileDialog.getOpenFileName(self, dialog_title)
+        if path:
+            list_widget.addItem(path)
+            self._sync_config_from_ui_and_save()
+
+    def _remove_from_list(self, list_widget):
+        """Remove selected item from a QListWidget."""
+        selected_items = list_widget.selectedItems()
+        for item in selected_items:
+            list_widget.takeItem(list_widget.row(item))
+        self._sync_config_from_ui_and_save()
+
+    def _on_appearance_changed(self):
+        """Handle theme/font/size changes."""
+        self._apply_visual_settings()
+        self._sync_config_from_ui_and_save()
+
+    def _reset_to_defaults(self):
+        """Reset the application's configuration to shipped defaults."""
+        from PyQt6.QtWidgets import QMessageBox
+        reply = QMessageBox.question(self, "Reset to Defaults",
+                                     "This will reset all configuration to the application's default values. Continue?",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                     QMessageBox.StandardButton.No)
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        from Python.ui.config_manager import load_default_config
+        success = load_default_config(self)
+        if success:
+            QMessageBox.information(self, "Defaults Loaded", "Default configuration has been loaded.")
+            self._load_config()
+        else:
+            QMessageBox.warning(self, "Reset Failed", "Failed to load default configuration.")
 
     def on_create_button_clicked(self):
         """Handle the Create button click"""
