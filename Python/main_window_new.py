@@ -1,12 +1,10 @@
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget, QStatusBar, 
     QMessageBox, QMenu, QFileDialog, QTableWidgetItem, QCheckBox,
-    QProgressDialog, QVBoxLayout, QHBoxLayout, QHeaderView, QMessageBox, QInputDialog
+    QProgressDialog, QVBoxLayout, QHBoxLayout, QHeaderView, QInputDialog
 )
 from PyQt6.QtCore import Qt, QCoreApplication, pyqtSlot, QEvent, QObject
 from PyQt6.QtGui import QCursor
-import urllib.request
-import urllib.error
 import shutil
 import os
 import time
@@ -343,6 +341,9 @@ class MainWindow(QMainWindow):
         self.data_manager = DataManager(self)
         self.steam_cache_manager = SteamCacheManager(self)
         self.steam_manager = SteamManager(self)
+        
+        # Initialize creation controller
+        self._setup_creation_controller()
         
         # Set up the UI
         self._setup_ui()
@@ -905,28 +906,6 @@ class MainWindow(QMainWindow):
                 font-weight: bold;
             }}
         """)
-
-    def _add_to_list(self, list_widget, dialog_title, is_directory=False):
-        """Add item to a QListWidget."""
-        if is_directory:
-            path = QFileDialog.getExistingDirectory(self, dialog_title)
-        else:
-            path, _ = QFileDialog.getOpenFileName(self, dialog_title)
-        if path:
-            list_widget.addItem(path)
-            self._sync_config_from_ui_and_save()
-
-    def _remove_from_list(self, list_widget):
-        """Remove selected item from a QListWidget."""
-        selected_items = list_widget.selectedItems()
-        for item in selected_items:
-            list_widget.takeItem(list_widget.row(item))
-        self._sync_config_from_ui_and_save()
-
-    def _on_appearance_changed(self):
-        """Handle theme/font/size changes."""
-        self._apply_visual_settings()
-        self._sync_config_from_ui_and_save()
 
     def _reset_to_defaults(self):
         """Reset the application's configuration to shipped defaults."""

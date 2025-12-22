@@ -244,7 +244,7 @@ def _setup_keysticks_profiles(config, project_dir, bin_dir, python_dir, search_l
     
     # Search for Player1.ks
     p1_profile = find_file_in_locations("Player1.ks", search_locations)
-    if p1_profile is None:
+    if p1_profile is\ None:
         p1_profile = find_file_recursive(bin_dir, "Player1.ks")
     
     if p1_profile:
