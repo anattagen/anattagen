@@ -431,9 +431,7 @@ def reset_launch_sequence(main_window):
         "Pre3", 
         "Borderless"
     ])
-    # Save the configuration after resetting
-    from Python.ui.config_manager import save_configuration
-    save_configuration(main_window)
+    main_window._sync_config_from_ui_and_save()
 
 def reset_exit_sequence(main_window):
     """Reset the exit sequence to default order"""
@@ -446,9 +444,7 @@ def reset_exit_sequence(main_window):
         "Taskbar",
         "Controller-Mapper"
     ])
-    # Save the configuration after resetting
-    from Python.ui.config_manager import save_configuration
-    save_configuration(main_window)
+    main_window._sync_config_from_ui_and_save()
 
 def print_deployment_options(main_window):
     """Print the deployment_path_options for debugging"""
@@ -523,8 +519,7 @@ def create_deployment_path_row_widget(parent_window, setup_qlineedit_to_mirror: 
 
     
     # Connect radio buttons to save config when changed
-    from Python.ui.config_manager import save_configuration
-    uoc_radio.toggled.connect(lambda checked, pw=parent_window: save_configuration(pw) if checked else None)
-    lc_radio.toggled.connect(lambda checked, pw=parent_window: save_configuration(pw) if checked else None)
+    uoc_radio.toggled.connect(lambda checked, pw=parent_window: pw._sync_config_from_ui_and_save() if checked else None)
+    lc_radio.toggled.connect(lambda checked, pw=parent_window: pw._sync_config_from_ui_and_save() if checked else None)
     
     return row_widget, radio_group, uoc_radio, lc_radio

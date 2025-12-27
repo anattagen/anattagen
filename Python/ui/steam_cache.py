@@ -1,290 +1,63 @@
 import os
 import json
-from Python.ui.name_utils import normalize_name_for_matching
-from PyQt6.QtWidgets import QMessageBox
-import shutil
-from Python import constants
+import logging
+from .. import constants
 
-# Constants
 STEAM_FILTERED_TXT = "steam_filtered.txt"
-NORMALIZED_INDEX_CACHE = "steam_normalized_index.json"
+NORMALIZED_INDEX_CACHE = "normalized_steam_games.cache"
 
 class SteamCacheManager:
     def __init__(self, main_window):
         self.main_window = main_window
-
-    def fix_steam_cache_file_path(self):
-        """Check and fix the steam cache file path if needed"""
-        print("Checking steam cache file path...")
-        
-        # Check if the attribute exists
-        if not hasattr(self.main_window, 'filtered_steam_cache_file_path'):
-            print("filtered_steam_cache_file_path attribute does not exist")
-            return False
-        
-        # Check if it's set
-        if not self.main_window.filtered_steam_cache_file_path:
-            print("filtered_steam_cache_file_path is not set")
-            return False
-        
-        # Check if it's pointing to a .json file
-        if self.main_window.filtered_steam_cache_file_path.endswith('.json'):
-            # Try to find the .txt version
-            txt_path = self.main_window.filtered_steam_cache_file_path.replace('.json', '.txt')
-            if os.path.exists(txt_path):
-
-                self.main_window.filtered_steam_cache_file_path = txt_path
-                return True
-            else:
-                # Look in the same directory
-                dir_path = os.path.dirname(self.main_window.filtered_steam_cache_file_path)
-                txt_file = os.path.join(dir_path, STEAM_FILTERED_TXT)
-                if os.path.exists(txt_file):
-
-                    self.main_window.filtered_steam_cache_file_path = txt_file
-                    return True
-                else:
-
-                    return False
-        
-        # Check if the file exists
-        if not os.path.exists(self.main_window.filtered_steam_cache_file_path):
-
-            
-            # Try to find it in the same directory
-            dir_path = os.path.dirname(self.main_window.filtered_steam_cache_file_path)
-            txt_file = os.path.join(dir_path, STEAM_FILTERED_TXT)
-            if os.path.exists(txt_file):
-
-                self.main_window.filtered_steam_cache_file_path = txt_file
-                return True
-            else:
-                # Try to find it in the script directory
-                script_dir = os.path.dirname(os.path.abspath(__file__))
-                txt_file = os.path.join(script_dir, STEAM_FILTERED_TXT)
-                if os.path.exists(txt_file):
-
-                    self.main_window.filtered_steam_cache_file_path = txt_file
-                    return True
-                else:
-
-                    return False
-        
-        return True
+        self.filtered_steam_cache = set()
+        self.normalized_steam_index = {}
+        self.filtered_cache_path = os.path.join(constants.APP_ROOT_DIR, STEAM_FILTERED_TXT)
+        self.normalized_index_path = os.path.join(constants.APP_ROOT_DIR, NORMALIZED_INDEX_CACHE)
 
     def load_filtered_steam_cache(self):
-        """Load the filtered Steam cache file if it exists"""
-        # Clear existing caches first - do this unconditionally
-        print("Clearing existing Steam caches")
-        self.main_window.steam_title_cache = {}
-        self.main_window.normalized_steam_match_index = {}
-        
-        # Define path
-        steam_filtered_path = os.path.join(constants.APP_ROOT_DIR, STEAM_FILTERED_TXT)
-        
-        # Set the path for future reference
-        self.main_window.filtered_steam_cache_file_path = steam_filtered_path
-        
-        # First try to load the normalized index cache if it exists
-        normalized_index_loaded = self.load_normalized_steam_index()
-        
-        # Always load the filtered cache to ensure we have the complete title cache
-        if os.path.exists(steam_filtered_path):
-            try:
-                with open(steam_filtered_path, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        if line.strip():
-                            parts = line.strip().split('\t')  # Use tab as separator
-                            if len(parts) >= 2:
-                                app_id = parts[0]
-                                title = parts[1]
-                                self.main_window.steam_title_cache[app_id] = title
-            except Exception as e:
-                print(f"Error loading filtered cache: {e}")
-                return False
-        
-        # If normalized index wasn't loaded or is incomplete, create it
-        if not normalized_index_loaded or len(self.main_window.normalized_steam_match_index) < len(self.main_window.steam_title_cache) * 0.9:
-            print("Normalized index not loaded or incomplete, creating new one")
-            self.create_normalized_steam_index()
-    
-        return True
-
-    def create_normalized_steam_index(self):
-        """Create normalized index for better matching"""
-        print("Creating normalized index for matching")
-        
-        self.main_window.normalized_steam_match_index = {}
-        
-        # Debug counters
-        total_titles = len(self.main_window.steam_title_cache)
-        skipped_count = 0
-        added_count = 0
-        
-        for app_id, title in self.main_window.steam_title_cache.items():
-            # Skip empty titles
-            if not title:
-                skipped_count += 1
-
-                continue
-            
-            # Normalize the title (do not use stemmer for Steam names to prevent improper culling)
-            normalized = normalize_name_for_matching(title, None)
-            
-            # Special handling for short titles (4 chars or less)
-            # These are often acronyms or unique names that should be preserved
-            if len(title) <= 4:
-
-                # For very short titles, we'll keep them even if they'd normally be filtered
-                self.main_window.normalized_steam_match_index[normalized] = {"id": app_id, "name": title}
-                added_count += 1
-                continue
-                
-            # Skip empty normalized names
-            if not normalized:
-                skipped_count += 1
-
-                continue
-                
-            # Skip if normalized name is too generic (single word that's too common)
-            generic_words = ["game", "about", "the", "and", "for", "with"]
-            if normalized in generic_words and len(normalized.split()) == 1:
-                skipped_count += 1
-
-                continue
-                
-            # Add to normalized index
-            self.main_window.normalized_steam_match_index[normalized] = {"id": app_id, "name": title}
-            added_count += 1
-        
-
-
-        
-        # Save the normalized index to a cache file
-        self.save_normalized_steam_index()
-        
-        return True
-
-    def save_normalized_steam_index(self):
-        """Save the normalized index to a cache file for faster loading"""
-        if not hasattr(self.main_window, 'normalized_steam_match_index') or not self.main_window.normalized_steam_match_index:
-            print("No normalized index to save")
-            return False
-        
-        try:
-            # Save to app root directory
-            cache_file = os.path.join(constants.APP_ROOT_DIR, NORMALIZED_INDEX_CACHE)
-            
-            # Save the index
-            with open(cache_file, 'w', encoding='utf-8') as f:
-                # Write human-readable JSON with unicode preserved
-                json.dump(self.main_window.normalized_steam_match_index, f, ensure_ascii=False, indent=2)
-            
-            return True
-        except Exception as e:
-            print(f"Error saving normalized index: {e}")
-            return False
+        if not os.path.exists(self.filtered_cache_path):
+            self.filtered_steam_cache = set()
+            return
+        with open(self.filtered_cache_path, 'r', encoding='utf-8') as f:
+            self.filtered_steam_cache = {line.strip() for line in f}
+        logging.info(f"Loaded {len(self.filtered_steam_cache)} entries from filtered Steam cache.")
 
     def load_normalized_steam_index(self):
-        """Load the normalized index from a cache file if it exists"""
-        # Check if the file exists in the app root
-        cache_file = os.path.join(constants.APP_ROOT_DIR, NORMALIZED_INDEX_CACHE)
-        
-        if not os.path.exists(cache_file):
-            return False
-        
+        if not os.path.exists(self.normalized_index_path):
+            self.normalized_steam_index = {}
+            return
+        with open(self.normalized_index_path, 'r', encoding='utf-8') as f:
+            self.normalized_steam_index = json.load(f)
+        logging.info(f"Loaded {len(self.normalized_steam_index)} entries from normalized Steam index.")
+
+    def save_filtered_steam_cache(self, filtered_list):
         try:
-            # Load the index
-            with open(cache_file, 'r', encoding='utf-8') as f:
-                self.main_window.normalized_steam_match_index = json.load(f)
-            
-            return True
-        except Exception as e:
-            print(f"Error loading normalized index: {e}")
-            return False
+            with open(self.filtered_cache_path, 'w', encoding='utf-8') as f:
+                for item in sorted(filtered_list):
+                    f.write(f"{item}\n")
+            logging.info(f"Saved {len(filtered_list)} entries to {STEAM_FILTERED_TXT}")
+            self.filtered_steam_cache = set(filtered_list)
+        except IOError as e:
+            logging.error(f"Error saving filtered steam cache: {e}")
 
-    def reset_steam_caches(self):
-        """Completely reset all Steam-related caches and data"""
-        print("Resetting all Steam-related caches and data")
-        
-        # Clear the main caches
-        self.main_window.steam_title_cache = {}
-        self.main_window.normalized_steam_match_index = {}
-        
-        # Clear any other related attributes
-        if hasattr(self.main_window, 'filtered_steam_cache_file_path'):
-            self.main_window.filtered_steam_cache_file_path = None
-        
-        if hasattr(self.main_window, 'steam_json_file_path'):
-            self.main_window.steam_json_file_path = None
-        
-        # Clear any other potential caches
-        for attr_name in dir(self.main_window):
-            if attr_name.startswith('steam_') and attr_name not in ('steam_title_cache', 'steam_json_file_path'):
-                setattr(self.main_window, attr_name, None)
-        
-        print("Steam caches reset complete")
-        return True
-
-    def backup_cache_files(self):
-        """Backup Steam cache files before processing"""
-        # Get the cache file paths
-        filtered_cache_path = os.path.join(constants.APP_ROOT_DIR, STEAM_FILTERED_TXT)
-        normalized_index_path = os.path.join(constants.APP_ROOT_DIR, NORMALIZED_INDEX_CACHE)
-        
-        # Backup filtered cache if it exists
-        if os.path.exists(filtered_cache_path):
-            backup_path = filtered_cache_path + ".old"
-            try:
-                # Remove old backup if it exists
-                if os.path.exists(backup_path):
-                    os.remove(backup_path)
-                
-                # Create backup
-                shutil.copy2(filtered_cache_path, backup_path)
-
-            except Exception as e:
-                self.main_window.statusBar().showMessage(f"Error backing up {STEAM_FILTERED_TXT}: {str(e)}", 5000)
-        
-        # Backup normalized index if it exists
-        if os.path.exists(normalized_index_path):
-            backup_path = normalized_index_path + ".old"
-            try:
-                # Remove old backup if it exists
-                if os.path.exists(backup_path):
-                    os.remove(backup_path)
-                
-                # Create backup
-                shutil.copy2(normalized_index_path, backup_path)
-
-            except Exception as e:
-                self.main_window.statusBar().showMessage(f"Error backing up {NORMALIZED_INDEX_CACHE}: {str(e)}", 5000)
+    def save_normalized_steam_index(self, normalized_index):
+        try:
+            with open(self.normalized_index_path, 'w', encoding='utf-8') as f:
+                json.dump(normalized_index, f, indent=4)
+            logging.info(f"Saved {len(normalized_index)} entries to {NORMALIZED_INDEX_CACHE}")
+            self.normalized_steam_index = normalized_index
+        except IOError as e:
+            logging.error(f"Error saving normalized steam index: {e}")
 
     def delete_cache_files(self):
-        """Delete the Steam cache files with confirmation and reset in-memory caches."""
-        # Get the cache file paths
-        filtered_cache_path = os.path.join(constants.APP_ROOT_DIR, STEAM_FILTERED_TXT)
-        normalized_index_path = os.path.join(constants.APP_ROOT_DIR, NORMALIZED_INDEX_CACHE)
+        deleted_count = 0
+        for path in [self.filtered_cache_path, self.normalized_index_path]:
+            if os.path.exists(path):
+                os.remove(path)
+                deleted_count += 1
+        self.main_window.statusBar().showMessage(f"{deleted_count} Steam cache files deleted.", 3000)
+        self.filtered_steam_cache.clear()
+        self.normalized_steam_index.clear()
 
-        # Ask for confirmation
-        reply = QMessageBox.question(
-            self.main_window,
-            "Delete Steam Cache",
-            "Are you sure you want to delete the Steam cache files?\n\n"
-            f"This will delete:\n- {STEAM_FILTERED_TXT}\n- {NORMALIZED_INDEX_CACHE}",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-
-        if reply == QMessageBox.StandardButton.Yes:
-            files_deleted = 0
-            for path in [filtered_cache_path, normalized_index_path]:
-                if os.path.exists(path):
-                    try:
-                        os.remove(path)
-                        files_deleted += 1
-                    except Exception as e:
-                        self.main_window.statusBar().showMessage(f"Error deleting {os.path.basename(path)}: {str(e)}", 5000)
-            
-            self.reset_steam_caches()
-            self.main_window.statusBar().showMessage(f"Deleted {files_deleted} Steam cache files", 5000)
+    def get_game_name(self, app_id):
+        return self.normalized_steam_index.get(str(app_id))

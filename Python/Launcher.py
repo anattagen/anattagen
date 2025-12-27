@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Launcher.py - Game Launcher Script
+
 A Python port of the Launcher.ahk script for launching games with pre/post actions
 """
 
@@ -10,18 +11,23 @@ import subprocess
 import configparser
 import time
 import ctypes
-import platform
 import shutil
 import tempfile
 import signal
 import psutil
+import logging
 from pathlib import Path
 import winreg
 import win32gui
 import win32con
 import win32process
 import win32api
+import shlex
 from typing import Dict, List, Optional, Tuple, Union
+import platform
+
+# Import the new sequence executor
+from Python.launcher.sequence_executor import SequenceExecutor
 
 class GameLauncher:
     def __init__(self):
@@ -43,6 +49,9 @@ class GameLauncher:
         self.joycount = 0
         self.mapper_extension = "gamecontroller.amgp"  # Default for antimicrox
         
+        self.game_process = None
+        self.borderless_process = None
+
         # Get command line arguments
         self.parse_arguments()
         
@@ -61,6 +70,9 @@ class GameLauncher:
         
         # Initialize joystick detection
         self.detect_joysticks()
+        
+        # Initialize the sequence executor
+        self.executor = SequenceExecutor(self)
 
     def parse_arguments(self):
         """Parse command line arguments"""
@@ -163,14 +175,17 @@ class GameLauncher:
             self.player1_profile = config.get('Paths', 'Player1Profile', fallback='')
             self.player2_profile = config.get('Paths', 'Player2Profile', fallback='')
             self.mm_game_config = config.get('Paths', 'MultiMonitorGamingConfig', fallback='')
+            self.mm_desktop_config = config.get('Paths', 'MultiMonitorDesktopConfig', fallback='')
         
         # Load options
         if 'Options' in config:
-            self.run_as_admin = config.get('Options', 'RunAsAdmin', fallback='0') == '1'
-            self.hide_taskbar = config.get('Options', 'HideTaskbar', fallback='0') == '1'
+            self.run_as_admin = config.getboolean('Options', 'RunAsAdmin', fallback=False)
+            self.hide_taskbar = config.getboolean('Options', 'HideTaskbar', fallback=False)
             self.borderless = config.get('Options', 'Borderless', fallback='0')
-            self.use_kill_list = config.get('Options', 'UseKillList', fallback='0') == '1'
-        
+            self.use_kill_list = config.getboolean('Options', 'UseKillList', fallback=False)
+            self.terminate_borderless_on_exit = config.getboolean('Options', 'TerminateBorderlessOnExit', fallback=False)
+
+
         # Load pre-launch apps
         if 'PreLaunch' in config:
             self.pre_launch_app_1 = config.get('PreLaunch', 'App1', fallback='')
@@ -251,47 +266,6 @@ class GameLauncher:
         except Exception as e:
             self.joymessage = f"Error detecting joysticks: {e}"
     
-    def run_pre_launch_apps(self):
-        """Run pre-launch applications"""
-        self.show_message("Running pre-launch applications")
-        
-        # Run pre-launch app 1
-        if self.pre_launch_app_1 and os.path.exists(self.pre_launch_app_1):
-            self.run_process(self.pre_launch_app_1, wait=self.pre_launch_app_1_wait)
-        
-        # Run pre-launch app 2
-        if self.pre_launch_app_2 and os.path.exists(self.pre_launch_app_2):
-            self.run_process(self.pre_launch_app_2, wait=self.pre_launch_app_2_wait)
-        
-        # Run pre-launch app 3
-        if self.pre_launch_app_3 and os.path.exists(self.pre_launch_app_3):
-            self.run_process(self.pre_launch_app_3, wait=self.pre_launch_app_3_wait)
-        
-        # Set up multi-monitor configuration if specified
-        if self.multimonitor_tool and self.mm_game_config and os.path.exists(self.multimonitor_tool) and os.path.exists(self.mm_game_config):
-            self.run_process(f'"{self.multimonitor_tool}" /load "{self.mm_game_config}"', wait=True)
-        
-        # Set up controller mapper if specified
-        if self.controller_mapper_app and self.player1_profile and os.path.exists(self.controller_mapper_app) and os.path.exists(self.player1_profile):
-            # Determine which mapper we're using
-            mapper_name = os.path.basename(self.controller_mapper_app).lower()
-            
-            if "antimicro" in mapper_name:
-                # For AntiMicroX
-                cmd = f'"{self.controller_mapper_app}" --tray --hidden --profile "{self.player1_profile}"'
-                if self.player2_profile and os.path.exists(self.player2_profile):
-                    cmd += f' --next --profile-controller 2 --profile "{self.player2_profile}"'
-                self.run_process(cmd)
-            elif "joyxoff" in mapper_name:
-                # For JoyXoff
-                self.run_process(f'"{self.controller_mapper_app}" -load "{self.player1_profile}"')
-            elif "joy2key" in mapper_name:
-                # For Joy2Key
-                self.run_process(f'"{self.controller_mapper_app}" -load "{self.player1_profile}"')
-            elif "keysticks" in mapper_name:
-                # For KeySticks
-                self.run_process(f'"{self.controller_mapper_app}" -load "{self.player1_profile}"')
-    
     def run_game(self):
         """Run the main game executable"""
         self.show_message(f"Launching game: {self.game_name}")
@@ -316,74 +290,36 @@ class GameLauncher:
         if self.just_after_launch_app and os.path.exists(self.just_after_launch_app):
             self.run_process(self.just_after_launch_app, wait=self.just_after_launch_wait)
         
-        # If borderless windowing is enabled, run it
+        # If borderless windowing is enabled, run it and track it
         if self.borderless in ['E', 'K'] and self.borderless_app and os.path.exists(self.borderless_app):
-            self.run_process(self.borderless_app)
+            self.borderless_process = self.run_process(f'"{self.borderless_app}"')
         
         # Wait for the game to exit
         if self.game_process:
             self.game_process.wait()
-    
-    def run_post_launch_apps(self):
-        """Run post-launch applications"""
-        self.show_message("Running post-launch applications")
-        
-        # Run just before exit app if specified
-        if self.just_before_exit_app and os.path.exists(self.just_before_exit_app):
-            self.run_process(self.just_before_exit_app, wait=self.just_before_exit_wait)
-        
-        # Kill borderless windowing if specified
-        if self.borderless == 'K' and self.borderless_app:
-            self.kill_process(os.path.basename(self.borderless_app))
-        
-        # Run post-launch app 1
-        if self.post_launch_app_1 and os.path.exists(self.post_launch_app_1):
-            self.run_process(self.post_launch_app_1, wait=self.post_launch_app_1_wait)
-        
-        # Run post-launch app 2
-        if self.post_launch_app_2 and os.path.exists(self.post_launch_app_2):
-            self.run_process(self.post_launch_app_2, wait=self.post_launch_app_2_wait)
-        
-        # Run post-launch app 3
-        if self.post_launch_app_3 and os.path.exists(self.post_launch_app_3):
-            self.run_process(self.post_launch_app_3, wait=self.post_launch_app_3_wait)
-    
-    def cleanup(self):
-        """Clean up processes and restore settings"""
-        self.show_message("Cleaning up")
-        
-        # Kill controller mapper if running
-        if self.controller_mapper_app:
-            self.kill_process(os.path.basename(self.controller_mapper_app))
-        
-        # Restore multi-monitor configuration if needed
-        # This would typically restore the desktop monitor configuration
-        
-        # Kill any remaining processes in the kill list if enabled
-        if self.use_kill_list:
-            self.kill_processes_in_list()
-    
+
     def run(self):
         """Main execution flow"""
         try:
             # Write current PID to the PID file
             self.write_pid_file()
             
-            # Run pre-launch applications
-            self.run_pre_launch_apps()
+            # Execute launch sequence
+            self.executor.execute('launch_sequence')
             
             # Run the game
             self.run_game()
             
-            # Run post-launch applications
-            self.run_post_launch_apps()
-            
-            # Clean up
-            self.cleanup()
+            # Execute exit sequence
+            self.executor.execute('exit_sequence')
             
         except Exception as e:
             self.show_message(f"Error: {e}")
         finally:
+            # Final cleanup to ensure system state is restored
+            self.executor.ensure_cleanup()
+            if self.use_kill_list:
+                self.kill_processes_in_list()
             self.show_message("Exiting launcher")
     
     # Helper methods
@@ -392,43 +328,128 @@ class GameLauncher:
         p = Path(path)
         return str(p), str(p.parent), p.suffix.lstrip('.'), p.stem
     
-    def run_process(self, cmd, cwd=None, wait=False, hide=False):
-        """Run a process with the given command"""
-        try:
-            # Set up process creation flags
+    def run_process(self, cmd: Union[str, List[str]], cwd: Optional[str] = None, wait: bool = False, hide: bool = False) -> Optional[subprocess.Popen]:
+        """
+        Run a process with the given command in a more robust and secure way.
+
+        Args:
+            cmd: The command to run, as a string or a list of arguments.
+            cwd: The working directory for the process.
+            wait: If True, wait for the process to complete and capture output.
+            hide: If True on Windows, create the process with no window.
+
+        Returns:
+            A subprocess.Popen object if wait is False and the process starts, otherwise None.
+        """
+        kwargs = {'cwd': cwd}
+        
+        # On Windows, we use shlex to safely parse command strings into lists,
+        # avoiding shell=True for better security.
+        if platform.system() == 'Windows':
+            if isinstance(cmd, str):
+                cmd_list = shlex.split(cmd)
+            else:
+                cmd_list = cmd # Assume it's already a list
+            
+            # Set creation flags for hiding the window
             creation_flags = 0
-            if platform.system() == 'Windows' and hide:
+            if hide:
                 creation_flags = subprocess.CREATE_NO_WINDOW
+            kwargs['creationflags'] = creation_flags
+        else: # For Linux/macOS
+            # On non-Windows, shell=True is often more convenient for string commands.
+            # For list commands, shell=False is the default and correct way.
+            if isinstance(cmd, str):
+                kwargs['shell'] = True
+            cmd_list = cmd
+
+        try:
+            self.show_message(f"Executing: {cmd}")
             
-            # Run the process
-            process = subprocess.Popen(
-                cmd, 
-                cwd=cwd, 
-                shell=True, 
-                creationflags=creation_flags if platform.system() == 'Windows' else 0
-            )
-            
-            # Wait for the process to complete if requested
+            # If we need to wait, it's better to capture output for debugging.
             if wait:
-                process.wait()
+                # Redirect stdout and stderr to capture output for logging
+                process = subprocess.Popen(cmd_list, **kwargs, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                stdout, stderr = process.communicate() # This also waits for the process to finish
+                if process.returncode != 0:
+                    # Decode stderr and log it if the process failed
+                    error_message = stderr.decode('utf-8', errors='ignore').strip()
+                    self.show_message(f"Process '{cmd_list[0]}' exited with error code {process.returncode}: {error_message}")
+                    logging.warning(f"Process '{cmd_list}' exited with code {process.returncode}. Stderr: {error_message}")
                 return None
-            
-            return process
+            else:
+                # For non-waiting processes, don't capture stdout/stderr to avoid pipe buffer deadlocks
+                process = subprocess.Popen(cmd_list, **kwargs)
+                return process
+
+        except FileNotFoundError:
+            self.show_message(f"Error: Command not found for '{str(cmd)}'")
+            logging.error(f"Command not found: {cmd}", exc_info=True)
+            return None
+        except PermissionError:
+            self.show_message(f"Error: Permission denied for '{str(cmd)}'. Try running as administrator.")
+            logging.error(f"Permission denied for: {cmd}", exc_info=True)
+            return None
         except Exception as e:
-            self.show_message(f"Error running process: {e}")
+            self.show_message(f"Error running process '{str(cmd)}': {e}")
+            logging.error(f"Failed to run process '{cmd}': {e}", exc_info=True)
             return None
     
-    def kill_process(self, process_name):
-        """Kill a process by name"""
+    def _on_terminate(self, proc):
+        """Callback for psutil.wait_procs to log terminated processes."""
+        self.show_message(f"  - Process {proc.name()} (PID: {proc.pid}) terminated.")
+        logging.info(f"Process {proc.name()} (PID: {proc.pid}) terminated.")
+
+    def terminate_process_tree(self, proc: psutil.Process, timeout: int = 3):
+        """
+        Gracefully terminates a process and its entire process tree.
+        Tries to terminate, waits for a timeout, then forcefully kills if necessary.
+        """
+        if not proc or not psutil.pid_exists(proc.pid):
+            return
+
         try:
-            for proc in psutil.process_iter(['pid', 'name']):
-                if process_name.lower() in proc.info['name'].lower():
-                    proc.terminate()
-                    time.sleep(1)
-                    if proc.is_running():
-                        proc.kill()
+            proc_name = proc.name()
+            self.show_message(f"Terminating process tree for {proc_name} (PID: {proc.pid})...")
+
+            # Get all children of the process before terminating the parent
+            children = proc.children(recursive=True)
+            all_procs_to_terminate = [proc] + children
+
+            for p in all_procs_to_terminate:
+                try:
+                    p.terminate()
+                except psutil.NoSuchProcess:
+                    continue # Process already ended
+
+            # Wait for all processes to terminate
+            gone, alive = psutil.wait_procs(all_procs_to_terminate, timeout=timeout, callback=self._on_terminate)
+
+            # If any are still alive, kill them forcefully
+            for p in alive:
+                try:
+                    self.show_message(f"  - Process {p.name()} (PID: {p.pid}) did not exit gracefully. Killing.")
+                    p.kill()
+                except psutil.NoSuchProcess:
+                    continue
+
+        except psutil.NoSuchProcess:
+            # This can happen if the process terminates between the pid_exists check and the name() call
+            self.show_message(f"Process with PID {proc.pid} no longer exists.")
+        except psutil.AccessDenied as e:
+            self.show_message(f"Access denied terminating process {proc.pid}: {e}")
+            logging.warning(f"Access denied terminating process {proc.pid}: {e}", exc_info=True)
         except Exception as e:
-            self.show_message(f"Error killing process {process_name}: {e}")
+            self.show_message(f"Error terminating process {proc.pid}: {e}")
+            logging.error(f"Error terminating process {proc.pid}: {e}", exc_info=True)
+
+    def kill_process_by_name(self, process_name: str, timeout: int = 3):
+        """Finds and kills processes by exact name match."""
+        if platform.system() != 'Windows':
+            return
+        for proc in psutil.process_iter(['pid', 'name']):
+            if proc.info['name'].lower() == process_name.lower():
+                self.terminate_process_tree(proc, timeout=timeout)
     
     def kill_processes_in_list(self):
         """Kill processes in the kill list"""

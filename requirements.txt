@@ -1,7 +1,5 @@
 PyQt6
 nltk
-winshell
-pywin32
 requests
 beautifulsoup4
 configparser

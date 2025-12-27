@@ -17,6 +17,7 @@ A desktop application to create isolated environments for PC games.
 
 *   **Vai-brainium Quantum Quill** - AI assistant that helped resolve critical UI and data processing issues.
 *   **The Gemini Architect** - AI architect who refactored core systems for robustness and implemented advanced configuration controls.
+*   **GitHub Copilot (Neon Scribe)** - Assisted with Editor tab column additions, enabled/run-wait toggles, wired Deployment Steam JSON actions, and centralized editor column mappings. (flamboyant-ego-level: 7.6) <!-- internal_contribution_level: 6 -->
 
 # But, why???
 
@@ -56,79 +57,45 @@ Run the installer or extract the binary to a location of your choice, **or** dow
 ```sh
 [RJ_PROJ]
 
-			├── README.set
-			├── requirements.txt
-			│
-			├──  Python
-			│   ├──  ax_DeskTemplate.set
-			│   ├──  ax_GameTemplate.set
-			│   ├──  ax_KBM_Template.set
-			│   ├──  ax_Trigger.set
-			│   ├──  cmdtemplate.set
-			│   ├──  config.set
-			│   ├──  config_manager.py
-			│   ├──  constants.py
-			│   ├──  data_handler.py
-			│   ├──  demoted.set
-			│   ├──  exclude_exe.set
-			│   ├──  first_run_init.py
-			│   ├──  folder_demoted.set
-			│   ├──  folder_exclude.set
-			│   ├──  Joystick.ico
-			│   ├──  ks_Blank.Template.set
-			│   ├──  ks_Desk.Template.set
-			│   ├──  ks_Game.Template.set
-			│   ├──  ks_Trigger.set
-			│   ├──  Launcher.py
-			│   ├──  main.py
-			│   ├──  main_window_new.py
-			│   ├──  models.py
-			│   ├──  release_groups.set
-			│   ├──  repos.set
-			│   ├──  setup_tab.py
-			│   │
-			│   └──  ui/
-			│        ├──  accordion.py
-			│        ├──  config_manager.py
-			│        ├──  deployment_tab.py
-			│        ├──  deployment_tab_ui.py
-			│        ├──  editor_tab.py
-			│        ├──  editor_tab_ui.py
-			│        ├──  game_indexer.py
-			│        ├──  index_manager.py
-			│        ├──  name_processor.py
-			│        ├──  name_utils.py
-			│        ├──  setup_tab_ui.py
-			│        ├──  steam_cache.py
-			│        ├──  steam_integration.py
-			│        ├──  steam_processor.py
-			│        ├──  steam_utils.py
-			│        ├──  ui_widgets.py
-			│        ├──  widgets.py
-			│        │
-			│        └──  creation/
-			│            ├──  creation_controller.py
-			│            ├──  file_propagator.py
-			│            └──  joystick_profile_manager.py
-			│
-			└──  site/
-				├──  AnkaCoder_b.ttf
-				├──  Hermit-Regular.otf
-				├──  InterUI.ttf
-				├──  key.ico
-				├──  malgun.ttf
-				├──  TruenoLt.otf
-				├──  index.html
-				├──  index.set
-				└──  img/
-					├──  Install.png
-					├──  Update.png
-					├──  keymapper.png
-					├──  key.png
-					├──  runas.png
-					└──  tip.png
-
-
+├── README.md
+├── README.set
+├── requirements.txt
+│
+├── Python/
+│   ├── main.py
+│   ├── main_window_new.py
+│   ├── models.py
+│   ├── constants.py
+│   ├── Launcher.py
+│   │
+│   ├── managers/
+│   │   ├── config_manager.py
+│   │   ├── data_manager.py
+│   │   └── steam_manager.py
+│   │
+│   └── ui/
+│       ├── accordion.py
+│       ├── deployment_tab.py
+│       ├── deployment_tab_ui.py
+│       ├── editor_tab.py
+│       ├── editor_tab_ui.py
+│       ├── game_indexer.py
+│       ├── name_processor.py
+│       ├── name_utils.py
+│       ├── setup_tab.py
+│       ├── steam_cache.py
+│       ├── steam_utils.py
+│       ├── ui_widgets.py
+│       ├── widgets.py
+│       │
+│       └── creation/
+│           ├── creation_controller.py
+│           ├── file_propagator.py
+│           └── joystick_profile_manager.py
+│
+└── site/
+    ├── fonts, icons, etc.
+    └── img/
 ```
 # Documentation
 
@@ -153,10 +120,10 @@ Run the installer or extract the binary to a location of your choice, **or** dow
 
 
 
-
+win
 ## Windows 11 / winget users can copy/paste this to install python very quickly:
 ```
-		winget install -e --id Python.Python.3.12 --scope machine
+		winget install -e --id Python.Python.3.13 --scope machine
 ```
 
 ### Now you can clone or download the repo, and install the requirements via pip
@@ -164,205 +131,14 @@ Run the installer or extract the binary to a location of your choice, **or** dow
 		cd %userprofile%/Downloads
 		git clone --recursive https://[GIT_SRC]/[RJ_PROJ]
 		cd [RJ_PROJ]
-		python -m pip install -r requirements.txt
+		python -m pip install -r requirements_win.txt
 		python -m Python\main.py
 ```
 
 
 ## Apple Mac Users
 ```
-		Click the mouse and ask Tim if it's okay to use the letter-button iThingAmaBopper. Hint: (It's not okay)
-		Upgrade your monitor-stand.  Pleb.
-```
-
-
-
-## Launching Games
-It is not necessary, but recommended to enable the RunAsAdmin option.
-Ideally, [RJ_PROJ] can run entirely in userspace, however many games require administrator access where user-level hardware is unavailable or unreliable.
-
-![AsAdmin](site/img/runas.png)
-ult profile-name eg: game-name/_#.gamecontroller.amgp, and other player# monikers.)
-
-# W.I.P/To Do
-
-Configuration, save and save-state locations are written to the Game.ini, however Cloud-Backup of Game-Saves and Game-Configuration files is a work in progress.  
-
-I will likely end up adopting an open sourced file-sync service application. 
-# [RJ_PROJ] Game Environment Manager
-
-A desktop application to create isolated environments for PC games. 
-
-## Features
-
-*   Game indexing from user-selected directories.
-*   Customizable options for each game.
-*   Tabbed interface for Setup, Deployment, and Editing environments.
-
-## Tech Stack
-
-*   Python
-*   Qt6 (for the main application)
-
-## Contributors
-
-*   **Vai-brainium Quantum Quill** - AI assistant that helped resolve critical UI and data processing issues.
-*   **The Gemini Architect** - AI architect who refactored core systems for robustness and implemented advanced configuration controls.
-
-# But, why???
-
-## 3 Reasons:
-
-**1.** Removing a Mickey Mouse sticker bricked the device and voided the repair warranty 
-
-**2.** Steam has no gaemz
-
-**3.** DRM and other malware concerns require *unofficial patches*
-
-## Benfits:
-
-**[+]** Offers a pre-configurated, self-contained portable environment for each game.
-
-**[+]** Granular options with precise and individuated controls to customize joystick mappings, monitor layouts, audio outputs and more.
-
-**[+]** Leverages native Windows shortcuts and languages for backwards compatibility.
-
-**[+]** Executable identification, release/build versions, group-naemz and other extranious title abberations are intelligently handled to derive titles set by the publisher and the steam-database enables further metadata aqiuisition key to portability between computers, drives, and gaming-frontends.
-
-## Use Case
-
-Creates a specialized launcher and profile-folder (jacket) for each game which houses the game's shortcut/s and isolates settings such as
- keyboad-mapping and monitor layout.  Tools which automate the process of creating and loading presets for devices, games and settings at 
- a granular level are downloaded and installed from directly within the program.
-
-AntimicroX, keySticks, JoyXoff, Joy2Key keymappers are supported.
-
-
-## Installation
-- This Version: **[CURV]**
-
-- This Build: **[VERSION]**
-
-Run the installer or extract the binary to a location of your choice, **or** download and build and run the source files and executables.
-```sh
-[RJ_PROJ]
-
-			├── README.set
-			├── requirements.txt
-			│
-			├──  Python
-			│   ├──  ax_DeskTemplate.set
-			│   ├──  ax_GameTemplate.set
-			│   ├──  ax_KBM_Template.set
-			│   ├──  ax_Trigger.set
-			│   ├──  cmdtemplate.set
-			│   ├──  config.set
-			│   ├──  config_manager.py
-			│   ├──  constants.py
-			│   ├──  data_handler.py
-			│   ├──  demoted.set
-			│   ├──  exclude_exe.set
-			│   ├──  first_run_init.py
-			│   ├──  folder_demoted.set
-			│   ├──  folder_exclude.set
-			│   ├──  Joystick.ico
-			│   ├──  ks_Blank.Template.set
-			│   ├──  ks_Desk.Template.set
-			│   ├──  ks_Game.Template.set
-			│   ├──  ks_Trigger.set
-			│   ├──  Launcher.py
-			│   ├──  main.py
-			│   ├──  main_window_new.py
-			│   ├──  models.py
-			│   ├──  release_groups.set
-			│   ├──  repos.set
-			│   ├──  setup_tab.py
-			│   │
-			│   └──  ui/
-			│        ├──  accordion.py
-			│        ├──  config_manager.py
-			│        ├──  deployment_tab.py
-			│        ├──  deployment_tab_ui.py
-			│        ├──  editor_tab.py
-			│        ├──  editor_tab_ui.py
-			│        ├──  game_indexer.py
-			│        ├──  index_manager.py
-			│        ├──  name_processor.py
-			│        ├──  name_utils.py
-			│        ├──  setup_tab_ui.py
-			│        ├──  steam_cache.py
-			│        ├──  steam_integration.py
-			│        ├──  steam_processor.py
-			│        ├──  steam_utils.py
-			│        ├──  ui_widgets.py
-			│        ├──  widgets.py
-			│        │
-			│        └──  creation/
-			│            ├──  creation_controller.py
-			│            ├──  file_propagator.py
-			│            └──  joystick_profile_manager.py
-			│
-			└──  site/
-				├──  AnkaCoder_b.ttf
-				├──  Hermit-Regular.otf
-				├──  InterUI.ttf
-				├──  key.ico
-				├──  malgun.ttf
-				├──  TruenoLt.otf
-				├──  index.html
-				├──  index.set
-				└──  img/
-					├──  Install.png
-					├──  Update.png
-					├──  keymapper.png
-					├──  key.png
-					├──  runas.png
-					└──  tip.png
-
-
-```
-# Documentation
-
-[Detailed Docs can be found here](https://[GIT_USER].[GIT_WEB]/[RJ_PROJ])
-
-# Setup
-
-
-## Ubuntu Users should :
-### For now clone the repo, setup a virtual environment in python and install the requirements via pip
-## Copy this code and you should be GUD
-```
-		sudo apt install python3-venv python3-pip git
-		cd ~
-		git clone --recursive https://[GIT_SRC]/[RJ_PROJ].git
-		cd [RJ_PROJ]
-		python3 -m venv .venv
-		source .venv/bin/activate
-		python -m pip install -r requirements.txt
-		python -m Python/main.py
-```
-
-
-
-
-## Windows 11 / winget users can copy/paste this to install python very quickly:
-```
-		winget install -e --id Python.Python.3.12 --scope machine
-```
-
-### Now you can clone or download the repo, and install the requirements via pip
-```
-		cd %userprofile%/Downloads
-		git clone --recursive https://[GIT_SRC]/[RJ_PROJ]
-		cd [RJ_PROJ]
-		python -m pip install -r requirements.txt
-		python -m Python\main.py
-```
-
-
-## Apple Mac Users
-```
-		Click the mouse and ask Tim if it's okay to use the letter-button iThingAmaBopper. Hint: (It's not okay)
+		Ask Tim if it's okay.  Hint: (It's not okay)
 		Upgrade your monitor-stand.  Pleb.
 ```
 

@@ -32,7 +32,6 @@ def main():
     """Main function to run the application."""
     setup_logging()
     app = QApplication(sys.argv)
-    app.setStyle("Material")
     window = MainWindow()
     window.show()
     sys.exit(app.exec())

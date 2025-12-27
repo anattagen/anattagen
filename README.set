@@ -57,79 +57,45 @@ Run the installer or extract the binary to a location of your choice, **or** dow
 ```sh
 [RJ_PROJ]
 
-			├── README.set
-			├── requirements.txt
-			│
-			├──  Python
-			│   ├──  ax_DeskTemplate.set
-			│   ├──  ax_GameTemplate.set
-			│   ├──  ax_KBM_Template.set
-			│   ├──  ax_Trigger.set
-			│   ├──  cmdtemplate.set
-			│   ├──  config.set
-			│   ├──  config_manager.py
-			│   ├──  constants.py
-			│   ├──  data_handler.py
-			│   ├──  demoted.set
-			│   ├──  exclude_exe.set
-			│   ├──  first_run_init.py
-			│   ├──  folder_demoted.set
-			│   ├──  folder_exclude.set
-			│   ├──  Joystick.ico
-			│   ├──  ks_Blank.Template.set
-			│   ├──  ks_Desk.Template.set
-			│   ├──  ks_Game.Template.set
-			│   ├──  ks_Trigger.set
-			│   ├──  Launcher.py
-			│   ├──  main.py
-			│   ├──  main_window_new.py
-			│   ├──  models.py
-			│   ├──  release_groups.set
-			│   ├──  repos.set
-			│   ├──  setup_tab.py
-			│   │
-			│   └──  ui/
-			│        ├──  accordion.py
-			│        ├──  config_manager.py
-			│        ├──  deployment_tab.py
-			│        ├──  deployment_tab_ui.py
-			│        ├──  editor_tab.py
-			│        ├──  editor_tab_ui.py
-			│        ├──  game_indexer.py
-			│        ├──  index_manager.py
-			│        ├──  name_processor.py
-			│        ├──  name_utils.py
-			│        ├──  setup_tab_ui.py
-			│        ├──  steam_cache.py
-			│        ├──  steam_integration.py
-			│        ├──  steam_processor.py
-			│        ├──  steam_utils.py
-			│        ├──  ui_widgets.py
-			│        ├──  widgets.py
-			│        │
-			│        └──  creation/
-			│            ├──  creation_controller.py
-			│            ├──  file_propagator.py
-			│            └──  joystick_profile_manager.py
-			│
-			└──  site/
-				├──  AnkaCoder_b.ttf
-				├──  Hermit-Regular.otf
-				├──  InterUI.ttf
-				├──  key.ico
-				├──  malgun.ttf
-				├──  TruenoLt.otf
-				├──  index.html
-				├──  index.set
-				└──  img/
-					├──  Install.png
-					├──  Update.png
-					├──  keymapper.png
-					├──  key.png
-					├──  runas.png
-					└──  tip.png
-
-
+├── README.md
+├── README.set
+├── requirements.txt
+│
+├── Python/
+│   ├── main.py
+│   ├── main_window_new.py
+│   ├── models.py
+│   ├── constants.py
+│   ├── Launcher.py
+│   │
+│   ├── managers/
+│   │   ├── config_manager.py
+│   │   ├── data_manager.py
+│   │   └── steam_manager.py
+│   │
+│   └── ui/
+│       ├── accordion.py
+│       ├── deployment_tab.py
+│       ├── deployment_tab_ui.py
+│       ├── editor_tab.py
+│       ├── editor_tab_ui.py
+│       ├── game_indexer.py
+│       ├── name_processor.py
+│       ├── name_utils.py
+│       ├── setup_tab.py
+│       ├── steam_cache.py
+│       ├── steam_utils.py
+│       ├── ui_widgets.py
+│       ├── widgets.py
+│       │
+│       └── creation/
+│           ├── creation_controller.py
+│           ├── file_propagator.py
+│           └── joystick_profile_manager.py
+│
+└── site/
+    ├── fonts, icons, etc.
+    └── img/
 ```
 # Documentation
 
@@ -154,10 +120,10 @@ Run the installer or extract the binary to a location of your choice, **or** dow
 
 
 
-
+win
 ## Windows 11 / winget users can copy/paste this to install python very quickly:
 ```
-		winget install -e --id Python.Python.3.12 --scope machine
+		winget install -e --id Python.Python.3.13 --scope machine
 ```
 
 ### Now you can clone or download the repo, and install the requirements via pip
@@ -165,14 +131,14 @@ Run the installer or extract the binary to a location of your choice, **or** dow
 		cd %userprofile%/Downloads
 		git clone --recursive https://[GIT_SRC]/[RJ_PROJ]
 		cd [RJ_PROJ]
-		python -m pip install -r requirements.txt
+		python -m pip install -r requirements_win.txt
 		python -m Python\main.py
 ```
 
 
 ## Apple Mac Users
 ```
-		Click the mouse and ask Tim if it's okay to use the letter-button iThingAmaBopper. Hint: (It's not okay)
+		Ask Tim if it's okay.  Hint: (It's not okay)
 		Upgrade your monitor-stand.  Pleb.
 ```
 
