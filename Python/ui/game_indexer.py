@@ -2,8 +2,8 @@ import os
 import logging
 import re
 from typing import Optional, Tuple, Dict, Any, Set
-from Python.ui.name_processor import NameProcessor
-from Python.ui.name_utils import normalize_name_for_matching, replace_illegal_chars
+from .name_processor import NameProcessor
+from .name_utils import replace_illegal_chars
 
 
 def get_filtered_directory_name(exec_full_path: str, folder_exclude_set: set) -> str:
@@ -42,8 +42,8 @@ def _is_demoted(
     Returns:
         True if the game is demoted, False otherwise.
     """
-    normalized_exec_name = normalize_name_for_matching(exec_name_no_ext).replace(' ', '').lower()
-    normalized_name_override = normalize_name_for_matching(name_override).replace(' ', '').lower()
+    normalized_exec_name = name_processor.get_match_name(exec_name_no_ext)
+    normalized_name_override = name_processor.get_match_name(name_override)
 
     # Check against executable demotion terms
     for demoted_term in demoted_set:
@@ -52,7 +52,7 @@ def _is_demoted(
 
     # Check against folder demotion terms
     processed_dir_name = name_processor.get_display_name(dir_name)
-    normalized_dir_name = normalize_name_for_matching(processed_dir_name).replace(' ', '').lower()
+    normalized_dir_name = name_processor.get_match_name(processed_dir_name)
     for demoted_term in folder_demoted_set:
         if normalized_dir_name == demoted_term and demoted_term not in normalized_name_override:
             return True
@@ -63,7 +63,8 @@ def _is_demoted(
 def _get_steam_match(
     name_override: str,
     config: Any,
-    steam_match_index: Optional[Dict[str, Any]]
+    steam_match_index: Optional[Dict[str, Any]],
+    name_processor: NameProcessor
 ) -> Tuple[str, str, str]:
     """
     Matches the game name with the Steam index and returns Steam info.
@@ -75,16 +76,19 @@ def _get_steam_match(
     if not (config.enable_name_matching and steam_match_index):
         return steam_name, steam_id, name_override
 
-    match_name = normalize_name_for_matching(name_override).replace(' ', '')
+    match_name = name_processor.get_match_name(name_override)
+    print(f"  [Steam Match] Attempting to match normalized name: '{match_name}'")
     match_data = steam_match_index.get(match_name)
 
     if not match_data:
+        print(f"  [Steam Match] -> No match found for '{match_name}'")
         return steam_name, steam_id, name_override
 
     steam_name = match_data.get("name", "")
     steam_id = match_data.get("id", "")
+    print(f"  [Steam Match] -> Found match! steam_id: '{steam_id}', steam_name: '{steam_name}'")
 
-    if steam_name and steam_name != name_override:
+    if steam_name:
         # Clean the steam name for use as a display name
         clean_steam_name = replace_illegal_chars(steam_name, " - ")
         while "  " in clean_steam_name: clean_steam_name = clean_steam_name.replace("  ", " ")
@@ -120,19 +124,56 @@ def _process_executable(
         )
 
         steam_name, steam_id, name_override = _get_steam_match(
-            name_override, main_window.config, getattr(main_window, 'normalized_steam_match_index', None)
+            name_override, main_window.config, main_window.steam_cache_manager.normalized_steam_index, name_processor
         )
 
-        return {
-            'include_checked': not is_demoted_flag,
-            'exec_name': filename,
+        config = main_window.config
+        game_data = {
+            'create': not is_demoted_flag,
+            'name': filename,
             'directory': os.path.dirname(exec_full_path),
             'steam_name': steam_name,
             'name_override': name_override,
             'steam_id': steam_id,
             'options': '',
             'arguments': '',
+            'run_as_admin': config.run_as_admin,
+            'hide_taskbar': config.hide_taskbar,
+
+            # Paths from setup tab
+            'controller_mapper_path': config.controller_mapper_path,
+            'borderless_windowing_path': config.borderless_gaming_path,
+            'multi_monitor_app_path': config.multi_monitor_tool_path,
+            'mm_game_profile': config.multimonitor_gaming_path,
+            'mm_desktop_profile': config.multimonitor_media_path,
+            'player1_profile': config.p1_profile_path,
+            'player2_profile': config.p2_profile_path,
+            'mediacenter_profile': config.mediacenter_profile_path,
+            'just_after_launch_path': config.just_after_launch_path,
+            'just_before_exit_path': config.just_before_exit_path,
+            'pre1_path': config.pre1_path, 'pre2_path': config.pre2_path, 'pre3_path': config.pre3_path,
+            'post1_path': config.post1_path, 'post2_path': config.post2_path, 'post3_path': config.post3_path,
+
+            # Enabled states from deployment tab
+            'controller_mapper_enabled': config.enable_controller_mapper,
+            'borderless_windowing_enabled': config.enable_borderless_app,
+            'multi_monitor_app_enabled': config.enable_multimonitor_app,
+            'just_after_launch_enabled': config.enable_after_launch_app,
+            'just_before_exit_enabled': config.enable_before_exit_app,
+            'pre_1_enabled': config.enable_pre1, 'pre_2_enabled': config.enable_pre2, 'pre_3_enabled': config.enable_pre3,
+            'post_1_enabled': config.enable_post1, 'post_2_enabled': config.enable_post2, 'post_3_enabled': config.enable_post3,
+
+            # Run-wait states from setup tab
+            'controller_mapper_run_wait': config.run_wait_states.get('controller_mapper_path_run_wait', False),
+            'borderless_windowing_run_wait': config.run_wait_states.get('borderless_gaming_path_run_wait', False),
+            'multi_monitor_app_run_wait': config.run_wait_states.get('multi_monitor_tool_path_run_wait', False),
+            'just_after_launch_run_wait': config.run_wait_states.get('just_after_launch_path_run_wait', False),
+            'just_before_exit_run_wait': config.run_wait_states.get('just_before_exit_path_run_wait', False),
+            'pre_1_run_wait': config.run_wait_states.get('pre1_path_run_wait', False), 'pre_2_run_wait': config.run_wait_states.get('pre2_path_run_wait', False), 'pre_3_run_wait': config.run_wait_states.get('pre3_path_run_wait', False),
+            'post_1_run_wait': config.run_wait_states.get('post1_path_run_wait', False), 'post_2_run_wait': config.run_wait_states.get('post2_path_run_wait', False), 'post_3_run_wait': config.run_wait_states.get('post3_path_run_wait', False),
         }
+        print(f"  [Indexer] Processed '{filename}'. steam_id='{steam_id}'")
+        return game_data
     except PermissionError:
         logging.warning(f"Permission denied for: {exec_full_path}")
     except Exception as e:

@@ -184,6 +184,7 @@ class DeploymentTab(QWidget):
         # --- Accordion Setup ---
         # Rename General Options to Database Indexing
         general_options_section = AccordionSection("Database Indexing", general_options_widget)
+        general_options_section.content_height += 75
         creation_section = AccordionSection("Creation", creation_options_widget)
 
         main_layout.addWidget(general_options_section)

@@ -2,8 +2,8 @@ import os
 import sys
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QGroupBox, QLabel, QFormLayout, QPushButton,
-    QComboBox, QHBoxLayout, QCheckBox,
-    QFileDialog, QApplication, QStyleFactory, QSpinBox, QMessageBox
+    QComboBox, QHBoxLayout, QCheckBox, QTabWidget,
+    QFileDialog, QApplication, QStyleFactory, QSpinBox, QMessageBox,
 )
 from PyQt6.QtGui import QFontDatabase, QFont, QPalette, QColor
 from PyQt6.QtCore import pyqtSignal, Qt
@@ -36,182 +36,178 @@ class SetupTab(QWidget):
     def _setup_ui(self):
         """Create and arrange all widgets for the Setup tab."""
         main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(5, 5, 5, 5)
 
-        # --- Section 0: Source Configuration ---
+        # --- Section 1: Sources & Indexing ---
         source_config_widget = QWidget()
-        source_config_layout = QVBoxLayout(source_config_widget)
+        source_config_layout = QFormLayout(source_config_widget)
+        source_config_layout.setSpacing(10)
 
         # Sources
-        source_dirs_layout = QHBoxLayout()
-        source_dirs_layout.addWidget(QLabel("Sources:"))
         self.source_dirs_list = DragDropListWidget()
         self.source_dirs_list.setMaximumHeight(100)
+        add_source_button = QPushButton("Add...")
+        remove_source_button = QPushButton("Remove")
+        source_buttons_layout = QVBoxLayout()
+        source_buttons_layout.addWidget(add_source_button)
+        source_buttons_layout.addWidget(remove_source_button)
+        source_buttons_layout.addStretch()
+        source_dirs_layout = QHBoxLayout()
         source_dirs_layout.addWidget(self.source_dirs_list, 1)
-        source_buttons_layout = QHBoxLayout()
-        self.add_source_dir_button = QPushButton("Add...")
-        self.remove_source_dir_button = QPushButton("Remove")
-        source_buttons_layout.addWidget(self.add_source_dir_button)
-        source_buttons_layout.addWidget(self.remove_source_dir_button)
         source_dirs_layout.addLayout(source_buttons_layout)
-        source_config_layout.addLayout(source_dirs_layout)
+        source_config_layout.addRow("Source Directories:", source_dirs_layout)
+        self.add_source_dir_button = add_source_button
+        self.remove_source_dir_button = remove_source_button
 
         # Excluded Items
-        excluded_layout = QHBoxLayout()
-        excluded_layout.addWidget(QLabel("Excluded Items:"))
         self.excluded_dirs_list = DragDropListWidget()
         self.excluded_dirs_list.setMaximumHeight(100)
+        add_excluded_button = QPushButton("Add...")
+        remove_excluded_button = QPushButton("Remove")
+        excluded_buttons_layout = QVBoxLayout()
+        excluded_buttons_layout.addWidget(add_excluded_button)
+        excluded_buttons_layout.addWidget(remove_excluded_button)
+        excluded_buttons_layout.addStretch()
+        excluded_layout = QHBoxLayout()
         excluded_layout.addWidget(self.excluded_dirs_list, 1)
-        excluded_buttons_layout = QHBoxLayout()
-        self.add_excluded_dir_button = QPushButton("+")
-        self.add_excluded_dir_button.setFixedWidth(30)
-        self.remove_excluded_dir_button = QPushButton("x")
-        self.remove_excluded_dir_button.setFixedWidth(30)
-        excluded_buttons_layout.addStretch(1)
-        excluded_buttons_layout.addWidget(self.add_excluded_dir_button)
-        excluded_buttons_layout.addWidget(self.remove_excluded_dir_button)
         excluded_layout.addLayout(excluded_buttons_layout)
-        source_config_layout.addLayout(excluded_layout)
+        source_config_layout.addRow("Excluded Directories:", excluded_layout)
+        self.add_excluded_dir_button = add_excluded_button
+        self.remove_excluded_dir_button = remove_excluded_button
 
         # Game managers
-        game_managers_layout = QHBoxLayout()
-        game_managers_layout.addWidget(QLabel("Game Managers Present:"))
         self.other_managers_combo = QComboBox()
         self.other_managers_combo.addItems(["None", "Steam", "Epic", "GOG", "Origin", "Ubisoft Connect", "Battle.net", "Xbox"])
-        game_managers_layout.addWidget(self.other_managers_combo)
         self.exclude_manager_checkbox = QCheckBox("Exclude Selected Manager's Games")
+        game_managers_layout = QHBoxLayout()
+        game_managers_layout.addWidget(self.other_managers_combo)
         game_managers_layout.addWidget(self.exclude_manager_checkbox)
         game_managers_layout.addStretch(1)
-        source_config_layout.addLayout(game_managers_layout)
+        source_config_layout.addRow("Game Managers Present:", game_managers_layout)
 
-        # Logging Verbosity
-        appearance_layout = QHBoxLayout()
-        appearance_layout.addWidget(QLabel("Logging Verbosity:"))
-        self.logging_verbosity_combo = QComboBox()
-        self.logging_verbosity_combo.addItems(["None", "Low", "Medium", "High", "Debug"])
-        appearance_layout.addWidget(self.logging_verbosity_combo)
-        appearance_layout.addStretch()
+        source_config_section = AccordionSection("Sources & Indexing", source_config_widget)
 
-        # Font Dropdown
-        appearance_layout.addWidget(QLabel("Font:"))
-        self.font_combo = QComboBox()
-        self.font_combo.addItem("System")
-        custom_fonts = self._load_and_get_custom_fonts()
-        self.font_combo.addItems(custom_fonts)
-        appearance_layout.addWidget(self.font_combo)
+        # --- Section 2: Paths & Profiles ---
+        paths_widget = QWidget()
+        paths_layout = QVBoxLayout(paths_widget)
+        paths_layout.setContentsMargins(0,0,0,0)
+        paths_tabs = QTabWidget()
+        paths_layout.addWidget(paths_tabs)
 
-        # Font Size SpinBox
-        appearance_layout.addWidget(QLabel("Size:"))
-        self.font_size_spin = QSpinBox()
-        self.font_size_spin.setRange(8, 24)
-        self.font_size_spin.setValue(10)
-        appearance_layout.addWidget(self.font_size_spin)
-
-        # Theme Dropdown
-        appearance_layout.addWidget(QLabel("Theme:"))
-        self.theme_combo = QComboBox()
-        self.theme_combo.addItems(["System", "Fusion Dark"])
-        available_styles = [s.lower() for s in QStyleFactory.keys()]
-        if "material" in available_styles:
-            self.theme_combo.addItems(["Material Light", "Material Dark"])
-        appearance_layout.addWidget(self.theme_combo)
-
-        # Restart Button
-        self.restart_btn = QPushButton("*")
-        self.restart_btn.setToolTip("Reset application configuration to defaults")
-        self.restart_btn.setFixedWidth(25)
-        appearance_layout.addWidget(self.restart_btn)
-        source_config_layout.addLayout(appearance_layout)
-
-        # --- Section 1: Directories ---
-        directories_widget = QWidget()
-        directories_layout = QFormLayout(directories_widget)
+        # Core Paths Tab
+        core_paths_widget = QWidget()
+        core_paths_layout = QFormLayout(core_paths_widget)
         self.path_rows["profiles_dir"] = PathConfigRow("profiles_dir", is_directory=True, add_enabled=False, add_cen_lc=False)
-        directories_layout.addRow("Profiles Directory:", self.path_rows["profiles_dir"])
+        core_paths_layout.addRow("Profiles Directory:", self.path_rows["profiles_dir"])
         self.path_rows["launchers_dir"] = PathConfigRow("launchers_dir", is_directory=True, add_enabled=False, add_cen_lc=False)
-        directories_layout.addRow("Launchers Directory:", self.path_rows["launchers_dir"])
+        core_paths_layout.addRow("Launchers Directory:", self.path_rows["launchers_dir"])
+        paths_tabs.addTab(core_paths_widget, "Core")
 
-        # --- Section 2: Applications ---
-        applications_widget = QWidget()
-        applications_layout = QFormLayout(applications_widget)
+        # Application Paths Tab
+        app_paths_widget = QWidget()
+        app_paths_layout = QFormLayout(app_paths_widget)
         self.path_rows["controller_mapper_path"] = PathConfigRow("controller_mapper_path", add_run_wait=True)
-        applications_layout.addRow("Controller Mapper:", self.path_rows["controller_mapper_path"])
+        app_paths_layout.addRow("Controller Mapper:", self.path_rows["controller_mapper_path"])
         self.path_rows["borderless_gaming_path"] = PathConfigRow("borderless_gaming_path", add_run_wait=True)
-        applications_layout.addRow("Borderless Windowing:", self.path_rows["borderless_gaming_path"])
+        app_paths_layout.addRow("Borderless Windowing:", self.path_rows["borderless_gaming_path"])
         self.path_rows["multi_monitor_tool_path"] = PathConfigRow("multi_monitor_tool_path", add_run_wait=True)
-        applications_layout.addRow("Multi-Monitor App:", self.path_rows["multi_monitor_tool_path"])
-        
+        app_paths_layout.addRow("Multi-Monitor App:", self.path_rows["multi_monitor_tool_path"])
+        self.path_rows["just_after_launch_path"] = PathConfigRow("just_after_launch_path", add_run_wait=True)
+        app_paths_layout.addRow("Just After Launch:", self.path_rows["just_after_launch_path"])
+        self.path_rows["just_before_exit_path"] = PathConfigRow("just_before_exit_path", add_run_wait=True)
+        app_paths_layout.addRow("Just Before Exit:", self.path_rows["just_before_exit_path"])
+        paths_tabs.addTab(app_paths_widget, "Applications")
+
+        # Profile Paths Tab
+        profile_paths_widget = QWidget()
+        profile_paths_layout = QFormLayout(profile_paths_widget)
+        self.path_rows["p1_profile_path"] = PathConfigRow("p1_profile_path", add_enabled=False)
+        profile_paths_layout.addRow("Player 1 Profile:", self.path_rows["p1_profile_path"])
+        self.path_rows["p2_profile_path"] = PathConfigRow("p2_profile_path", add_enabled=False)
+        profile_paths_layout.addRow("Player 2 Profile:", self.path_rows["p2_profile_path"])
+        self.path_rows["mediacenter_profile_path"] = PathConfigRow("mediacenter_profile_path", add_enabled=False)
+        profile_paths_layout.addRow("Media Center Profile:", self.path_rows["mediacenter_profile_path"])
+        self.path_rows["multimonitor_gaming_path"] = PathConfigRow("multimonitor_gaming_path", add_enabled=False)
+        profile_paths_layout.addRow("MM Gaming Config:", self.path_rows["multimonitor_gaming_path"])
+        self.path_rows["multimonitor_media_path"] = PathConfigRow("multimonitor_media_path", add_enabled=False)
+        profile_paths_layout.addRow("MM Media/Desktop Config:", self.path_rows["multimonitor_media_path"])
+        paths_tabs.addTab(profile_paths_widget, "Profiles")
+
+        # Script Paths Tab
+        script_paths_widget = QWidget()
+        script_paths_layout = QFormLayout(script_paths_widget)
         for i in range(1, 4):
             key = f"pre{i}_path"
             self.path_rows[key] = PathConfigRow(key, add_run_wait=True)
-            applications_layout.addRow(f"Pre-Launch App {i}:", self.path_rows[key])
-        
-        self.path_rows["just_after_launch_path"] = PathConfigRow("just_after_launch_path", add_run_wait=True)
-        applications_layout.addRow("Just After Launch:", self.path_rows["just_after_launch_path"])
-        
-        self.path_rows["just_before_exit_path"] = PathConfigRow("just_before_exit_path", add_run_wait=True)
-        applications_layout.addRow("Just Before Exit:", self.path_rows["just_before_exit_path"])
-
+            script_paths_layout.addRow(f"Pre-Launch App {i}:", self.path_rows[key])
         for i in range(1, 4):
             key = f"post{i}_path"
             self.path_rows[key] = PathConfigRow(key, add_run_wait=True)
-            applications_layout.addRow(f"Post-Launch App {i}:", self.path_rows[key])
+            script_paths_layout.addRow(f"Post-Launch App {i}:", self.path_rows[key])
+        paths_tabs.addTab(script_paths_widget, "Scripts")
+        
+        paths_section = AccordionSection("Paths & Profiles", paths_widget)
 
-        # --- Section 3: Profiles ---
-        profiles_widget = QWidget()
-        profiles_layout = QFormLayout(profiles_widget)
-        self.path_rows["p1_profile_path"] = PathConfigRow("p1_profile_path", add_enabled=False)
-        profiles_layout.addRow("Player 1 Profile:", self.path_rows["p1_profile_path"])
-        self.path_rows["p2_profile_path"] = PathConfigRow("p2_profile_path", add_enabled=False)
-        profiles_layout.addRow("Player 2 Profile:", self.path_rows["p2_profile_path"])
-        self.path_rows["mediacenter_profile_path"] = PathConfigRow("mediacenter_profile_path", add_enabled=False)
-        profiles_layout.addRow("Media Center Profile:", self.path_rows["mediacenter_profile_path"])
-        self.path_rows["multimonitor_gaming_path"] = PathConfigRow("multimonitor_gaming_path", add_enabled=False)
-        profiles_layout.addRow("MM Gaming Config:", self.path_rows["multimonitor_gaming_path"])
-        self.path_rows["multimonitor_media_path"] = PathConfigRow("multimonitor_media_path", add_enabled=False)
-        profiles_layout.addRow("MM Media/Desktop Config:", self.path_rows["multimonitor_media_path"])
-
-        # --- Sequences Group ---
+        # --- Section 3: Execution Sequence ---
         sequences_widget = QWidget()
         sequences_layout = QHBoxLayout(sequences_widget)
 
         # Launch Sequence
-        launch_sequence_group = QGroupBox("")
+        launch_sequence_group = QGroupBox("Launch Order")
         launch_sequence_layout = QVBoxLayout(launch_sequence_group)
-        launch_title = QLabel("<b>Launch Order</b>")
-        launch_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.launch_sequence_list = DragDropListWidget()
         self.reset_launch_btn = QPushButton("Reset")
-        # keep 'Drag to reorder' label as-is (exception)
-        launch_sequence_layout.addWidget(launch_title)
-        launch_sequence_layout.addWidget(QLabel("Drag to reorder:"))
         launch_sequence_layout.addWidget(self.launch_sequence_list)
         launch_sequence_layout.addWidget(self.reset_launch_btn)
         sequences_layout.addWidget(launch_sequence_group)
 
         # Exit Sequence
-        exit_sequence_group = QGroupBox("")
+        exit_sequence_group = QGroupBox("Exit Order")
         exit_sequence_layout = QVBoxLayout(exit_sequence_group)
-        exit_title = QLabel("<b>Exit Order</b>")
-        exit_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.exit_sequence_list = DragDropListWidget()
         self.reset_exit_btn = QPushButton("Reset")
-        exit_sequence_layout.addWidget(exit_title)
         exit_sequence_layout.addWidget(self.exit_sequence_list)
         exit_sequence_layout.addWidget(self.reset_exit_btn)
         sequences_layout.addWidget(exit_sequence_group)
-
-        # --- Accordion Setup ---
-        source_config_section = AccordionSection("Source Configuration", source_config_widget)
-        directories_section = AccordionSection("Paths", directories_widget)
-        applications_section = AccordionSection("Applications", applications_widget)
-        profiles_section = AccordionSection("Profiles", profiles_widget)
         sequences_section = AccordionSection("Execution Sequences", sequences_widget)
 
+        # --- Section 4: Appearance & Behavior ---
+        appearance_widget = QWidget()
+        appearance_layout = QFormLayout(appearance_widget)
+        # Logging Verbosity
+        self.logging_verbosity_combo = QComboBox()
+        self.logging_verbosity_combo.addItems(["None", "Low", "Medium", "High", "Debug"])
+        appearance_layout.addRow("Logging Verbosity:", self.logging_verbosity_combo)
+        # Font
+        font_layout = QHBoxLayout()
+        self.font_combo = QComboBox()
+        self.font_combo.addItem("System")
+        custom_fonts = self._load_and_get_custom_fonts()
+        self.font_combo.addItems(custom_fonts)
+        font_layout.addWidget(self.font_combo)
+        font_layout.addWidget(QLabel("Size:"))
+        self.font_size_spin = QSpinBox()
+        self.font_size_spin.setRange(8, 24)
+        self.font_size_spin.setValue(10)
+        font_layout.addWidget(self.font_size_spin)
+        appearance_layout.addRow("Font:", font_layout)
+        # Theme
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItems(["System", "Fusion Dark"])
+        available_styles = [s.lower() for s in QStyleFactory.keys()]
+        if "material" in available_styles:
+            self.theme_combo.addItems(["Material Light", "Material Dark"])
+        appearance_layout.addRow("Theme:", self.theme_combo)
+        # Restart Button
+        self.restart_btn = QPushButton("Reset to Defaults")
+        self.restart_btn.setToolTip("Reset all application configuration to defaults")
+        appearance_layout.addRow(self.restart_btn)
+        appearance_section = AccordionSection("Appearance & Behavior", appearance_widget)
+
         main_layout.addWidget(source_config_section)
-        main_layout.addWidget(directories_section)
-        main_layout.addWidget(applications_section)
-        main_layout.addWidget(profiles_section)
+        main_layout.addWidget(paths_section)
         main_layout.addWidget(sequences_section)
+        main_layout.addWidget(appearance_section)
         main_layout.addStretch()
         self._connect_signals()
 
@@ -224,7 +220,7 @@ class SetupTab(QWidget):
         self.reset_exit_btn.clicked.connect(self._reset_exit_sequence)
 
         self.source_dirs_list.model().rowsMoved.connect(self.config_changed.emit)
-        self.source_dirs_list.model().rowsInserted.connect(lambda: self.config_changed.emit())
+        self.source_dirs_list.model().rowsInserted.connect(self.config_changed.emit)
         self.source_dirs_list.model().rowsRemoved.connect(self.config_changed.emit)
         self.excluded_dirs_list.model().rowsMoved.connect(self.config_changed.emit)
         self.excluded_dirs_list.model().rowsInserted.connect(lambda: self.config_changed.emit())
@@ -234,8 +230,8 @@ class SetupTab(QWidget):
             row.valueChanged.connect(self.config_changed.emit)
 
         # Sequences
-        self.launch_sequence_list.model().rowsMoved.connect(self.config_changed.emit)
-        self.exit_sequence_list.model().rowsMoved.connect(self.config_changed.emit)
+        self.launch_sequence_list.model().layoutChanged.connect(self.config_changed.emit)
+        self.exit_sequence_list.model().layoutChanged.connect(self.config_changed.emit)
 
         # Logging
         self.logging_verbosity_combo.currentTextChanged.connect(self.main_window._on_logging_verbosity_changed)

@@ -20,13 +20,14 @@ class DataManager(QObject):
         self.main_window = main_window
 
     def _load_set_file(self, filename):
-        """Loads a .set file into a set of strings from the app root."""
+        """Loads a .set file into a set of strings from the assets directory."""
         result = set()
-        file_path = os.path.join(constants.APP_ROOT_DIR, filename)
+        file_path = os.path.join(constants.ASSETS_DIR, filename)
         if not os.path.exists(file_path):
+            logging.warning(f"Set file not found: {file_path}")
             return result
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, 'r', encoding='utf-8-sig') as f:
                 for line in f:
                     line = line.strip().lower()
                     if line and not line.startswith('#'):
@@ -76,6 +77,11 @@ class DataManager(QObject):
                 self.status_updated.emit(f"Found {len(found_games)} games.", 3000)
                 self.index_data_loaded.emit(found_games)
 
+                # Automatically save the index file
+                if found_games:
+                    index_file_path = os.path.join(constants.APP_ROOT_DIR, "current.index")
+                    self.save_editor_table_to_index(found_games, index_file_path)
+
         except Exception as e:
             logging.error(f"Error during indexing: {e}", exc_info=True)
             self.status_updated.emit(f"Error during indexing: {e}", 5000)
@@ -96,6 +102,11 @@ class DataManager(QObject):
 
     def save_editor_table_to_index(self, data, file_path):
         """Saves the current editor table data to a .index file."""
+        print(f"\n--- [DataManager] Attempting to save {len(data)} items to '{os.path.basename(file_path)}' ---")
+        # Log steam_id for the first few items to check
+        for i, game in enumerate(data[:5]):
+            print(f"  [DataManager:save] Item {i} ('{game.get('name')}'): steam_id is '{game.get('steam_id')}'")
+
         try:
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=4)

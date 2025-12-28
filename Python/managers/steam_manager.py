@@ -70,63 +70,70 @@ class SteamManager(QObject):
         self.download_thread.start()
 
     def _download_with_progress(self, url, output_file, version):
-        """Download file with progress tracking."""
+        """Download file with progress tracking and rate-limit handling."""
         self.is_downloading = True
         success = False
         start_time = time.time()
-    
-        try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
-            with requests.get(url, headers=headers, stream=True) as r:
-                r.raise_for_status()
-                total_size = int(r.headers.get('content-length', 0))
-                downloaded = 0
-                
-                with open(output_file, 'wb') as f:
-                    for chunk in r.iter_content(chunk_size=8192):
-                        if chunk:
+        max_retries = 5
+        retry_delay = 2  # seconds
+
+        for attempt in range(max_retries):
+            try:
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                }
+                with requests.get(url, headers=headers, stream=True, timeout=30) as r:
+                    if r.status_code == 429:  # Too Many Requests
+                        retry_after = int(r.headers.get("Retry-After", retry_delay))
+                        self.status_updated.emit(f"Rate limited by Steam API. Retrying in {retry_after} seconds...", 0)
+                        time.sleep(retry_after)
+                        retry_delay *= 2
+                        continue
+
+                    r.raise_for_status()
+                    total_size = int(r.headers.get('content-length', 0))
+                    downloaded = 0
+
+                    with open(output_file, 'wb') as f:
+                        for chunk in r.iter_content(chunk_size=8192):
+                            if not chunk: break
                             f.write(chunk)
                             downloaded += len(chunk)
-                            
                             if total_size > 0:
                                 percent = min(100, (downloaded * 100) / total_size)
                                 elapsed_time = time.time() - start_time
-                                if elapsed_time > 0:
-                                    speed = downloaded / elapsed_time
-                                    speed_mb = speed / (1024 * 1024)
-                                    remaining = total_size - downloaded
-                                    eta_seconds = remaining / speed if speed > 0 else 0
-                                    eta_str = self._format_eta(eta_seconds)
-                                    progress_text = f"Downloading Steam JSON (v{version}): {percent:.1f}% | {speed_mb:.2f} MB/s | ETA: {eta_str}"
-                                else:
-                                    progress_text = f"Downloading Steam JSON (v{version}): {percent:.1f}%"
-                            else: # If no content-length, just show amount downloaded
+                                speed = downloaded / elapsed_time if elapsed_time > 0 else 0
+                                speed_mb = speed / (1024 * 1024)
+                                remaining = total_size - downloaded
+                                eta_seconds = remaining / speed if speed > 0 else 0
+                                eta_str = self._format_eta(eta_seconds)
+                                progress_text = f"Downloading Steam JSON (v{version}): {percent:.1f}% | {speed_mb:.2f} MB/s | ETA: {eta_str}"
+                            else:
                                 downloaded_mb = downloaded / (1024 * 1024)
                                 progress_text = f"Downloading Steam JSON (v{version}): {downloaded_mb:.2f} MB"
-                            
                             self.status_updated.emit(progress_text, 0)
-                        else:
-                            # Handle case where chunk is empty
-                            break
-                            
-            # Check if download was successful
-            if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
-                self.status_updated.emit(f"Steam JSON (v{version}) downloaded successfully", 5000)
-                success = True
-                # Ask user if they want to process (on main thread)
-                self.processing_prompt_requested.emit(output_file)
-            else:
-                self.status_updated.emit(f"Failed to download Steam JSON (v{version})", 5000)
 
-        except requests.exceptions.RequestException as e:
-            self.status_updated.emit(f"Network error downloading Steam JSON: {str(e)}", 5000)
-        except Exception as e:
-            self.status_updated.emit(f"Error downloading Steam JSON: {str(e)}", 5000)
-        finally:
+                    if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
+                        self.status_updated.emit(f"Steam JSON (v{version}) downloaded successfully", 5000)
+                        success = True
+                        self.processing_prompt_requested.emit(output_file)
+                    else:
+                        self.status_updated.emit(f"Failed to download Steam JSON (v{version})", 5000)
+                    break  # Success, break from retry loop
+
+            except requests.exceptions.RequestException as e:
+                self.status_updated.emit(f"Network error downloading Steam JSON: {e}", 5000)
+                if attempt < max_retries - 1:
+                    self.status_updated.emit(f"Retrying in {retry_delay} seconds...", 0)
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                else:
+                    self.status_updated.emit("Download failed after multiple retries.", 5000)
+            except Exception as e:
+                self.status_updated.emit(f"Error downloading Steam JSON: {e}", 5000)
+                break
+        else:
             self.is_downloading = False
-            # Re-enable UI elements
             self.download_finished.emit(success, output_file)
 
     def _format_eta(self, seconds):
