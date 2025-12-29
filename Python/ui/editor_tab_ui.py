@@ -112,6 +112,11 @@ def populate_editor_tab(main_window):
                       constants.EditorCols.POST1_ENABLED.value, constants.EditorCols.PRE2_ENABLED.value,
                       constants.EditorCols.POST2_ENABLED.value, constants.EditorCols.PRE3_ENABLED.value,
                       constants.EditorCols.POST3_ENABLED.value]
+        
+        # Hide the Enabled columns as they are now merged into the path columns
+        for col in en_columns:
+            main_window.editor_table.setColumnHidden(col, True)
+
         rw_columns = [constants.EditorCols.CM_RUN_WAIT.value, constants.EditorCols.BW_RUN_WAIT.value,
                       constants.EditorCols.MM_RUN_WAIT.value, constants.EditorCols.JA_RUN_WAIT.value,
                       constants.EditorCols.JB_RUN_WAIT.value, constants.EditorCols.PRE1_RUN_WAIT.value,
@@ -119,7 +124,7 @@ def populate_editor_tab(main_window):
                       constants.EditorCols.POST2_RUN_WAIT.value, constants.EditorCols.PRE3_RUN_WAIT.value,
                       constants.EditorCols.POST3_RUN_WAIT.value]
 
-        for col in en_columns + rw_columns:
+        for col in rw_columns:
             # Use a conservative small width; UI can still resize if needed
             main_window.editor_table.setColumnWidth(col, 56)
     except Exception:

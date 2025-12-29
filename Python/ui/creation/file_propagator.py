@@ -80,18 +80,23 @@ class FilePropagator:
             self.logger.error(f"Error creating profile directory for {game_name}: {str(e)}")
             return None
             
-    def copy_template(self, template_path, destination_path, replacements=None):
+    def copy_template(self, template_path, destination_path, replacements=None, overwrite=True):
         """Copy a template file with variable replacements
         
         Args:
             template_path: Path to the template file
             destination_path: Path where the processed file will be saved
             replacements: Dictionary of replacements (e.g., {"{{VAR}}": "value"})
+            overwrite: Whether to overwrite existing files
             
         Returns:
             True if successful, False otherwise
         """
         try:
+            # Check overwrite
+            if os.path.exists(destination_path) and not overwrite:
+                return True
+
             # Check if the template exists
             if not os.path.exists(template_path):
                 self.logger.error(f"Template file not found: {template_path}")
@@ -119,17 +124,22 @@ class FilePropagator:
             self.logger.error(f"Error copying template: {str(e)}")
             return False
             
-    def copy_file(self, source_path, destination_path):
+    def copy_file(self, source_path, destination_path, overwrite=True):
         """Copy a file from source to destination
         
         Args:
             source_path: Path to the source file
             destination_path: Path where the file will be copied
+            overwrite: Whether to overwrite existing files
             
         Returns:
             True if successful, False otherwise
         """
         try:
+            # Check overwrite
+            if os.path.exists(destination_path) and not overwrite:
+                return True
+
             # Check if the source file exists
             if not os.path.exists(source_path):
                 self.logger.error(f"Source file not found: {source_path}")
@@ -147,7 +157,7 @@ class FilePropagator:
             self.logger.error(f"Error copying file: {str(e)}")
             return False
             
-    def create_launcher(self, game_name, executable_path, working_dir, arguments="", profile_dir=""):
+    def create_launcher(self, game_name, executable_path, working_dir, arguments="", profile_dir="", overwrite=True):
         """Create a launcher batch file for a game
         
         Args:
@@ -156,6 +166,7 @@ class FilePropagator:
             working_dir: Working directory for the game
             arguments: Command line arguments for the game
             profile_dir: Path to the profile directory
+            overwrite: Whether to overwrite existing launcher
             
         Returns:
             Path to created launcher file or None if failed
@@ -181,7 +192,7 @@ class FilePropagator:
             }
             
             # Copy the template with replacements
-            if not self.copy_template(template_path, launcher_path, replacements):
+            if not self.copy_template(template_path, launcher_path, replacements, overwrite=overwrite):
                 return None
                 
             return launcher_path
@@ -190,13 +201,14 @@ class FilePropagator:
             self.logger.error(f"Error creating launcher for {game_name}: {str(e)}")
             return None
             
-    def create_shortcut(self, game_name, target_path, icon_path=None):
+    def create_shortcut(self, game_name, target_path, icon_path=None, overwrite=True):
         """Create a shortcut to a launcher or executable
         
         Args:
             game_name: Name of the game (used for shortcut name)
             target_path: Path to the target file
             icon_path: Path to an icon file (optional)
+            overwrite: Whether to overwrite existing shortcut
             
         Returns:
             Path to created shortcut or None if failed
@@ -217,6 +229,10 @@ class FilePropagator:
             # Create the shortcut file path
             shortcut_path = os.path.join(self.launchers_dir, f"{safe_name}.lnk")
             
+            # Check overwrite
+            if os.path.exists(shortcut_path) and not overwrite:
+                return shortcut_path
+
             # Build the command to create the shortcut
             import subprocess
             cmd = [
@@ -248,12 +264,13 @@ class FilePropagator:
             self.logger.error(f"Error creating shortcut for {game_name}: {str(e)}")
             return None
             
-    def create_joystick_profiles(self, game_name, profile_dir):
+    def create_joystick_profiles(self, game_name, profile_dir, overwrite=True):
         """Create joystick profiles for a game
         
         Args:
             game_name: Name of the game
             profile_dir: Path to the profile directory
+            overwrite: Whether to overwrite existing profiles
             
         Returns:
             Dictionary with paths to created profiles
@@ -293,7 +310,7 @@ class FilePropagator:
             for profile_type, template_path in templates.items():
                 if os.path.exists(template_path):
                     output_path = output_paths[profile_type]
-                    success = self.copy_template(template_path, output_path, replacements)
+                    success = self.copy_template(template_path, output_path, replacements, overwrite=overwrite)
                     if success:
                         result[profile_type] = output_path
                     else:

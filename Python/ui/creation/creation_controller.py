@@ -35,11 +35,21 @@ class CreationController:
         app_config = self.main_window.config
         game_name_override = game_data.get('name_override', 'New Game')
         
+        # Check if launcher creation is enabled in Setup Tab
+        if not app_config.defaults.get('launchers_dir_enabled', True):
+            logging.info(f"Skipping launcher creation for {game_name_override} (Disabled in Setup)")
+            return True
+
         # 1. Define the launcher directory for this game
         launcher_base_dir = Path(app_config.launchers_dir)
         game_launcher_dir = launcher_base_dir / game_name_override
         
         try:
+            # Check overwrite flag for launcher directory
+            if game_launcher_dir.exists() and not app_config.overwrite_states.get('launchers_dir', True): # Launcher dir overwrite is still global
+                logging.info(f"Skipping launcher creation for {game_name_override} (Overwrite disabled)")
+                return True
+
             # 2. Create the directory structure
             game_launcher_dir.mkdir(parents=True, exist_ok=True)
             
@@ -155,9 +165,22 @@ class CreationController:
         """
         Copies files to the game's launcher directory if they are set to LC mode.
         """
+        app_config = self.main_window.config
+        
+        # Check if profile folder creation is enabled
+        if not app_config.defaults.get('profiles_dir_enabled', True):
+            return
+
         profile_keys = [
             'player1_profile', 'player2_profile', 'mm_game_profile', 'mm_desktop_profile'
         ]
+        # Map profile keys to their overwrite config keys
+        key_map = {
+            'player1_profile': 'p1_profile_path',
+            'player2_profile': 'p2_profile_path',
+            'mm_game_profile': 'multimonitor_gaming_path',
+            'mm_desktop_profile': 'multimonitor_media_path'
+        }
 
         for key in profile_keys:
             path_with_mode = game_data.get(key, "")
@@ -169,7 +192,14 @@ class CreationController:
                 target_dir = game_launcher_dir / "Profiles" / key
                 target_dir.mkdir(parents=True, exist_ok=True)
                 
+                target_file = target_dir / original_path.name
+                
+                # Check overwrite flag for this specific profile type
+                config_key = key_map.get(key)
+                if config_key and target_file.exists() and not app_config.overwrite_states.get(config_key, True): # Profiles overwrite is still global
+                    continue
+
                 try:
-                    shutil.copy2(original_path, target_dir / original_path.name)
+                    shutil.copy2(original_path, target_file)
                 except Exception as e:
                     logging.error(f"Failed to copy profile {original_path} to {target_dir}: {e}")

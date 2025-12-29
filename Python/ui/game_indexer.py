@@ -163,6 +163,19 @@ def _process_executable(
             'pre_1_enabled': config.enable_pre1, 'pre_2_enabled': config.enable_pre2, 'pre_3_enabled': config.enable_pre3,
             'post_1_enabled': config.enable_post1, 'post_2_enabled': config.enable_post2, 'post_3_enabled': config.enable_post3,
 
+            # Overwrite states (default to global config)
+            'controller_mapper_overwrite': config.overwrite_states.get('controller_mapper_path', True),
+            'borderless_windowing_overwrite': config.overwrite_states.get('borderless_gaming_path', True),
+            'multi_monitor_app_overwrite': config.overwrite_states.get('multi_monitor_tool_path', True),
+            'just_after_launch_overwrite': config.overwrite_states.get('just_after_launch_path', True),
+            'just_before_exit_overwrite': config.overwrite_states.get('just_before_exit_path', True),
+            'pre_1_overwrite': config.overwrite_states.get('pre1_path', True),
+            'pre_2_overwrite': config.overwrite_states.get('pre2_path', True),
+            'pre_3_overwrite': config.overwrite_states.get('pre3_path', True),
+            'post_1_overwrite': config.overwrite_states.get('post1_path', True),
+            'post_2_overwrite': config.overwrite_states.get('post2_path', True),
+            'post_3_overwrite': config.overwrite_states.get('post3_path', True),
+
             # Run-wait states from setup tab
             'controller_mapper_run_wait': config.run_wait_states.get('controller_mapper_path_run_wait', False),
             'borderless_windowing_run_wait': config.run_wait_states.get('borderless_gaming_path_run_wait', False),

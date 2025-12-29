@@ -60,14 +60,9 @@ class AppConfig:
         self.enable_name_matching = False
         self.steam_json_version = 2
         self.use_kill_list = False
-        self.enable_launcher = False
-        self.apply_mapper_profiles = False
-        self.enable_borderless_windowing = False
         self.terminate_borderless_on_exit = False
 
         # Deployment Tab: Creation Options
-        self.create_profile_folders = False
-        self.create_overwrite_launcher = False
         self.create_overwrite_joystick_profiles = False
 
         # Enable toggles for applications defined in Setup -> Applications
@@ -88,6 +83,9 @@ class AppConfig:
 
         # Default enabled states for various features
         self.defaults = {}
+
+        # Overwrite states for paths (Deployment Tab -> Creation)
+        self.overwrite_states = {}
 
         # Default run-wait states for various features
         self.run_wait_states = {}

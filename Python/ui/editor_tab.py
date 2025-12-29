@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
+    QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem, QLabel,
     QPushButton, QHeaderView, QAbstractItemView, QMenu, QCheckBox, QLineEdit
 )
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -122,6 +122,30 @@ class EditorTab(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         return widget
 
+    def _create_merged_path_widget(self, enabled: bool, path_text: str, overwrite: bool) -> QWidget:
+        """Create a merged widget with Enabled checkbox, Path label, and Overwrite checkbox."""
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(4, 0, 4, 0)
+        layout.setSpacing(6)
+        
+        cb_enabled = QCheckBox()
+        cb_enabled.setChecked(enabled)
+        cb_enabled.setToolTip("Enable")
+        
+        label = QLabel(path_text)
+        label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        
+        cb_overwrite = QCheckBox()
+        cb_overwrite.setChecked(overwrite)
+        cb_overwrite.setToolTip("Overwrite")
+        
+        layout.addWidget(cb_enabled)
+        layout.addWidget(label, 1)
+        layout.addWidget(cb_overwrite)
+        
+        return widget
+
     def _get_checkbox_value(self, row: int, col: int) -> bool:
         """Get checkbox value from a cell widget."""
         widget = self.table.cellWidget(row, col)
@@ -130,6 +154,18 @@ class EditorTab(QWidget):
             if checkbox:
                 return checkbox.isChecked()
         return False
+
+    def _get_merged_path_data(self, row: int, col: int):
+        """Extract enabled, path, and overwrite from a merged widget."""
+        widget = self.table.cellWidget(row, col)
+        if widget:
+            cbs = widget.findChildren(QCheckBox)
+            enabled = cbs[0].isChecked() if len(cbs) > 0 else False
+            overwrite = cbs[1].isChecked() if len(cbs) > 1 else False
+            lbl = widget.findChild(QLabel)
+            path = lbl.text() if lbl else ""
+            return enabled, path, overwrite
+        return False, "", False
 
     def populate_from_data(self, data):
         """Populate the table with data."""
@@ -190,24 +226,22 @@ class EditorTab(QWidget):
                 return symbol, run_wait
 
             # Controller Mapper (CheckBox, Path with symbol, RunWait)
-            self.table.setCellWidget(row_num, constants.EditorCols.CM_ENABLED.value, self._create_checkbox_widget(game.get('controller_mapper_enabled', True)))
+            # Merged widget for Path column
             cm_symbol, cm_run_wait = _get_propagation_symbol_and_run_wait('controller_mapper_path')
             cm_path = f"{cm_symbol} {game.get('controller_mapper_path', '')}"
-            self.table.setItem(row_num, constants.EditorCols.CM_PATH.value, QTableWidgetItem(cm_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.CM_PATH.value, self._create_merged_path_widget(game.get('controller_mapper_enabled', True), cm_path, game.get('controller_mapper_overwrite', True)))
             self.table.setCellWidget(row_num, constants.EditorCols.CM_RUN_WAIT.value, self._create_checkbox_widget(game.get('controller_mapper_run_wait', cm_run_wait)))
 
             # Borderless Windowing (CheckBox, Path with symbol, RunWait)
-            self.table.setCellWidget(row_num, constants.EditorCols.BW_ENABLED.value, self._create_checkbox_widget(game.get('borderless_windowing_enabled', True)))
             bw_symbol, bw_run_wait = _get_propagation_symbol_and_run_wait('borderless_gaming_path')
             bw_path = f"{bw_symbol} {game.get('borderless_windowing_path', '')}"
-            self.table.setItem(row_num, constants.EditorCols.BW_PATH.value, QTableWidgetItem(bw_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.BW_PATH.value, self._create_merged_path_widget(game.get('borderless_windowing_enabled', True), bw_path, game.get('borderless_windowing_overwrite', True)))
             self.table.setCellWidget(row_num, constants.EditorCols.BW_RUN_WAIT.value, self._create_checkbox_widget(game.get('borderless_windowing_run_wait', bw_run_wait)))
 
             # Multi-monitor App (CheckBox, Path with symbol, RunWait)
-            self.table.setCellWidget(row_num, constants.EditorCols.MM_ENABLED.value, self._create_checkbox_widget(game.get('multi_monitor_app_enabled', True)))
             mm_symbol, mm_run_wait = _get_propagation_symbol_and_run_wait('multi_monitor_tool_path')
             mm_path = f"{mm_symbol} {game.get('multi_monitor_app_path', '')}"
-            self.table.setItem(row_num, constants.EditorCols.MM_PATH.value, QTableWidgetItem(mm_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.MM_PATH.value, self._create_merged_path_widget(game.get('multi_monitor_app_enabled', True), mm_path, game.get('multi_monitor_app_overwrite', True)))
             self.table.setCellWidget(row_num, constants.EditorCols.MM_RUN_WAIT.value, self._create_checkbox_widget(game.get('multi_monitor_app_run_wait', mm_run_wait)))
 
             # Hide Taskbar (CheckBox)
@@ -236,54 +270,46 @@ class EditorTab(QWidget):
             self.table.setItem(row_num, constants.EditorCols.MEDIACENTER_PROFILE.value, QTableWidgetItem(mediacenter_profile))
 
             # Just After Launch (CheckBox, Path with symbol, RunWait)
-            self.table.setCellWidget(row_num, constants.EditorCols.JA_ENABLED.value, self._create_checkbox_widget(game.get('just_after_launch_enabled', True)))
             ja_symbol, ja_run_wait = _get_propagation_symbol_and_run_wait('just_after_launch_path')
             ja_path = f"{ja_symbol} {game.get('just_after_launch_path', '')}"
-            self.table.setItem(row_num, constants.EditorCols.JA_PATH.value, QTableWidgetItem(ja_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.JA_PATH.value, self._create_merged_path_widget(game.get('just_after_launch_enabled', True), ja_path, game.get('just_after_launch_overwrite', True)))
             self.table.setCellWidget(row_num, constants.EditorCols.JA_RUN_WAIT.value, self._create_checkbox_widget(game.get('just_after_launch_run_wait', ja_run_wait)))
 
             # Just Before Exit (CheckBox, Path with symbol, RunWait)
-            self.table.setCellWidget(row_num, constants.EditorCols.JB_ENABLED.value, self._create_checkbox_widget(game.get('just_before_exit_enabled', True)))
             jb_symbol, jb_run_wait = _get_propagation_symbol_and_run_wait('just_before_exit_path')
             jb_path = f"{jb_symbol} {game.get('just_before_exit_path', '')}"
-            self.table.setItem(row_num, constants.EditorCols.JB_PATH.value, QTableWidgetItem(jb_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.JB_PATH.value, self._create_merged_path_widget(game.get('just_before_exit_enabled', True), jb_path, game.get('just_before_exit_overwrite', True)))
             self.table.setCellWidget(row_num, constants.EditorCols.JB_RUN_WAIT.value, self._create_checkbox_widget(game.get('just_before_exit_run_wait', jb_run_wait)))
 
             # Pre/Post Scripts with Enabled Checkboxes and RunWait toggles
             pre1_symbol, pre1_run_wait = _get_propagation_symbol_and_run_wait('pre1_path')
-            self.table.setCellWidget(row_num, constants.EditorCols.PRE1_ENABLED.value, self._create_checkbox_widget(game.get('pre_1_enabled', True)))
             pre1_path = f"{pre1_symbol} {game.get('pre1_path', '')}"
-            self.table.setItem(row_num, constants.EditorCols.PRE1_PATH.value, QTableWidgetItem(pre1_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.PRE1_PATH.value, self._create_merged_path_widget(game.get('pre_1_enabled', True), pre1_path, game.get('pre_1_overwrite', True)))
             self.table.setCellWidget(row_num, constants.EditorCols.PRE1_RUN_WAIT.value, self._create_checkbox_widget(game.get('pre_1_run_wait', pre1_run_wait)))
 
             post1_symbol, post1_run_wait = _get_propagation_symbol_and_run_wait('post1_path')
-            self.table.setCellWidget(row_num, constants.EditorCols.POST1_ENABLED.value, self._create_checkbox_widget(game.get('post_1_enabled', True)))
             post1_path = f"{post1_symbol} {game.get('post1_path', '')}"
-            self.table.setItem(row_num, constants.EditorCols.POST1_PATH.value, QTableWidgetItem(post1_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.POST1_PATH.value, self._create_merged_path_widget(game.get('post_1_enabled', True), post1_path, game.get('post_1_overwrite', True)))
             self.table.setCellWidget(row_num, constants.EditorCols.POST1_RUN_WAIT.value, self._create_checkbox_widget(game.get('post_1_run_wait', post1_run_wait)))
 
             pre2_symbol, pre2_run_wait = _get_propagation_symbol_and_run_wait('pre2_path')
-            self.table.setCellWidget(row_num, constants.EditorCols.PRE2_ENABLED.value, self._create_checkbox_widget(game.get('pre_2_enabled', True)))
             pre2_path = f"{pre2_symbol} {game.get('pre2_path', '')}"
-            self.table.setItem(row_num, constants.EditorCols.PRE2_PATH.value, QTableWidgetItem(pre2_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.PRE2_PATH.value, self._create_merged_path_widget(game.get('pre_2_enabled', True), pre2_path, game.get('pre_2_overwrite', True)))
             self.table.setCellWidget(row_num, constants.EditorCols.PRE2_RUN_WAIT.value, self._create_checkbox_widget(game.get('pre_2_run_wait', pre2_run_wait)))
 
             post2_symbol, post2_run_wait = _get_propagation_symbol_and_run_wait('post2_path')
-            self.table.setCellWidget(row_num, constants.EditorCols.POST2_ENABLED.value, self._create_checkbox_widget(game.get('post_2_enabled', True)))
             post2_path = f"{post2_symbol} {game.get('post2_path', '')}"
-            self.table.setItem(row_num, constants.EditorCols.POST2_PATH.value, QTableWidgetItem(post2_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.POST2_PATH.value, self._create_merged_path_widget(game.get('post_2_enabled', True), post2_path, game.get('post_2_overwrite', True)))
             self.table.setCellWidget(row_num, constants.EditorCols.POST2_RUN_WAIT.value, self._create_checkbox_widget(game.get('post_2_run_wait', post2_run_wait)))
 
             pre3_symbol, pre3_run_wait = _get_propagation_symbol_and_run_wait('pre3_path')
-            self.table.setCellWidget(row_num, constants.EditorCols.PRE3_ENABLED.value, self._create_checkbox_widget(game.get('pre_3_enabled', True)))
             pre3_path = f"{pre3_symbol} {game.get('pre3_path', '')}"
-            self.table.setItem(row_num, constants.EditorCols.PRE3_PATH.value, QTableWidgetItem(pre3_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.PRE3_PATH.value, self._create_merged_path_widget(game.get('pre_3_enabled', True), pre3_path, game.get('pre_3_overwrite', True)))
             self.table.setCellWidget(row_num, constants.EditorCols.PRE3_RUN_WAIT.value, self._create_checkbox_widget(game.get('pre_3_run_wait', pre3_run_wait)))
 
             post3_symbol, post3_run_wait = _get_propagation_symbol_and_run_wait('post3_path')
-            self.table.setCellWidget(row_num, constants.EditorCols.POST3_ENABLED.value, self._create_checkbox_widget(game.get('post_3_enabled', True)))
             post3_path = f"{post3_symbol} {game.get('post3_path', '')}"
-            self.table.setItem(row_num, constants.EditorCols.POST3_PATH.value, QTableWidgetItem(post3_path))
+            self.table.setCellWidget(row_num, constants.EditorCols.POST3_PATH.value, self._create_merged_path_widget(game.get('post_3_enabled', True), post3_path, game.get('post_3_overwrite', True)))
             self.table.setCellWidget(row_num, constants.EditorCols.POST3_RUN_WAIT.value, self._create_checkbox_widget(game.get('post_3_run_wait', post3_run_wait)))
 
             self.table.blockSignals(False) # Unblock signals
@@ -323,18 +349,24 @@ class EditorTab(QWidget):
             game['run_as_admin'] = self._get_checkbox_value(row, constants.EditorCols.RUN_AS_ADMIN.value)
 
             # Controller Mapper (cols 8-10)
-            game['controller_mapper_enabled'] = self._get_checkbox_value(row, constants.EditorCols.CM_ENABLED.value)
-            game['controller_mapper_path'] = self.table.item(row, constants.EditorCols.CM_PATH.value).text() if self.table.item(row, constants.EditorCols.CM_PATH.value) else ''
+            cm_enabled, cm_path_full, cm_overwrite = self._get_merged_path_data(row, constants.EditorCols.CM_PATH.value)
+            game['controller_mapper_enabled'] = cm_enabled
+            game['controller_mapper_path'] = cm_path_full.lstrip('<> ') # Strip symbol
+            game['controller_mapper_overwrite'] = cm_overwrite
             game['controller_mapper_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.CM_RUN_WAIT.value)
 
             # Borderless Windowing (cols 11-13)
-            game['borderless_windowing_enabled'] = self._get_checkbox_value(row, constants.EditorCols.BW_ENABLED.value)
-            game['borderless_windowing_path'] = self.table.item(row, constants.EditorCols.BW_PATH.value).text() if self.table.item(row, constants.EditorCols.BW_PATH.value) else ''
+            bw_enabled, bw_path_full, bw_overwrite = self._get_merged_path_data(row, constants.EditorCols.BW_PATH.value)
+            game['borderless_windowing_enabled'] = bw_enabled
+            game['borderless_windowing_path'] = bw_path_full.lstrip('<> ')
+            game['borderless_windowing_overwrite'] = bw_overwrite
             game['borderless_windowing_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.BW_RUN_WAIT.value)
 
             # Multi-monitor App (cols 14-16)
-            game['multi_monitor_app_enabled'] = self._get_checkbox_value(row, constants.EditorCols.MM_ENABLED.value)
-            game['multi_monitor_app_path'] = self.table.item(row, constants.EditorCols.MM_PATH.value).text() if self.table.item(row, constants.EditorCols.MM_PATH.value) else ''
+            mm_enabled, mm_path_full, mm_overwrite = self._get_merged_path_data(row, constants.EditorCols.MM_PATH.value)
+            game['multi_monitor_app_enabled'] = mm_enabled
+            game['multi_monitor_app_path'] = mm_path_full.lstrip('<> ')
+            game['multi_monitor_app_overwrite'] = mm_overwrite
             game['multi_monitor_app_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.MM_RUN_WAIT.value)
 
             # Hide Taskbar (col 17)
@@ -348,38 +380,54 @@ class EditorTab(QWidget):
             game['mediacenter_profile'] = self.table.item(row, constants.EditorCols.MEDIACENTER_PROFILE.value).text() if self.table.item(row, constants.EditorCols.MEDIACENTER_PROFILE.value) else ''
 
             # Just After Launch (cols 23-25)
-            game['just_after_launch_enabled'] = self._get_checkbox_value(row, constants.EditorCols.JA_ENABLED.value)
-            game['just_after_launch_path'] = self.table.item(row, constants.EditorCols.JA_PATH.value).text() if self.table.item(row, constants.EditorCols.JA_PATH.value) else ''
+            ja_enabled, ja_path_full, ja_overwrite = self._get_merged_path_data(row, constants.EditorCols.JA_PATH.value)
+            game['just_after_launch_enabled'] = ja_enabled
+            game['just_after_launch_path'] = ja_path_full.lstrip('<> ')
+            game['just_after_launch_overwrite'] = ja_overwrite
             game['just_after_launch_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.JA_RUN_WAIT.value)
 
             # Just Before Exit (cols 26-28)
-            game['just_before_exit_enabled'] = self._get_checkbox_value(row, constants.EditorCols.JB_ENABLED.value)
-            game['just_before_exit_path'] = self.table.item(row, constants.EditorCols.JB_PATH.value).text() if self.table.item(row, constants.EditorCols.JB_PATH.value) else ''
+            jb_enabled, jb_path_full, jb_overwrite = self._get_merged_path_data(row, constants.EditorCols.JB_PATH.value)
+            game['just_before_exit_enabled'] = jb_enabled
+            game['just_before_exit_path'] = jb_path_full.lstrip('<> ')
+            game['just_before_exit_overwrite'] = jb_overwrite
             game['just_before_exit_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.JB_RUN_WAIT.value)
 
             # Pre/Post scripts (cols 29-46)
-            game['pre_1_enabled'] = self._get_checkbox_value(row, constants.EditorCols.PRE1_ENABLED.value)
-            game['pre1_path'] = self.table.item(row, constants.EditorCols.PRE1_PATH.value).text() if self.table.item(row, constants.EditorCols.PRE1_PATH.value) else ''
+            pre1_enabled, pre1_path_full, pre1_overwrite = self._get_merged_path_data(row, constants.EditorCols.PRE1_PATH.value)
+            game['pre_1_enabled'] = pre1_enabled
+            game['pre1_path'] = pre1_path_full.lstrip('<> ')
+            game['pre_1_overwrite'] = pre1_overwrite
             game['pre_1_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.PRE1_RUN_WAIT.value)
 
-            game['post_1_enabled'] = self._get_checkbox_value(row, constants.EditorCols.POST1_ENABLED.value)
-            game['post1_path'] = self.table.item(row, constants.EditorCols.POST1_PATH.value).text() if self.table.item(row, constants.EditorCols.POST1_PATH.value) else ''
+            post1_enabled, post1_path_full, post1_overwrite = self._get_merged_path_data(row, constants.EditorCols.POST1_PATH.value)
+            game['post_1_enabled'] = post1_enabled
+            game['post1_path'] = post1_path_full.lstrip('<> ')
+            game['post_1_overwrite'] = post1_overwrite
             game['post_1_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.POST1_RUN_WAIT.value)
 
-            game['pre_2_enabled'] = self._get_checkbox_value(row, constants.EditorCols.PRE2_ENABLED.value)
-            game['pre2_path'] = self.table.item(row, constants.EditorCols.PRE2_PATH.value).text() if self.table.item(row, constants.EditorCols.PRE2_PATH.value) else ''
+            pre2_enabled, pre2_path_full, pre2_overwrite = self._get_merged_path_data(row, constants.EditorCols.PRE2_PATH.value)
+            game['pre_2_enabled'] = pre2_enabled
+            game['pre2_path'] = pre2_path_full.lstrip('<> ')
+            game['pre_2_overwrite'] = pre2_overwrite
             game['pre_2_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.PRE2_RUN_WAIT.value)
 
-            game['post_2_enabled'] = self._get_checkbox_value(row, constants.EditorCols.POST2_ENABLED.value)
-            game['post2_path'] = self.table.item(row, constants.EditorCols.POST2_PATH.value).text() if self.table.item(row, constants.EditorCols.POST2_PATH.value) else ''
+            post2_enabled, post2_path_full, post2_overwrite = self._get_merged_path_data(row, constants.EditorCols.POST2_PATH.value)
+            game['post_2_enabled'] = post2_enabled
+            game['post2_path'] = post2_path_full.lstrip('<> ')
+            game['post_2_overwrite'] = post2_overwrite
             game['post_2_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.POST2_RUN_WAIT.value)
 
-            game['pre_3_enabled'] = self._get_checkbox_value(row, constants.EditorCols.PRE3_ENABLED.value)
-            game['pre3_path'] = self.table.item(row, constants.EditorCols.PRE3_PATH.value).text() if self.table.item(row, constants.EditorCols.PRE3_PATH.value) else ''
+            pre3_enabled, pre3_path_full, pre3_overwrite = self._get_merged_path_data(row, constants.EditorCols.PRE3_PATH.value)
+            game['pre_3_enabled'] = pre3_enabled
+            game['pre3_path'] = pre3_path_full.lstrip('<> ')
+            game['pre_3_overwrite'] = pre3_overwrite
             game['pre_3_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.PRE3_RUN_WAIT.value)
 
-            game['post_3_enabled'] = self._get_checkbox_value(row, constants.EditorCols.POST3_ENABLED.value)
-            game['post3_path'] = self.table.item(row, constants.EditorCols.POST3_PATH.value).text() if self.table.item(row, constants.EditorCols.POST3_PATH.value) else ''
+            post3_enabled, post3_path_full, post3_overwrite = self._get_merged_path_data(row, constants.EditorCols.POST3_PATH.value)
+            game['post_3_enabled'] = post3_enabled
+            game['post3_path'] = post3_path_full.lstrip('<> ')
+            game['post_3_overwrite'] = post3_overwrite
             game['post_3_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.POST3_RUN_WAIT.value)
 
             data.append(game)

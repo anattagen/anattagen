@@ -97,9 +97,11 @@ class SetupTab(QWidget):
         # Core Paths Tab
         core_paths_widget = QWidget()
         core_paths_layout = QFormLayout(core_paths_widget)
-        self.path_rows["profiles_dir"] = PathConfigRow("profiles_dir", is_directory=True, add_enabled=False, add_cen_lc=False)
+        self.path_rows["profiles_dir"] = PathConfigRow("profiles_dir", is_directory=True, add_enabled=True, add_cen_lc=True)
+        self.path_rows["profiles_dir"].enabled_cb.setToolTip("Create Profile Folders")
         core_paths_layout.addRow("Profiles Directory:", self.path_rows["profiles_dir"])
-        self.path_rows["launchers_dir"] = PathConfigRow("launchers_dir", is_directory=True, add_enabled=False, add_cen_lc=False)
+        self.path_rows["launchers_dir"] = PathConfigRow("launchers_dir", is_directory=True, add_enabled=True, add_cen_lc=True)
+        self.path_rows["launchers_dir"].enabled_cb.setToolTip("Create Launcher")
         core_paths_layout.addRow("Launchers Directory:", self.path_rows["launchers_dir"])
         paths_tabs.addTab(core_paths_widget, "Core")
 
@@ -107,14 +109,19 @@ class SetupTab(QWidget):
         app_paths_widget = QWidget()
         app_paths_layout = QFormLayout(app_paths_widget)
         self.path_rows["controller_mapper_path"] = PathConfigRow("controller_mapper_path", add_run_wait=True)
+        self.path_rows["controller_mapper_path"].enabled_cb.setToolTip("Enable Controller Mapper")
         app_paths_layout.addRow("Controller Mapper:", self.path_rows["controller_mapper_path"])
         self.path_rows["borderless_gaming_path"] = PathConfigRow("borderless_gaming_path", add_run_wait=True)
+        self.path_rows["borderless_gaming_path"].enabled_cb.setToolTip("Enable Borderless Windowing")
         app_paths_layout.addRow("Borderless Windowing:", self.path_rows["borderless_gaming_path"])
         self.path_rows["multi_monitor_tool_path"] = PathConfigRow("multi_monitor_tool_path", add_run_wait=True)
+        self.path_rows["multi_monitor_tool_path"].enabled_cb.setToolTip("Enable Multi-Monitor Tool")
         app_paths_layout.addRow("Multi-Monitor App:", self.path_rows["multi_monitor_tool_path"])
         self.path_rows["just_after_launch_path"] = PathConfigRow("just_after_launch_path", add_run_wait=True)
+        self.path_rows["just_after_launch_path"].enabled_cb.setToolTip("Enable Just After Launch App")
         app_paths_layout.addRow("Just After Launch:", self.path_rows["just_after_launch_path"])
         self.path_rows["just_before_exit_path"] = PathConfigRow("just_before_exit_path", add_run_wait=True)
+        self.path_rows["just_before_exit_path"].enabled_cb.setToolTip("Enable Just Before Exit App")
         app_paths_layout.addRow("Just Before Exit:", self.path_rows["just_before_exit_path"])
         paths_tabs.addTab(app_paths_widget, "Applications")
 
@@ -139,10 +146,12 @@ class SetupTab(QWidget):
         for i in range(1, 4):
             key = f"pre{i}_path"
             self.path_rows[key] = PathConfigRow(key, add_run_wait=True)
+            self.path_rows[key].enabled_cb.setToolTip(f"Enable Pre-Launch App {i}")
             script_paths_layout.addRow(f"Pre-Launch App {i}:", self.path_rows[key])
         for i in range(1, 4):
             key = f"post{i}_path"
             self.path_rows[key] = PathConfigRow(key, add_run_wait=True)
+            self.path_rows[key].enabled_cb.setToolTip(f"Enable Post-Launch App {i}")
             script_paths_layout.addRow(f"Post-Launch App {i}:", self.path_rows[key])
         paths_tabs.addTab(script_paths_widget, "Scripts")
         

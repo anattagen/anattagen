@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel,
+    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QScrollArea,
     QPushButton, QCheckBox, QGroupBox, QMenu, QRadioButton, QButtonGroup
 )
 from PyQt6.QtCore import pyqtSignal
@@ -12,6 +12,37 @@ def get_module_path():
     """Dynamically calculates the path to the current module."""
     return os.path.dirname(os.path.abspath(__file__))
 
+
+PATH_KEYS = [
+    "profiles_dir", "launchers_dir",
+    "controller_mapper_path", "borderless_gaming_path", "multi_monitor_tool_path",
+    "just_after_launch_path", "just_before_exit_path",
+    "p1_profile_path", "p2_profile_path", "mediacenter_profile_path",
+    "multimonitor_gaming_path", "multimonitor_media_path",
+    "pre1_path", "pre2_path", "pre3_path",
+    "post1_path", "post2_path", "post3_path"
+]
+
+PATH_LABELS = {
+    "profiles_dir": "Overwrite Profile Folders",
+    "launchers_dir": "Overwrite Launcher",
+    "controller_mapper_path": "Overwrite Controller Mapper",
+    "borderless_gaming_path": "Overwrite Borderless Windowing",
+    "multi_monitor_tool_path": "Overwrite Multi-Monitor Tool",
+    "just_after_launch_path": "Overwrite Just After Launch",
+    "just_before_exit_path": "Overwrite Just Before Exit",
+    "p1_profile_path": "Overwrite Player 1 Profile",
+    "p2_profile_path": "Overwrite Player 2 Profile",
+    "mediacenter_profile_path": "Overwrite Media Center Profile",
+    "multimonitor_gaming_path": "Overwrite MM Gaming Config",
+    "multimonitor_media_path": "Overwrite MM Media Config",
+    "pre1_path": "Overwrite Pre-Launch App 1",
+    "pre2_path": "Overwrite Pre-Launch App 2",
+    "pre3_path": "Overwrite Pre-Launch App 3",
+    "post1_path": "Overwrite Post-Launch App 1",
+    "post2_path": "Overwrite Post-Launch App 2",
+    "post3_path": "Overwrite Post-Launch App 3"
+}
 
 class DeploymentTab(QWidget):
     """A QWidget that encapsulates all UI and logic for the Deployment tab."""
@@ -26,6 +57,7 @@ class DeploymentTab(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.overwrite_checkboxes = {}
         self._populate_ui()
 
     def _populate_ui(self):
@@ -88,50 +120,14 @@ class DeploymentTab(QWidget):
         creation_options_widget = QWidget()
         creation_options_layout = QVBoxLayout(creation_options_widget)
         
-        self.create_profile_folders_checkbox = QCheckBox("Create Profile Folders")
-        self.create_profile_folders_checkbox.setChecked(True)
-        self.create_overwrite_launcher_checkbox = QCheckBox("Create/Overwrite Launcher")
-        self.create_overwrite_launcher_checkbox.setChecked(True)
-        self.create_overwrite_joystick_profiles_checkbox = QCheckBox("Create/Overwrite Joystick Profiles")
-        self.create_overwrite_joystick_profiles_checkbox.setChecked(True)
         self.hide_taskbar_checkbox = QCheckBox("Hide Taskbar")
         self.hide_taskbar_checkbox.setChecked(False)
         self.run_as_admin_checkbox = QCheckBox("Run As Admin")
         self.run_as_admin_checkbox.setChecked(True)
         self.use_kill_list_checkbox = QCheckBox("Use Kill List")
         self.use_kill_list_checkbox.setChecked(True)
-        self.enable_launcher_checkbox = QCheckBox("Enable Launcher")
-        self.enable_launcher_checkbox.setChecked(True)
-        self.apply_mapper_profiles_checkbox = QCheckBox("Apply Mapper Profiles")
-        self.apply_mapper_profiles_checkbox.setChecked(True)
-        self.enable_borderless_windowing_checkbox = QCheckBox("Enable Borderless Windowing")
-        self.enable_borderless_windowing_checkbox.setChecked(True)
         self.terminate_bw_on_exit_checkbox = QCheckBox("Terminate Borderless on Exit")
         self.terminate_bw_on_exit_checkbox.setChecked(True)
-
-        # Enable toggles for Applications (populated from Setup -> Applications)
-        self.enable_controller_mapper_checkbox = QCheckBox("Enable Controller Mapper")
-        self.enable_controller_mapper_checkbox.setChecked(True)
-        self.enable_borderless_app_checkbox = QCheckBox("Enable Borderless App")
-        self.enable_borderless_app_checkbox.setChecked(True)
-        self.enable_multimonitor_app_checkbox = QCheckBox("Enable Multi-Monitor App")
-        self.enable_multimonitor_app_checkbox.setChecked(True)
-        self.enable_after_launch_app_checkbox = QCheckBox("Enable Just After Launch App")
-        self.enable_after_launch_app_checkbox.setChecked(True)
-        self.enable_before_exit_app_checkbox = QCheckBox("Enable Just Before Exit App")
-        self.enable_before_exit_app_checkbox.setChecked(True)
-        self.enable_pre1_checkbox = QCheckBox("Enable Pre-Launch App 1")
-        self.enable_pre1_checkbox.setChecked(True)
-        self.enable_pre2_checkbox = QCheckBox("Enable Pre-Launch App 2")
-        self.enable_pre2_checkbox.setChecked(True)
-        self.enable_pre3_checkbox = QCheckBox("Enable Pre-Launch App 3")
-        self.enable_pre3_checkbox.setChecked(True)
-        self.enable_post1_checkbox = QCheckBox("Enable Post-Launch App 1")
-        self.enable_post1_checkbox.setChecked(True)
-        self.enable_post2_checkbox = QCheckBox("Enable Post-Launch App 2")
-        self.enable_post2_checkbox.setChecked(True)
-        self.enable_post3_checkbox = QCheckBox("Enable Post-Launch App 3")
-        self.enable_post3_checkbox.setChecked(True)
 
         # Index Sources moved to Database Indexing (General Options) section
         index_sources_button = QPushButton("INDEX SOURCES")
@@ -147,32 +143,29 @@ class DeploymentTab(QWidget):
         left_col = QVBoxLayout()
         right_col = QVBoxLayout()
 
-        # Left column: creation options + enable toggles for apps
-        left_col.addWidget(self.create_profile_folders_checkbox)
-        left_col.addWidget(self.create_overwrite_launcher_checkbox)
-        left_col.addWidget(self.create_overwrite_joystick_profiles_checkbox)
-        left_col.addSpacing(6)
-        left_col.addWidget(self.enable_controller_mapper_checkbox)
-        left_col.addWidget(self.enable_borderless_app_checkbox)
-        left_col.addWidget(self.enable_multimonitor_app_checkbox)
-        left_col.addWidget(self.enable_after_launch_app_checkbox)
-        left_col.addWidget(self.enable_before_exit_app_checkbox)
-        left_col.addWidget(self.enable_pre1_checkbox)
-        left_col.addWidget(self.enable_pre2_checkbox)
-        left_col.addWidget(self.enable_pre3_checkbox)
-        left_col.addWidget(self.enable_post1_checkbox)
-        left_col.addWidget(self.enable_post2_checkbox)
-        left_col.addWidget(self.enable_post3_checkbox)
-        left_col.addStretch(1)
+        # Left column: Overwrite checkboxes for all 18 items
+        overwrite_scroll = QScrollArea()
+        overwrite_scroll.setWidgetResizable(True)
+        overwrite_widget = QWidget()
+        overwrite_layout = QVBoxLayout(overwrite_widget)
+        overwrite_layout.setContentsMargins(0, 0, 0, 0)
+        
+        for key in PATH_KEYS:
+            label = PATH_LABELS.get(key, f"Overwrite {key}")
+            cb = QCheckBox(label)
+            cb.setChecked(True)
+            cb.stateChanged.connect(self.config_changed.emit)
+            self.overwrite_checkboxes[key] = cb
+            overwrite_layout.addWidget(cb)
+            
+        overwrite_scroll.setWidget(overwrite_widget)
+        left_col.addWidget(overwrite_scroll)
 
         # Right column: runtime/creation flags requested to be on right
         right_col.addWidget(self.hide_taskbar_checkbox)
         right_col.addWidget(self.run_as_admin_checkbox)
         right_col.addWidget(self.use_kill_list_checkbox)
         right_col.addWidget(self.terminate_bw_on_exit_checkbox)
-        right_col.addWidget(self.enable_launcher_checkbox)
-        right_col.addWidget(self.apply_mapper_profiles_checkbox)
-        right_col.addWidget(self.enable_borderless_windowing_checkbox)
         right_col.addSpacing(6)
         right_col.addWidget(create_button)
         right_col.addStretch(1)
@@ -198,13 +191,7 @@ class DeploymentTab(QWidget):
         self.name_check_checkbox.stateChanged.connect(self.config_changed.emit)
         self.steam_json_v1_radio.toggled.connect(self.config_changed.emit)
         self.steam_json_v2_radio.toggled.connect(self.config_changed.emit)
-        self.create_overwrite_launcher_checkbox.stateChanged.connect(self.config_changed.emit)
-        self.create_profile_folders_checkbox.stateChanged.connect(self.config_changed.emit)
-        self.create_overwrite_joystick_profiles_checkbox.stateChanged.connect(self.config_changed.emit)
         self.use_kill_list_checkbox.stateChanged.connect(self.config_changed.emit)
-        self.enable_launcher_checkbox.stateChanged.connect(self.config_changed.emit)
-        self.apply_mapper_profiles_checkbox.stateChanged.connect(self.config_changed.emit)
-        self.enable_borderless_windowing_checkbox.stateChanged.connect(self.config_changed.emit)
         self.terminate_bw_on_exit_checkbox.stateChanged.connect(self.config_changed.emit)
 
         index_sources_button.clicked.connect(self.index_sources_requested.emit)
@@ -273,35 +260,7 @@ class DeploymentTab(QWidget):
 
     def highlight_unpopulated_items(self, main_window):
         """Highlight enable checkboxes in red if their corresponding setup items are not populated."""
-        # Map each enable checkbox to its corresponding setup item path
-        items_to_check = {
-            self.enable_controller_mapper_checkbox: getattr(main_window, 'controller_mapper_app_line_edit', None),
-            self.enable_borderless_app_checkbox: getattr(main_window, 'borderless_app_line_edit', None),
-            self.enable_multimonitor_app_checkbox: getattr(main_window, 'multimonitor_app_line_edit', None),
-            self.enable_after_launch_app_checkbox: getattr(main_window, 'after_launch_app_line_edit', None),
-            self.enable_before_exit_app_checkbox: getattr(main_window, 'before_exit_app_line_edit', None),
-            self.enable_pre1_checkbox: getattr(main_window, 'pre_launch_app_line_edits', [None])[0] if hasattr(main_window, 'pre_launch_app_line_edits') and len(main_window.pre_launch_app_line_edits) > 0 else None,
-            self.enable_pre2_checkbox: getattr(main_window, 'pre_launch_app_line_edits', [None, None])[1] if hasattr(main_window, 'pre_launch_app_line_edits') and len(main_window.pre_launch_app_line_edits) > 1 else None,
-            self.enable_pre3_checkbox: getattr(main_window, 'pre_launch_app_line_edits', [None, None, None])[2] if hasattr(main_window, 'pre_launch_app_line_edits') and len(main_window.pre_launch_app_line_edits) > 2 else None,
-            self.enable_post1_checkbox: getattr(main_window, 'post_launch_app_line_edits', [None])[0] if hasattr(main_window, 'post_launch_app_line_edits') and len(main_window.post_launch_app_line_edits) > 0 else None,
-            self.enable_post2_checkbox: getattr(main_window, 'post_launch_app_line_edits', [None, None])[1] if hasattr(main_window, 'post_launch_app_line_edits') and len(main_window.post_launch_app_line_edits) > 1 else None,
-            self.enable_post3_checkbox: getattr(main_window, 'post_launch_app_line_edits', [None, None, None])[2] if hasattr(main_window, 'post_launch_app_line_edits') and len(main_window.post_launch_app_line_edits) > 2 else None,
-        }
-        
-        # Light red color for unpopulated items
-        red_style = "color: #ff9999;"
-        normal_style = ""
-        
-        for checkbox, line_edit in items_to_check.items():
-            if line_edit and hasattr(line_edit, 'text'):
-                # Check if the field is empty
-                if not line_edit.text().strip():
-                    # Apply red styling to checkbox text
-                    checkbox.setStyleSheet(red_style)
-                else:
-                    checkbox.setStyleSheet(normal_style)
-            else:
-                checkbox.setStyleSheet(normal_style)
+        pass
 
     def sync_ui_from_config(self, config: AppConfig):
         """Updates the UI widgets with values from the AppConfig model."""
@@ -317,30 +276,12 @@ class DeploymentTab(QWidget):
         else:
             self.steam_json_v2_radio.setChecked(True)
 
-        self.create_profile_folders_checkbox.setChecked(config.create_profile_folders)
-        self.create_overwrite_launcher_checkbox.setChecked(config.create_overwrite_launcher)
-        self.create_overwrite_joystick_profiles_checkbox.setChecked(config.create_overwrite_joystick_profiles)
         self.use_kill_list_checkbox.setChecked(config.use_kill_list)
-        self.enable_launcher_checkbox.setChecked(config.enable_launcher)
-        self.apply_mapper_profiles_checkbox.setChecked(config.apply_mapper_profiles)
-        self.enable_borderless_windowing_checkbox.setChecked(config.enable_borderless_windowing)
         self.terminate_bw_on_exit_checkbox.setChecked(config.terminate_borderless_on_exit)
         
-        # Populate enable toggles for applications
-        try:
-            self.enable_controller_mapper_checkbox.setChecked(config.enable_controller_mapper)
-            self.enable_borderless_app_checkbox.setChecked(config.enable_borderless_app)
-            self.enable_multimonitor_app_checkbox.setChecked(config.enable_multimonitor_app)
-            self.enable_after_launch_app_checkbox.setChecked(config.enable_after_launch_app)
-            self.enable_before_exit_app_checkbox.setChecked(config.enable_before_exit_app)
-            self.enable_pre1_checkbox.setChecked(config.enable_pre1)
-            self.enable_pre2_checkbox.setChecked(config.enable_pre2)
-            self.enable_pre3_checkbox.setChecked(config.enable_pre3)
-            self.enable_post1_checkbox.setChecked(config.enable_post1)
-            self.enable_post2_checkbox.setChecked(config.enable_post2)
-            self.enable_post3_checkbox.setChecked(config.enable_post3)
-        except Exception:
-            pass
+        # Sync overwrite checkboxes
+        for key, cb in self.overwrite_checkboxes.items():
+            cb.setChecked(config.overwrite_states.get(key, True))
 
         self.blockSignals(False)
 
@@ -352,27 +293,9 @@ class DeploymentTab(QWidget):
         config.enable_name_matching = self.name_check_checkbox.isChecked()
         config.steam_json_version = 1 if self.steam_json_v1_radio.isChecked() else 2
 
-        config.create_profile_folders = self.create_profile_folders_checkbox.isChecked()
-        config.create_overwrite_launcher = self.create_overwrite_launcher_checkbox.isChecked()
-        config.create_overwrite_joystick_profiles = self.create_overwrite_joystick_profiles_checkbox.isChecked()
         config.use_kill_list = self.use_kill_list_checkbox.isChecked()
-        config.enable_launcher = self.enable_launcher_checkbox.isChecked()
-        config.apply_mapper_profiles = self.apply_mapper_profiles_checkbox.isChecked()
-        config.enable_borderless_windowing = self.enable_borderless_windowing_checkbox.isChecked()
         config.terminate_borderless_on_exit = self.terminate_bw_on_exit_checkbox.isChecked()
         
-        # Save enable toggles for applications
-        try:
-            config.enable_controller_mapper = self.enable_controller_mapper_checkbox.isChecked()
-            config.enable_borderless_app = self.enable_borderless_app_checkbox.isChecked()
-            config.enable_multimonitor_app = self.enable_multimonitor_app_checkbox.isChecked()
-            config.enable_after_launch_app = self.enable_after_launch_app_checkbox.isChecked()
-            config.enable_before_exit_app = self.enable_before_exit_app_checkbox.isChecked()
-            config.enable_pre1 = self.enable_pre1_checkbox.isChecked()
-            config.enable_pre2 = self.enable_pre2_checkbox.isChecked()
-            config.enable_pre3 = self.enable_pre3_checkbox.isChecked()
-            config.enable_post1 = self.enable_post1_checkbox.isChecked()
-            config.enable_post2 = self.enable_post2_checkbox.isChecked()
-            config.enable_post3 = self.enable_post3_checkbox.isChecked()
-        except Exception:
-            pass
+        # Sync overwrite states
+        for key, cb in self.overwrite_checkboxes.items():
+            config.overwrite_states[key] = cb.isChecked()

@@ -116,14 +116,23 @@ class ConfigManager(QObject):
             'pre3_path_run_wait': True, 'post3_path_run_wait': True,
         }
 
+        # Set default overwrite states (Deployment Tab -> Creation)
+        config.overwrite_states = {
+            key: True for key in [
+                "profiles_dir", "launchers_dir", "controller_mapper_path", "borderless_gaming_path",
+                "multi_monitor_tool_path", "just_after_launch_path", "just_before_exit_path",
+                "p1_profile_path", "p2_profile_path", "mediacenter_profile_path",
+                "multimonitor_gaming_path", "multimonitor_media_path",
+                "pre1_path", "pre2_path", "pre3_path", "post1_path", "post2_path", "post3_path"
+            ]
+        }
+
         # Set default deployment tab options
         config.net_check = True
         config.hide_taskbar = False
         config.run_as_admin = True
         config.enable_name_matching = True
         config.steam_json_version = 2
-        config.create_profile_folders = True
-        config.create_overwrite_launcher = True
         config.create_overwrite_joystick_profiles = True
 
         logging.info("First-time setup complete.")
