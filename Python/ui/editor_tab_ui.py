@@ -101,7 +101,8 @@ def populate_editor_tab(main_window):
         "JB En", "Just Before Exit", "JB Rw",
         "Pre1En", "Pre1", "Pre1Rw", "Pst1En", "Post1", "Pst1Rw",
         "Pre2En", "Pre2", "Pre2Rw", "Pst2En", "Post2", "Pst2Rw",
-        "Pre3En", "Pre3", "Pre3Rw", "Pst3En", "Post3", "Pst3Rw"
+        "Pre3En", "Pre3", "Pre3Rw", "Pst3En", "Post3", "Pst3Rw",
+        "KL En", "Kill List"
     ])
 
     # Shorten width for Enabled (En) and Run/Wait (Rw) columns to save space

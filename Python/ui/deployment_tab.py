@@ -69,14 +69,6 @@ class DeploymentTab(QWidget):
         general_options_widget = QWidget()
         general_options_layout = QVBoxLayout(general_options_widget)
 
-        # Row 1: Network check and Steam DB button
-        self.net_check_checkbox = QCheckBox("Check Network Connection")
-
-        row1_layout = QHBoxLayout()
-        row1_layout.addWidget(self.net_check_checkbox)
-        row1_layout.addStretch(1)
-        general_options_layout.addLayout(row1_layout)
-
         # Row 3: Enable Steam Name Matching (moved from Setup Tab)
         self.name_check_checkbox = QCheckBox("Enable Steam Name Matching")
         self.name_check_checkbox.setToolTip("Attempt to match indexed games with Steam titles for better naming. Requires steam.json.")
@@ -128,6 +120,9 @@ class DeploymentTab(QWidget):
         self.use_kill_list_checkbox.setChecked(True)
         self.terminate_bw_on_exit_checkbox = QCheckBox("Terminate Borderless on Exit")
         self.terminate_bw_on_exit_checkbox.setChecked(True)
+        
+        self.download_game_json_checkbox = QCheckBox("Download Game.json")
+        self.download_game_json_checkbox.setToolTip("If checked, attempts to download game metadata from Steam using the Steam ID during creation.")
 
         # Index Sources moved to Database Indexing (General Options) section
         index_sources_button = QPushButton("INDEX SOURCES")
@@ -168,6 +163,7 @@ class DeploymentTab(QWidget):
         right_col.addWidget(self.terminate_bw_on_exit_checkbox)
         right_col.addSpacing(6)
         right_col.addWidget(create_button)
+        right_col.addWidget(self.download_game_json_checkbox)
         right_col.addStretch(1)
 
         creation_columns_layout.addLayout(left_col)
@@ -185,7 +181,6 @@ class DeploymentTab(QWidget):
         main_layout.addStretch(1)
 
         # --- Connect Signals ---
-        self.net_check_checkbox.stateChanged.connect(self.config_changed.emit)
         self.hide_taskbar_checkbox.stateChanged.connect(self.config_changed.emit)
         self.run_as_admin_checkbox.stateChanged.connect(self.config_changed.emit)
         self.name_check_checkbox.stateChanged.connect(self.config_changed.emit)
@@ -193,6 +188,7 @@ class DeploymentTab(QWidget):
         self.steam_json_v2_radio.toggled.connect(self.config_changed.emit)
         self.use_kill_list_checkbox.stateChanged.connect(self.config_changed.emit)
         self.terminate_bw_on_exit_checkbox.stateChanged.connect(self.config_changed.emit)
+        self.download_game_json_checkbox.stateChanged.connect(self.config_changed.emit)
 
         index_sources_button.clicked.connect(self.index_sources_requested.emit)
         create_button.clicked.connect(self.create_selected_requested.emit)
@@ -266,7 +262,6 @@ class DeploymentTab(QWidget):
         """Updates the UI widgets with values from the AppConfig model."""
         self.blockSignals(True)
 
-        self.net_check_checkbox.setChecked(config.net_check)
         self.hide_taskbar_checkbox.setChecked(config.hide_taskbar)
         self.run_as_admin_checkbox.setChecked(config.run_as_admin)
         self.name_check_checkbox.setChecked(config.enable_name_matching)
@@ -278,6 +273,7 @@ class DeploymentTab(QWidget):
 
         self.use_kill_list_checkbox.setChecked(config.use_kill_list)
         self.terminate_bw_on_exit_checkbox.setChecked(config.terminate_borderless_on_exit)
+        self.download_game_json_checkbox.setChecked(config.download_game_json)
         
         # Sync overwrite checkboxes
         for key, cb in self.overwrite_checkboxes.items():
@@ -287,7 +283,6 @@ class DeploymentTab(QWidget):
 
     def sync_config_from_ui(self, config: AppConfig):
         """Updates the AppConfig model with values from the UI widgets."""
-        config.net_check = self.net_check_checkbox.isChecked()
         config.hide_taskbar = self.hide_taskbar_checkbox.isChecked()
         config.run_as_admin = self.run_as_admin_checkbox.isChecked()
         config.enable_name_matching = self.name_check_checkbox.isChecked()
@@ -295,6 +290,7 @@ class DeploymentTab(QWidget):
 
         config.use_kill_list = self.use_kill_list_checkbox.isChecked()
         config.terminate_borderless_on_exit = self.terminate_bw_on_exit_checkbox.isChecked()
+        config.download_game_json = self.download_game_json_checkbox.isChecked()
         
         # Sync overwrite states
         for key, cb in self.overwrite_checkboxes.items():

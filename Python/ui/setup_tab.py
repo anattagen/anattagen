@@ -1,16 +1,80 @@
 import os
 import sys
+import configparser
+import requests
+import zipfile
+import shutil
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QGroupBox, QLabel, QFormLayout, QPushButton,
     QComboBox, QHBoxLayout, QCheckBox, QTabWidget,
-    QFileDialog, QApplication, QStyleFactory, QSpinBox, QMessageBox,
+    QFileDialog, QApplication, QStyleFactory, QSpinBox, QMessageBox, QProgressBar
 )
 from PyQt6.QtGui import QFontDatabase, QFont, QPalette, QColor
-from PyQt6.QtCore import pyqtSignal, Qt
+from PyQt6.QtCore import pyqtSignal, Qt, QThread, pyqtSlot
 from Python.models import AppConfig
 from Python.ui.widgets import DragDropListWidget, PathConfigRow
 from Python.ui.accordion import AccordionSection
 from Python import constants
+
+class DownloadThread(QThread):
+    """Thread for downloading and extracting tools."""
+    progress = pyqtSignal(int)
+    finished = pyqtSignal(bool, str, str) # success, message, result_path
+
+    def __init__(self, url, extract_dir, exe_name):
+        super().__init__()
+        self.url = url
+        self.extract_dir = extract_dir
+        self.exe_name = exe_name
+
+    def run(self):
+        try:
+            # Create extract directory
+            os.makedirs(self.extract_dir, exist_ok=True)
+            
+            # Determine filename from URL
+            filename = self.url.split('/')[-1]
+            save_path = os.path.join(self.extract_dir, filename)
+            
+            # Download
+            response = requests.get(self.url, stream=True)
+            response.raise_for_status()
+            total_length = response.headers.get('content-length')
+
+            with open(save_path, 'wb') as f:
+                if total_length is None: # no content length header
+                    f.write(response.content)
+                else:
+                    dl = 0
+                    total_length = int(total_length)
+                    for data in response.iter_content(chunk_size=4096):
+                        dl += len(data)
+                        f.write(data)
+                        self.progress.emit(int(100 * dl / total_length))
+            
+            # Extract if it's a zip
+            if filename.lower().endswith('.zip'):
+                with zipfile.ZipFile(save_path, 'r') as zip_ref:
+                    zip_ref.extractall(self.extract_dir)
+                os.remove(save_path) # Clean up zip
+            elif filename.lower().endswith('.7z'):
+                # Basic handling: just leave the 7z if we can't extract it easily without extra libs
+                # Or assume user handles it. For now, we just leave it.
+                pass
+                
+            # Construct result path
+            result_path = os.path.join(self.extract_dir, self.exe_name)
+            if not os.path.exists(result_path):
+                # Try to find it recursively if not found at root
+                for root, dirs, files in os.walk(self.extract_dir):
+                    if self.exe_name in files:
+                        result_path = os.path.join(root, self.exe_name)
+                        break
+            
+            self.finished.emit(True, "Download complete", result_path)
+            
+        except Exception as e:
+            self.finished.emit(False, str(e), "")
 
 class SetupTab(QWidget):
     """A QWidget that encapsulates all UI and logic for the Setup tab."""
@@ -31,6 +95,8 @@ class SetupTab(QWidget):
         super().__init__(parent)
         self.main_window = parent
         self.path_rows = {}
+        self.repos = self._parse_repos_set()
+        self.download_thread = None
         self._setup_ui()
 
     def _setup_ui(self):
@@ -95,6 +161,12 @@ class SetupTab(QWidget):
         paths_layout.addWidget(paths_tabs)
 
         # Core Paths Tab
+        # Prepare repo items for generic lists (All except GLOBAL)
+        all_tools = {}
+        for section, items in self.repos.items():
+            if section != "GLOBAL":
+                all_tools.update(items)
+
         core_paths_widget = QWidget()
         core_paths_layout = QFormLayout(core_paths_widget)
         self.path_rows["profiles_dir"] = PathConfigRow("profiles_dir", is_directory=True, add_enabled=True, add_cen_lc=True)
@@ -108,19 +180,19 @@ class SetupTab(QWidget):
         # Application Paths Tab
         app_paths_widget = QWidget()
         app_paths_layout = QFormLayout(app_paths_widget)
-        self.path_rows["controller_mapper_path"] = PathConfigRow("controller_mapper_path", add_run_wait=True)
+        self.path_rows["controller_mapper_path"] = PathConfigRow("controller_mapper_path", add_run_wait=True, repo_items=self.repos.get("MAPPERS"))
         self.path_rows["controller_mapper_path"].enabled_cb.setToolTip("Enable Controller Mapper")
         app_paths_layout.addRow("Controller Mapper:", self.path_rows["controller_mapper_path"])
-        self.path_rows["borderless_gaming_path"] = PathConfigRow("borderless_gaming_path", add_run_wait=True)
+        self.path_rows["borderless_gaming_path"] = PathConfigRow("borderless_gaming_path", add_run_wait=True, repo_items=self.repos.get("WINDOWING"))
         self.path_rows["borderless_gaming_path"].enabled_cb.setToolTip("Enable Borderless Windowing")
         app_paths_layout.addRow("Borderless Windowing:", self.path_rows["borderless_gaming_path"])
-        self.path_rows["multi_monitor_tool_path"] = PathConfigRow("multi_monitor_tool_path", add_run_wait=True)
+        self.path_rows["multi_monitor_tool_path"] = PathConfigRow("multi_monitor_tool_path", add_run_wait=True, repo_items=self.repos.get("DISPLAY"))
         self.path_rows["multi_monitor_tool_path"].enabled_cb.setToolTip("Enable Multi-Monitor Tool")
         app_paths_layout.addRow("Multi-Monitor App:", self.path_rows["multi_monitor_tool_path"])
-        self.path_rows["just_after_launch_path"] = PathConfigRow("just_after_launch_path", add_run_wait=True)
+        self.path_rows["just_after_launch_path"] = PathConfigRow("just_after_launch_path", add_run_wait=True, repo_items=all_tools)
         self.path_rows["just_after_launch_path"].enabled_cb.setToolTip("Enable Just After Launch App")
         app_paths_layout.addRow("Just After Launch:", self.path_rows["just_after_launch_path"])
-        self.path_rows["just_before_exit_path"] = PathConfigRow("just_before_exit_path", add_run_wait=True)
+        self.path_rows["just_before_exit_path"] = PathConfigRow("just_before_exit_path", add_run_wait=True, repo_items=all_tools)
         self.path_rows["just_before_exit_path"].enabled_cb.setToolTip("Enable Just Before Exit App")
         app_paths_layout.addRow("Just Before Exit:", self.path_rows["just_before_exit_path"])
         paths_tabs.addTab(app_paths_widget, "Applications")
@@ -145,12 +217,12 @@ class SetupTab(QWidget):
         script_paths_layout = QFormLayout(script_paths_widget)
         for i in range(1, 4):
             key = f"pre{i}_path"
-            self.path_rows[key] = PathConfigRow(key, add_run_wait=True)
+            self.path_rows[key] = PathConfigRow(key, add_run_wait=True, repo_items=all_tools)
             self.path_rows[key].enabled_cb.setToolTip(f"Enable Pre-Launch App {i}")
             script_paths_layout.addRow(f"Pre-Launch App {i}:", self.path_rows[key])
         for i in range(1, 4):
             key = f"post{i}_path"
-            self.path_rows[key] = PathConfigRow(key, add_run_wait=True)
+            self.path_rows[key] = PathConfigRow(key, add_run_wait=True, repo_items=all_tools)
             self.path_rows[key].enabled_cb.setToolTip(f"Enable Post-Launch App {i}")
             script_paths_layout.addRow(f"Post-Launch App {i}:", self.path_rows[key])
         paths_tabs.addTab(script_paths_widget, "Scripts")
@@ -202,8 +274,12 @@ class SetupTab(QWidget):
         appearance_layout.addRow("Font:", font_layout)
         # Theme
         self.theme_combo = QComboBox()
-        self.theme_combo.addItems(["System", "Fusion Dark"])
+        self.theme_combo.addItems(["System", "Fusion Dark", "Fusion Light"])
         available_styles = [s.lower() for s in QStyleFactory.keys()]
+        if "windows" in available_styles:
+            self.theme_combo.addItem("Windows")
+        if "windowsvista" in available_styles:
+            self.theme_combo.addItem("WindowsVista")
         if "material" in available_styles:
             self.theme_combo.addItems(["Material Light", "Material Dark"])
         appearance_layout.addRow("Theme:", self.theme_combo)
@@ -212,6 +288,11 @@ class SetupTab(QWidget):
         self.restart_btn.setToolTip("Reset all application configuration to defaults")
         appearance_layout.addRow(self.restart_btn)
         appearance_section = AccordionSection("Appearance & Behavior", appearance_widget)
+
+        # Progress Bar for downloads
+        self.download_progress = QProgressBar()
+        self.download_progress.setVisible(False)
+        main_layout.addWidget(self.download_progress)
 
         main_layout.addWidget(source_config_section)
         main_layout.addWidget(paths_section)
@@ -237,6 +318,7 @@ class SetupTab(QWidget):
         # Path rows
         for row in self.path_rows.values():
             row.valueChanged.connect(self.config_changed.emit)
+            row.downloadRequested.connect(self._on_download_requested)
 
         # Sequences
         self.launch_sequence_list.model().layoutChanged.connect(self.config_changed.emit)
@@ -250,6 +332,111 @@ class SetupTab(QWidget):
         self.font_size_spin.valueChanged.connect(self._on_appearance_changed)
         self.theme_combo.currentTextChanged.connect(self._on_appearance_changed)
         self.restart_btn.clicked.connect(self._reset_to_defaults)
+
+    def _parse_repos_set(self):
+        """Parses the repos.set file and returns a dictionary of tools."""
+        repos = {}
+        if not os.path.exists(constants.REPOS_SET):
+            return repos
+
+        config = configparser.ConfigParser()
+        config.read(constants.REPOS_SET)
+
+        global_vars = {}
+        if "GLOBAL" in config:
+            global_vars = dict(config["GLOBAL"])
+            # Pre-resolve common variables
+            global_vars["app_directory"] = constants.APP_ROOT_DIR
+
+        for section in config.sections():
+            repos[section] = {}
+            for key, value in config[section].items():
+                if section == "GLOBAL": continue
+                
+                # Basic variable substitution
+                val = value
+                for var_name, var_val in global_vars.items():
+                    val = val.replace(f"${var_name.upper()}", var_val)
+                    val = val.replace(f"${var_name}", var_val)
+                
+                # Item specific substitution
+                val = val.replace("$ITEMNAME", key)
+                
+                parts = val.split('|')
+                if len(parts) >= 3:
+                    repos[section][key] = {
+                        'url': parts[0],
+                        'extract_dir': parts[1],
+                        'exe_name': parts[2]
+                    }
+        return repos
+
+    def _on_download_requested(self, tool_name, tool_data):
+        """Initiates the download of a tool."""
+        if self.download_thread and self.download_thread.isRunning():
+            QMessageBox.warning(self, "Download in Progress", "Please wait for the current download to finish.")
+            return
+
+        self.download_progress.setValue(0)
+        self.download_progress.setVisible(True)
+        self.download_progress.setFormat(f"Downloading {tool_name}... %p%")
+
+        self.download_thread = DownloadThread(tool_data['url'], tool_data['extract_dir'], tool_data['exe_name'])
+        self.download_thread.progress.connect(self.download_progress.setValue)
+        self.download_thread.finished.connect(lambda success, msg, path: self._on_download_finished(success, msg, path, self.sender()))
+        self.download_thread.start()
+
+    def _on_download_finished(self, success, message, result_path, sender_row):
+        self.download_progress.setVisible(False)
+        if success:
+            # Find which row sent the request (this is tricky with async, so we might need to store the active row)
+            # For simplicity, we can iterate rows to find which one matches the tool or just update the one that triggered it if we passed it.
+            # Actually, the sender() in _on_download_requested is the PathConfigRow.
+            # We need to pass that reference to the finished callback.
+            # I updated the lambda above to pass self.sender() but self.sender() in _on_download_requested is the row.
+            # However, in the lambda for finished, self.sender() is the thread.
+            # So we need to capture the row in _on_download_requested.
+            pass # Logic handled by closure in _on_download_requested if implemented correctly, 
+                 # but here I need to update the UI.
+            
+            # Since I can't easily pass the row instance through the thread without modifying the thread class or using a closure
+            # Let's assume the user wants to set the path for the row they clicked.
+            # A robust way is to store self.active_download_row in _on_download_requested.
+            if hasattr(self, 'active_download_row') and self.active_download_row:
+                self.active_download_row.line_edit.setText(result_path)
+                self.active_download_row = None
+            
+            QMessageBox.information(self, "Download Complete", f"Successfully downloaded to:\n{result_path}")
+        else:
+            QMessageBox.critical(self, "Download Failed", f"Error: {message}")
+            self.active_download_row = None
+
+    # Update _on_download_requested to store the row
+    def _on_download_requested(self, tool_name, tool_data):
+        if self.download_thread and self.download_thread.isRunning():
+            QMessageBox.warning(self, "Download in Progress", "Please wait for the current download to finish.")
+            return
+
+        self.active_download_row = self.sender() # Store the row that requested the download
+        
+        self.download_progress.setValue(0)
+        self.download_progress.setVisible(True)
+        self.download_progress.setFormat(f"Downloading {tool_name}... %p%")
+
+        self.download_thread = DownloadThread(tool_data['url'], tool_data['extract_dir'], tool_data['exe_name'])
+        self.download_thread.progress.connect(self.download_progress.setValue)
+        self.download_thread.finished.connect(self._on_download_finished_slot)
+        self.download_thread.start()
+
+    def _on_download_finished_slot(self, success, message, result_path):
+        self.download_progress.setVisible(False)
+        if success:
+            if hasattr(self, 'active_download_row') and self.active_download_row:
+                self.active_download_row.line_edit.setText(result_path)
+            QMessageBox.information(self, "Download Complete", f"Successfully downloaded to:\n{result_path}")
+        else:
+            QMessageBox.critical(self, "Download Failed", f"Error: {message}")
+        self.active_download_row = None
 
     def _load_and_get_custom_fonts(self):
         """Load fonts from the 'site' directory and return their family names."""
@@ -369,6 +556,8 @@ class SetupTab(QWidget):
         theme_map = {
             "Basic": "windows",
             "Fusion": "Fusion",
+            "Windows": "Windows",
+            "WindowsVista": "WindowsVista",
             "Universal": "windowsvista",
             "Material": "Material"
         }

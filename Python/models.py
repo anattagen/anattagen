@@ -54,7 +54,7 @@ class AppConfig:
         self.exit_sequence = []
 
         # Deployment Tab: General Options
-        self.net_check = False
+        self.download_game_json = False
         self.hide_taskbar = False
         self.run_as_admin = False
         self.enable_name_matching = False

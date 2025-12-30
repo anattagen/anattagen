@@ -112,8 +112,10 @@ def _process_executable(
         exec_name_no_ext = os.path.splitext(filename)[0]
         clean_exec_name = re.sub(r'[^a-zA-Z0-9]', '', exec_name_no_ext).lower()
 
-        if clean_exec_name in main_window.exclude_exe_set:
-            return None
+        # Check exclusion (substring match)
+        for exclude_str in main_window.exclude_exe_set:
+            if exclude_str in filename.lower():
+                return None
 
         dir_name = get_filtered_directory_name(exec_full_path, main_window.folder_exclude_set)
         name_override = name_processor.get_display_name(dir_name)
@@ -127,6 +129,23 @@ def _process_executable(
             name_override, main_window.config, main_window.steam_cache_manager.normalized_steam_index, name_processor
         )
 
+        # Generate kill list
+        kill_list = []
+        dir_path = os.path.dirname(exec_full_path)
+        try:
+            for f in os.listdir(dir_path):
+                if f.lower().endswith('.exe') and f.lower() != filename.lower():
+                    # Check exclusion for these too
+                    should_exclude = False
+                    for exclude_str in main_window.exclude_exe_set:
+                        if exclude_str in f.lower():
+                            should_exclude = True
+                            break
+                    if not should_exclude:
+                        kill_list.append(f)
+        except Exception:
+            pass
+
         config = main_window.config
         game_data = {
             'create': not is_demoted_flag,
@@ -139,6 +158,9 @@ def _process_executable(
             'arguments': '',
             'run_as_admin': config.run_as_admin,
             'hide_taskbar': config.hide_taskbar,
+            'kill_list_enabled': config.use_kill_list,
+            'kill_list': ",".join(kill_list),
+            'terminate_borderless_on_exit': config.terminate_borderless_on_exit,
 
             # Paths from setup tab
             'controller_mapper_path': config.controller_mapper_path,

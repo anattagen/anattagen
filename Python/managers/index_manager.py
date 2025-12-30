@@ -27,8 +27,9 @@ def save_index(main_window, directory, data):
                               "game_monitor_cfg", "desktop_monitor_cfg", 
                               "post1", "post2", "post3", 
                               "pre1", "pre2", "pre3", 
-                              "just_after", "just_before", "borderless",
-                              "as_admin", "no_tb"]
+                              "just_after", "just_before", "borderless", 
+                              "as_admin", "no_tb",
+                              "kill_list_enabled", "kill_list"]
                     
                     # Get path indicators
                     path_indicators = row.get("path_indicators", {})
@@ -136,8 +137,9 @@ def load_index(main_window=None, directory=None, prompt_for_filename=False):
                                   "game_monitor_cfg", "desktop_monitor_cfg", 
                                   "post1", "post2", "post3", 
                                   "pre1", "pre2", "pre3", 
-                                  "just_after", "just_before", "borderless",
-                                  "as_admin", "no_tb"]
+                                  "just_after", "just_before", "borderless", 
+                                  "as_admin", "no_tb",
+                                  "kill_list_enabled", "kill_list"]
                         
                         # Create a dictionary for this row
                         row_dict = {}
@@ -156,7 +158,7 @@ def load_index(main_window=None, directory=None, prompt_for_filename=False):
                                     row_dict[field] = "" # Value is stored separately or derived
                                 else:
                                     # For boolean fields, convert to boolean
-                                    if field in ["include", "as_admin", "no_tb"]:
+                                    if field in ["include", "as_admin", "no_tb", "kill_list_enabled"]:
                                         row_dict[field] = parts[i].lower() == "true"
                                     else:
                                         row_dict[field] = parts[i]

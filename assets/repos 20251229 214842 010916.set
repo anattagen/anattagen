@@ -18,7 +18,7 @@ STEAMDBI = https://steamdb.info/app/
 
 
 [WINDOWING]
-borderlessGaming = $EXHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|borderless-gaming-portable.exe
+borderlessGaming = $EXHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME ]portable.exe
 border_stripper = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 FullScreenIzer = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 

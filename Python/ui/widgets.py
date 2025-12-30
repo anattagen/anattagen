@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (QListWidget, QAbstractItemView, QWidget, QHBoxLayout,
                              QCheckBox, QLineEdit, QPushButton, QRadioButton,
-                             QButtonGroup, QFileDialog)
-from PyQt6.QtCore import Qt, QMimeData, pyqtSignal
+                             QButtonGroup, QFileDialog, QToolButton, QMenu)
+from PyQt6.QtCore import Qt, QMimeData, pyqtSignal, QSize
 from PyQt6.QtGui import QDrag
 
 class DragDropListWidget(QListWidget):
@@ -13,35 +13,7 @@ class DragDropListWidget(QListWidget):
         self.setAcceptDrops(True)
         self.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-    
-    def mousePressEvent(self, event):
-        """Handle mouse press events"""
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.drag_start_position = event.pos()
-        super().mousePressEvent(event)
-    
-    def mouseMoveEvent(self, event):
-        """Handle mouse move events for drag and drop"""
-        if not (event.buttons() & Qt.MouseButton.LeftButton):
-            return
-        
-        if not hasattr(self, 'drag_start_position'):
-            return
-        
-        if (event.pos() - self.drag_start_position).manhattanLength() < 10:
-            return
-        
-        drag = QDrag(self)
-        mime_data = QMimeData()
-        
-        # Store the row index in the mime data
-        current_item = self.currentItem()
-        if current_item:
-            mime_data.setText(str(self.row(current_item)))
-            drag.setMimeData(mime_data)
-            
-            # Start the drag operation
-            drag.exec(Qt.DropAction.MoveAction)
+        self.setDropIndicatorShown(True)
     
     def dropEvent(self, event):
         """Handle drop events for reordering"""
@@ -53,9 +25,10 @@ class DragDropListWidget(QListWidget):
 class PathConfigRow(QWidget):
     """Custom widget for a path configuration row with options."""
     valueChanged = pyqtSignal()
+    downloadRequested = pyqtSignal(str, dict)  # tool_name, tool_data
 
     def __init__(self, config_key, is_directory=False, add_enabled=True,
-                 add_run_wait=False, add_cen_lc=True, parent=None):
+                 add_run_wait=False, add_cen_lc=True, repo_items=None, parent=None):
         super().__init__(parent)
         self.config_key = config_key
         self.is_directory = is_directory
@@ -78,6 +51,22 @@ class PathConfigRow(QWidget):
         self.line_edit = QLineEdit()
         self.line_edit.textChanged.connect(self.valueChanged.emit)
         layout.addWidget(self.line_edit)
+
+        # Repo Flyout Button
+        if repo_items:
+            self.tool_btn = QToolButton()
+            self.tool_btn.setText("▼")
+            self.tool_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+            self.tool_btn.setToolTip("Download/Select Tool")
+            self.menu = QMenu()
+            
+            for name, data in repo_items.items():
+                action = self.menu.addAction(name)
+                # Use default arguments to capture loop variables correctly
+                action.triggered.connect(lambda checked, n=name, d=data: self.downloadRequested.emit(n, d))
+            
+            self.tool_btn.setMenu(self.menu)
+            layout.addWidget(self.tool_btn)
 
         # Browse Button
         self.browse_btn = QPushButton(". . .")

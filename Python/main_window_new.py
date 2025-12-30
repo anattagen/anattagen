@@ -268,6 +268,12 @@ class MainWindow(QMainWindow):
         # Update the status bar
         self.statusBar().showMessage("Editor table updated and saved", 3000)
 
+    def _save_editor_table_to_index(self):
+        """Saves the current editor table to the default index file."""
+        file_path = os.path.join(constants.APP_ROOT_DIR, "current.index")
+        data = self.editor_tab.get_all_game_data()
+        self.data_manager.save_editor_table_to_index(data, file_path)
+
     @pyqtSlot()
     def _on_load_index_requested(self):
         """Handle request to load an index file."""

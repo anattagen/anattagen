@@ -3,6 +3,8 @@ import os
 from pathlib import Path
 import shutil
 import logging
+import requests
+import json
 
 from Python import constants
 
@@ -57,6 +59,10 @@ class CreationController:
             ini_path = game_launcher_dir / "Game.ini"
             self._create_game_ini(ini_path, game_data, app_config, game_launcher_dir)
             
+            # 3b. Download Game.json if enabled
+            if app_config.download_game_json:
+                self._download_game_json(game_data, game_launcher_dir)
+
             # 4. Create the launcher executable (conceptual step)
             # In a real build, you'd copy a pre-compiled Launcher.exe.
             # Here, we create a batch file as a functional placeholder.
@@ -82,6 +88,26 @@ class CreationController:
             self.main_window.statusBar().showMessage(f"Error creating launcher for {game_name_override}: {e}", 5000)
             return False
 
+    def _download_game_json(self, game_data, game_launcher_dir):
+        """Downloads Game.json from Steam API if steam_id is present."""
+        steam_id = game_data.get('steam_id')
+        if not steam_id or steam_id == 'NOT_FOUND_IN_DATA' or steam_id == 'ITEM_IS_NONE':
+            logging.info(f"Skipping Game.json download: No valid Steam ID for {game_data.get('name_override')}")
+            return
+
+        url = f"https://store.steampowered.com/api/appdetails?appids={steam_id}"
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            json_path = game_launcher_dir / "Game.json"
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=4)
+            logging.info(f"Downloaded Game.json for {game_data.get('name_override')} (AppID: {steam_id})")
+        except Exception as e:
+            logging.error(f"Failed to download Game.json for {game_data.get('name_override')} (AppID: {steam_id}): {e}")
+
     def _create_game_ini(self, ini_path, game_data, app_config, game_launcher_dir):
         """
         Generates and saves the Game.ini file based on game-specific and global settings.
@@ -96,9 +122,9 @@ class CreationController:
 
         # --- [Paths] Section ---
         config.add_section('Paths')
-        config.set('Paths', 'ControllerMapperApp', app_config.controller_mapper_path)
-        config.set('Paths', 'BorderlessWindowingApp', app_config.borderless_gaming_path)
-        config.set('Paths', 'MultiMonitorTool', app_config.multi_monitor_tool_path)
+        config.set('Paths', 'ControllerMapperApp', game_data.get('controller_mapper_path', ''))
+        config.set('Paths', 'BorderlessWindowingApp', game_data.get('borderless_windowing_path', ''))
+        config.set('Paths', 'MultiMonitorTool', game_data.get('multi_monitor_app_path', ''))
         
         # Handle profile paths with CEN/LC logic
         config.set('Paths', 'Player1Profile', self._get_profile_path('player1_profile', game_data))
@@ -111,8 +137,9 @@ class CreationController:
         config.set('Options', 'RunAsAdmin', str(game_data.get('run_as_admin', False)))
         config.set('Options', 'HideTaskbar', str(game_data.get('hide_taskbar', False)))
         config.set('Options', 'Borderless', game_data.get('options', '0'))
-        config.set('Options', 'UseKillList', str(app_config.use_kill_list))
-        config.set('Options', 'TerminateBorderlessOnExit', str(app_config.terminate_borderless_on_exit))
+        config.set('Options', 'UseKillList', str(game_data.get('kill_list_enabled', False)))
+        config.set('Options', 'TerminateBorderlessOnExit', str(game_data.get('terminate_borderless_on_exit', app_config.terminate_borderless_on_exit)))
+        config.set('Options', 'KillList', game_data.get('kill_list', ''))
 
         # --- [PreLaunch] & [PostLaunch] Sections ---
         config.add_section('PreLaunch')
@@ -130,10 +157,10 @@ class CreationController:
         config.set('PostLaunch', 'App2Wait', str(game_data.get('post_2_run_wait', False)))
         config.set('PostLaunch', 'App3', game_data.get('post3_path', '').lstrip('<> '))
         config.set('PostLaunch', 'App3Wait', str(game_data.get('post_3_run_wait', False)))
-        config.set('PostLaunch', 'JustAfterLaunchApp', game_data.get('ja_path', '').lstrip('<> '))
-        config.set('PostLaunch', 'JustAfterLaunchWait', str(game_data.get('ja_run_wait', False)))
-        config.set('PostLaunch', 'JustBeforeExitApp', game_data.get('jb_path', '').lstrip('<> '))
-        config.set('PostLaunch', 'JustBeforeExitWait', str(game_data.get('jb_run_wait', False)))
+        config.set('PostLaunch', 'JustAfterLaunchApp', game_data.get('just_after_launch_path', '').lstrip('<> '))
+        config.set('PostLaunch', 'JustAfterLaunchWait', str(game_data.get('just_after_launch_run_wait', False)))
+        config.set('PostLaunch', 'JustBeforeExitApp', game_data.get('just_before_exit_path', '').lstrip('<> '))
+        config.set('PostLaunch', 'JustBeforeExitWait', str(game_data.get('just_before_exit_run_wait', False)))
 
         # --- [Sequences] Section ---
         config.add_section('Sequences')
