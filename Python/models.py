@@ -11,6 +11,7 @@ class AppConfig:
         # Setup Tab: Element & Application Locations
         self.profiles_dir = ""
         self.launchers_dir = ""
+        self.launcher_executable = ""
         self.controller_mapper_path = ""
         self.borderless_gaming_path = ""
         self.multi_monitor_tool_path = ""
@@ -33,6 +34,33 @@ class AppConfig:
         # Just Before/After launch apps
         self.just_after_launch_path = ""
         self.just_before_exit_path = ""
+
+        # App Options & Arguments
+        self.controller_mapper_path_options = ""
+        self.controller_mapper_path_arguments = ""
+        self.borderless_gaming_path_options = ""
+        self.borderless_gaming_path_arguments = ""
+        self.multi_monitor_tool_path_options = ""
+        self.multi_monitor_tool_path_arguments = ""
+        
+        self.just_after_launch_path_options = ""
+        self.just_after_launch_path_arguments = ""
+        self.just_before_exit_path_options = ""
+        self.just_before_exit_path_arguments = ""
+        
+        self.pre1_path_options = ""
+        self.pre1_path_arguments = ""
+        self.pre2_path_options = ""
+        self.pre2_path_arguments = ""
+        self.pre3_path_options = ""
+        self.pre3_path_arguments = ""
+        
+        self.post1_path_options = ""
+        self.post1_path_arguments = ""
+        self.post2_path_options = ""
+        self.post2_path_arguments = ""
+        self.post3_path_options = ""
+        self.post3_path_arguments = ""
 
         # Setup Tab: Propagation Status (CEN/LC modes)
         self.deployment_path_modes = {}

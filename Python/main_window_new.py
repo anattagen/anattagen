@@ -102,7 +102,7 @@ class MainWindow(QMainWindow):
         
     def _on_clear_listview(self):
         """Clear the editor table"""
-        self.editor_tab.table.setRowCount(0)
+        self.editor_tab.clear_table()
         self.statusBar().showMessage("List view cleared", 3000)
 
     def _connect_signals(self):
@@ -356,20 +356,21 @@ class MainWindow(QMainWindow):
 
     def on_create_button_clicked(self):
         """Handle the Create button click"""
-        # Get the selected games data from the editor tab
-        selected_games = self.editor_tab.get_selected_game_data()
+        # Get all game data and filter for items marked 'create'
+        all_games = self.editor_tab.get_all_game_data()
+        games_to_process = [g for g in all_games if g.get('create')]
         
-        if not selected_games:
-            QMessageBox.warning(self, "No Games Selected", "Please select at least one game to process.")
+        if not games_to_process:
+            QMessageBox.warning(self, "No Games to Create", "Please mark at least one game with 'Create' in the Editor tab.")
             return
         
         # Debug output to verify selected games
-        print(f"Selected {len(selected_games)} games for processing")
-        for i, game in enumerate(selected_games):
+        print(f"Found {len(games_to_process)} games marked for creation")
+        for i, game in enumerate(games_to_process):
             print(f"Game {i+1}: {game.get('name_override', '')}")
         
         # Call create_all with the selected games
-        result = self.creation_controller.create_all(selected_games)
+        result = self.creation_controller.create_all(games_to_process)
         self.statusBar().showMessage(f"Creation process finished. Processed: {result['processed_count']}, Failed: {result['failed_count']}", 5000)
 
     def _backup_steam_cache_files(self):

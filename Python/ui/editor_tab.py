@@ -1,10 +1,11 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem, QLabel,
     QPushButton, QHeaderView, QAbstractItemView, QMenu, QCheckBox, QLineEdit,
-    QApplication, QFileDialog
+    QApplication, QFileDialog, QInputDialog, QMessageBox
 )
 import os
-import json
+import json 
+import copy
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QCursor
 from Python import constants
@@ -21,6 +22,7 @@ class EditorTab(QWidget):
         super().__init__(parent)
         self.main_window = main_window
         self.table = None
+        self.original_data = []
         self.populate_ui()
 
     def populate_ui(self):
@@ -34,6 +36,11 @@ class EditorTab(QWidget):
         self.search_bar.textChanged.connect(self.filter_table)
         search_layout.addWidget(QLabel("Search:"))
         search_layout.addWidget(self.search_bar)
+        
+        # Add Game Button
+        self.add_game_button = QPushButton("Add Game")
+        self.add_game_button.clicked.connect(self.add_game_manually)
+        search_layout.addWidget(self.add_game_button)
         main_layout.addLayout(search_layout)
 
         # --- Table ---
@@ -43,22 +50,22 @@ class EditorTab(QWidget):
         
         headers = [
             "Create", "Name", "Directory", "SteamID",
-            "NameOverride", "Options", "Arguments", "RunAsAdmin",
+            "NameOverride", "opts", "args", "AsAdmin",
             "Controller Mapper", "CM Rw",
             "Borderless Windowing", "BW Rw", "Win-Exit",
             "Multi-Monitor", "MM Rw",
-            "Hide Taskbar",
+            "Hide TB",
             "MM Game Profile", "MM Desktop Profile",
             "Player 1 Profile", "Player 2 Profile", "MediaCenter Profile",
-            "Just After Launch", "JA Rw",
-            "Just Before Exit", "JB Rw",
+            "OnStart", "JA Rw",
+            "PreQuit", "JB Rw",
             "Pre1", "Pre1Rw",
             "Post1", "Post1Rw",
             "Pre2", "Pre2Rw",
             "Post2", "Post2Rw",
             "Pre3", "Pre3Rw",
             "Post3", "Post3Rw",
-            "KL En", "Kill List"
+            "Kill List"
         ]
         self.table.setHorizontalHeaderLabels(headers)
 
@@ -79,7 +86,7 @@ class EditorTab(QWidget):
             "Post-launch script 2", "Wait for Post2?",
             "Pre-launch script 3", "Wait for Pre3?",
             "Post-launch script 3", "Wait for Post3?",
-            "Enable Kill List", "Comma-separated list of processes to kill"
+            "Comma-separated list of processes to kill (Checked = Enabled)"
         ]
         for i, tooltip in enumerate(tooltips):
             item = self.table.horizontalHeaderItem(i)
@@ -98,6 +105,11 @@ class EditorTab(QWidget):
             for col in rw_columns:
                 # Use a conservative small width; UI can still resize if needed
                 self.table.setColumnWidth(col, 56)
+
+            # Reduce width of opts, args, and Directory by 80%
+            shrink_cols = [constants.EditorCols.DIRECTORY.value, constants.EditorCols.OPTIONS.value, constants.EditorCols.ARGUMENTS.value]
+            for col in shrink_cols:
+                self.table.setColumnWidth(col, 30)
         except Exception:
             pass
         header = self.table.horizontalHeader()
@@ -112,27 +124,21 @@ class EditorTab(QWidget):
 
         # --- Buttons ---
         buttons_layout = QHBoxLayout()
-        self.add_game_button = QPushButton("Add Game Manually")
         self.save_button = QPushButton("Save Index")
         self.load_button = QPushButton("Load Index")
         self.delete_button = QPushButton("Delete Indexes")
         self.clear_button = QPushButton("Clear View")
-        self.regenerate_names_button = QPushButton("Regenerate All Names")
         buttons_layout.addWidget(self.save_button)
         buttons_layout.addWidget(self.load_button)
-        buttons_layout.addWidget(self.add_game_button)
         buttons_layout.addWidget(self.delete_button)
         buttons_layout.addWidget(self.clear_button)
-        buttons_layout.addWidget(self.regenerate_names_button)
         main_layout.addLayout(buttons_layout)
 
         # --- Connect Signals ---
         self.save_button.clicked.connect(self.save_index_requested.emit)
-        self.add_game_button.clicked.connect(self.add_game_manually)
         self.load_button.clicked.connect(self.load_index_requested.emit)
         self.delete_button.clicked.connect(self.delete_indexes_requested.emit)
         self.clear_button.clicked.connect(self.clear_view_requested.emit)
-        self.regenerate_names_button.clicked.connect(self.main_window._regenerate_all_names)
 
         self.table.customContextMenuRequested.connect(self.on_context_menu)
         self.table.cellClicked.connect(self.on_cell_clicked)
@@ -164,15 +170,65 @@ class EditorTab(QWidget):
         filename = os.path.basename(file_path)
         directory = os.path.dirname(file_path)
         
+        # Default values
+        name_override = os.path.splitext(filename)[0]
+        steam_id = 'NOT_FOUND_IN_DATA'
+
+        # Attempt to detect Steam AppID
+        try:
+            from Python.ui.name_processor import NameProcessor
+            from Python.ui.name_utils import replace_illegal_chars
+
+            # Ensure steam index is loaded
+            if not self.main_window.steam_cache_manager.normalized_steam_index:
+                self.main_window.steam_cache_manager.load_normalized_steam_index()
+
+            # Initialize NameProcessor
+            release_groups = getattr(self.main_window, 'release_groups_set', set())
+            exclude_exe = getattr(self.main_window, 'exclude_exe_set', set())
+            name_processor = NameProcessor(release_groups, exclude_exe)
+
+            # Process name
+            clean_name = name_processor.get_display_name(name_override)
+            match_name = name_processor.get_match_name(clean_name)
+            
+            # Lookup
+            if self.main_window.config.enable_name_matching:
+                match_data = self.main_window.steam_cache_manager.normalized_steam_index.get(match_name)
+                if match_data:
+                    steam_name = match_data.get("name", "")
+                    found_id = match_data.get("id", "")
+                    
+                    if found_id:
+                        steam_id = found_id
+                    
+                    if steam_name:
+                        # Clean steam name for override
+                        clean_steam_name = replace_illegal_chars(steam_name, " - ")
+                        while "  " in clean_steam_name: clean_steam_name = clean_steam_name.replace("  ", " ")
+                        while "- -" in clean_steam_name: clean_steam_name = clean_steam_name.replace("- -", " - ")
+                        name_override = clean_steam_name.strip()
+                    else:
+                        name_override = clean_name
+                else:
+                    name_override = clean_name
+            else:
+                name_override = clean_name
+
+        except Exception as e:
+            print(f"Error detecting Steam AppID: {e}")
+
         game_data = {
             'create': True,
             'name': filename,
             'directory': directory,
-            'name_override': os.path.splitext(filename)[0],
+            'name_override': name_override,
+            'steam_id': steam_id
         }
         
         row = self.table.rowCount()
         self.table.insertRow(row)
+        self.original_data.append(copy.deepcopy(game_data))
         self._populate_row(row, game_data)
         self.table.scrollToItem(self.table.item(row, 0))
         self.main_window._on_editor_table_edited(None)
@@ -218,11 +274,23 @@ class EditorTab(QWidget):
         paste_action = menu.addAction("Paste")
         paste_action.triggered.connect(lambda: self.paste_cell(row, col))
         
+        if col == constants.EditorCols.STEAMID.value:
+            search_steam_action = menu.addAction("Search Steam AppID")
+            search_steam_action.triggered.connect(lambda: self.search_steam_id(row))
+            
+        if col == constants.EditorCols.KILL_LIST.value:
+            self._add_kill_list_menu(menu, row)
+
+        menu.addSeparator()
+
+        reset_row_action = menu.addAction("Reset Row")
+        reset_row_action.triggered.connect(lambda: self.reset_row(row))
+
         menu.addSeparator()
         
         # Check column range for "Apply to Selected"
         if constants.EditorCols.ARGUMENTS.value < col < constants.EditorCols.KILL_LIST.value:
-            apply_action = menu.addAction("Make all selected items in the row like this")
+            apply_action = menu.addAction("Propagate selection to column")
             apply_action.triggered.connect(lambda: self.apply_cell_value_to_selection(row, col))
             
         if not menu.isEmpty():
@@ -259,6 +327,93 @@ class EditorTab(QWidget):
         item = self.table.item(row, col)
         if item:
             item.setText(text)
+            self.main_window._on_editor_table_edited(None)
+
+    def search_steam_id(self, row):
+        """Manually search for a Steam AppID."""
+        name_item = self.table.item(row, constants.EditorCols.NAME_OVERRIDE.value)
+        if not name_item or not name_item.text():
+            name_item = self.table.item(row, constants.EditorCols.NAME.value)
+        
+        current_name = name_item.text() if name_item else ""
+        
+        search_term, ok = QInputDialog.getText(self, "Search Steam AppID", "Enter game name:", text=current_name)
+        
+        if ok and search_term:
+            if not self.main_window.steam_cache_manager.normalized_steam_index:
+                self.main_window.steam_cache_manager.load_normalized_steam_index()
+            
+            try:
+                from Python.ui.name_processor import NameProcessor
+                release_groups = getattr(self.main_window, 'release_groups_set', set())
+                exclude_exe = getattr(self.main_window, 'exclude_exe_set', set())
+                name_processor = NameProcessor(release_groups, exclude_exe)
+                
+                match_name = name_processor.get_match_name(search_term)
+                match_data = self.main_window.steam_cache_manager.normalized_steam_index.get(match_name)
+                
+                if match_data:
+                    steam_id = match_data.get("id")
+                    steam_name = match_data.get("name")
+                    confirm = QMessageBox.question(self, "Steam AppID Found", f"Found: {steam_name}\nAppID: {steam_id}\n\nApply this ID?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                    if confirm == QMessageBox.StandardButton.Yes:
+                        self.table.setItem(row, constants.EditorCols.STEAMID.value, QTableWidgetItem(str(steam_id)))
+                        self.main_window._on_editor_table_edited(None)
+                else:
+                    QMessageBox.information(self, "Not Found", f"No Steam game found matching '{search_term}'")
+            except Exception as e:
+                print(f"Error searching Steam ID: {e}")
+
+    def _add_kill_list_menu(self, menu, row):
+        """Add context menu items for Kill List."""
+        kp_menu = menu.addMenu("Add Common Process")
+        
+        procs = []
+        if os.path.exists(constants.KILLPROCS_SET):
+            try:
+                with open(constants.KILLPROCS_SET, 'r') as f:
+                    procs = [line.strip() for line in f if line.strip()]
+            except Exception:
+                pass
+        
+        if not procs:
+            kp_menu.addAction("No processes found").setEnabled(False)
+            return
+
+        for proc in procs:
+            action = kp_menu.addAction(proc)
+            action.triggered.connect(lambda checked, p=proc, r=row: self.append_kill_proc(r, p))
+
+    def append_kill_proc(self, row, proc):
+        """Append a process to the kill list."""
+        item = self.table.item(row, constants.EditorCols.KILL_LIST.value)
+        current_text = item.text() if item else ""
+        
+        # Avoid duplicates if possible, or just append
+        current_list = [p.strip() for p in current_text.split(',')] if current_text else []
+        if proc not in current_list:
+            current_list.append(proc)
+            new_text = ",".join(current_list)
+            if not item:
+                item = QTableWidgetItem()
+                self.table.setItem(row, constants.EditorCols.KILL_LIST.value, item)
+            item.setText(new_text)
+            self.main_window._on_editor_table_edited(None)
+
+    def reset_row(self, row):
+        """Reset the row to its original state."""
+        if 0 <= row < len(self.original_data):
+            reply = QMessageBox.question(
+                self, "Confirm Reset",
+                "Are you sure you want to reset this row to its original state?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+            game_data = self.original_data[row]
+            self._populate_row(row, copy.deepcopy(game_data))
             self.main_window._on_editor_table_edited(None)
 
     def on_cell_clicked(self, row, column):
@@ -345,6 +500,7 @@ class EditorTab(QWidget):
             return
 
         print(f"populate_from_data: Received {len(data)} items to populate.")
+        self.original_data = [copy.deepcopy(game) for game in data]
         self.table.setRowCount(0)
         for row_num, game in enumerate(data):
             self.table.insertRow(row_num)
@@ -388,13 +544,13 @@ class EditorTab(QWidget):
         # Controller Mapper (CheckBox, Path with symbol, RunWait)
         # Merged widget for Path column
         cm_symbol, cm_run_wait = self._get_propagation_symbol_and_run_wait('controller_mapper_path')
-        cm_path = f"{cm_symbol} {game.get('controller_mapper_path', '')}"
+        cm_path = f"{cm_symbol} {game.get('controller_mapper_path', '').lstrip('<> ')}"
         self.table.setCellWidget(row_num, constants.EditorCols.CM_PATH.value, self._create_merged_path_widget(game.get('controller_mapper_enabled', True), cm_path, game.get('controller_mapper_overwrite', True)))
         self.table.setCellWidget(row_num, constants.EditorCols.CM_RUN_WAIT.value, self._create_checkbox_widget(game.get('controller_mapper_run_wait', cm_run_wait)))
 
         # Borderless Windowing (CheckBox, Path with symbol, RunWait)
         bw_symbol, bw_run_wait = self._get_propagation_symbol_and_run_wait('borderless_gaming_path')
-        bw_path = f"{bw_symbol} {game.get('borderless_windowing_path', '')}"
+        bw_path = f"{bw_symbol} {game.get('borderless_windowing_path', '').lstrip('<> ')}"
         self.table.setCellWidget(row_num, constants.EditorCols.BW_PATH.value, self._create_merged_path_widget(game.get('borderless_windowing_enabled', True), bw_path, game.get('borderless_windowing_overwrite', True)))
         self.table.setCellWidget(row_num, constants.EditorCols.BW_RUN_WAIT.value, self._create_checkbox_widget(game.get('borderless_windowing_run_wait', bw_run_wait)))
         
@@ -403,7 +559,7 @@ class EditorTab(QWidget):
 
         # Multi-monitor App (CheckBox, Path with symbol, RunWait)
         mm_symbol, mm_run_wait = self._get_propagation_symbol_and_run_wait('multi_monitor_tool_path')
-        mm_path = f"{mm_symbol} {game.get('multi_monitor_app_path', '')}"
+        mm_path = f"{mm_symbol} {game.get('multi_monitor_app_path', '').lstrip('<> ')}"
         self.table.setCellWidget(row_num, constants.EditorCols.MM_PATH.value, self._create_merged_path_widget(game.get('multi_monitor_app_enabled', True), mm_path, game.get('multi_monitor_app_overwrite', True)))
         self.table.setCellWidget(row_num, constants.EditorCols.MM_RUN_WAIT.value, self._create_checkbox_widget(game.get('multi_monitor_app_run_wait', mm_run_wait)))
 
@@ -412,71 +568,73 @@ class EditorTab(QWidget):
 
         # Profiles with propagation symbols
         mm_game_symbol, _ = self._get_propagation_symbol_and_run_wait('multimonitor_gaming_path')
-        mm_game_profile = f"{mm_game_symbol} {game.get('mm_game_profile', '')}"
+        mm_game_profile = f"{mm_game_symbol} {game.get('mm_game_profile', '').lstrip('<> ')}"
         self.table.setItem(row_num, constants.EditorCols.MM_GAME_PROFILE.value, QTableWidgetItem(mm_game_profile))
         
         mm_desktop_symbol, _ = self._get_propagation_symbol_and_run_wait('multimonitor_media_path')
-        mm_desktop_profile = f"{mm_desktop_symbol} {game.get('mm_desktop_profile', '')}"
+        mm_desktop_profile = f"{mm_desktop_symbol} {game.get('mm_desktop_profile', '').lstrip('<> ')}"
         self.table.setItem(row_num, constants.EditorCols.MM_DESKTOP_PROFILE.value, QTableWidgetItem(mm_desktop_profile))
         
         p1_symbol, _ = self._get_propagation_symbol_and_run_wait('p1_profile_path')
-        player1_profile = f"{p1_symbol} {game.get('player1_profile', '')}"
+        player1_profile = f"{p1_symbol} {game.get('player1_profile', '').lstrip('<> ')}"
         self.table.setItem(row_num, constants.EditorCols.PLAYER1_PROFILE.value, QTableWidgetItem(player1_profile))
         
         p2_symbol, _ = self._get_propagation_symbol_and_run_wait('p2_profile_path')
-        player2_profile = f"{p2_symbol} {game.get('player2_profile', '')}"
+        player2_profile = f"{p2_symbol} {game.get('player2_profile', '').lstrip('<> ')}"
         self.table.setItem(row_num, constants.EditorCols.PLAYER2_PROFILE.value, QTableWidgetItem(player2_profile))
         
         mc_symbol, _ = self._get_propagation_symbol_and_run_wait('mediacenter_profile_path')
-        mediacenter_profile = f"{mc_symbol} {game.get('mediacenter_profile', '')}"
+        mediacenter_profile = f"{mc_symbol} {game.get('mediacenter_profile', '').lstrip('<> ')}"
         self.table.setItem(row_num, constants.EditorCols.MEDIACENTER_PROFILE.value, QTableWidgetItem(mediacenter_profile))
 
         # Just After Launch (CheckBox, Path with symbol, RunWait)
         ja_symbol, ja_run_wait = self._get_propagation_symbol_and_run_wait('just_after_launch_path')
-        ja_path = f"{ja_symbol} {game.get('just_after_launch_path', '')}"
+        ja_path = f"{ja_symbol} {game.get('just_after_launch_path', '').lstrip('<> ')}"
         self.table.setCellWidget(row_num, constants.EditorCols.JA_PATH.value, self._create_merged_path_widget(game.get('just_after_launch_enabled', True), ja_path, game.get('just_after_launch_overwrite', True)))
         self.table.setCellWidget(row_num, constants.EditorCols.JA_RUN_WAIT.value, self._create_checkbox_widget(game.get('just_after_launch_run_wait', ja_run_wait)))
 
         # Just Before Exit (CheckBox, Path with symbol, RunWait)
         jb_symbol, jb_run_wait = self._get_propagation_symbol_and_run_wait('just_before_exit_path')
-        jb_path = f"{jb_symbol} {game.get('just_before_exit_path', '')}"
+        jb_path = f"{jb_symbol} {game.get('just_before_exit_path', '').lstrip('<> ')}"
         self.table.setCellWidget(row_num, constants.EditorCols.JB_PATH.value, self._create_merged_path_widget(game.get('just_before_exit_enabled', True), jb_path, game.get('just_before_exit_overwrite', True)))
         self.table.setCellWidget(row_num, constants.EditorCols.JB_RUN_WAIT.value, self._create_checkbox_widget(game.get('just_before_exit_run_wait', jb_run_wait)))
 
         # Pre/Post Scripts with Enabled Checkboxes and RunWait toggles
         pre1_symbol, pre1_run_wait = self._get_propagation_symbol_and_run_wait('pre1_path')
-        pre1_path = f"{pre1_symbol} {game.get('pre1_path', '')}"
+        pre1_path = f"{pre1_symbol} {game.get('pre1_path', '').lstrip('<> ')}"
         self.table.setCellWidget(row_num, constants.EditorCols.PRE1_PATH.value, self._create_merged_path_widget(game.get('pre_1_enabled', True), pre1_path, game.get('pre_1_overwrite', True)))
         self.table.setCellWidget(row_num, constants.EditorCols.PRE1_RUN_WAIT.value, self._create_checkbox_widget(game.get('pre_1_run_wait', pre1_run_wait)))
 
         post1_symbol, post1_run_wait = self._get_propagation_symbol_and_run_wait('post1_path')
-        post1_path = f"{post1_symbol} {game.get('post1_path', '')}"
+        post1_path = f"{post1_symbol} {game.get('post1_path', '').lstrip('<> ')}"
         self.table.setCellWidget(row_num, constants.EditorCols.POST1_PATH.value, self._create_merged_path_widget(game.get('post_1_enabled', True), post1_path, game.get('post_1_overwrite', True)))
         self.table.setCellWidget(row_num, constants.EditorCols.POST1_RUN_WAIT.value, self._create_checkbox_widget(game.get('post_1_run_wait', post1_run_wait)))
 
         pre2_symbol, pre2_run_wait = self._get_propagation_symbol_and_run_wait('pre2_path')
-        pre2_path = f"{pre2_symbol} {game.get('pre2_path', '')}"
+        pre2_path = f"{pre2_symbol} {game.get('pre2_path', '').lstrip('<> ')}"
         self.table.setCellWidget(row_num, constants.EditorCols.PRE2_PATH.value, self._create_merged_path_widget(game.get('pre_2_enabled', True), pre2_path, game.get('pre_2_overwrite', True)))
         self.table.setCellWidget(row_num, constants.EditorCols.PRE2_RUN_WAIT.value, self._create_checkbox_widget(game.get('pre_2_run_wait', pre2_run_wait)))
 
         post2_symbol, post2_run_wait = self._get_propagation_symbol_and_run_wait('post2_path')
-        post2_path = f"{post2_symbol} {game.get('post2_path', '')}"
+        post2_path = f"{post2_symbol} {game.get('post2_path', '').lstrip('<> ')}"
         self.table.setCellWidget(row_num, constants.EditorCols.POST2_PATH.value, self._create_merged_path_widget(game.get('post_2_enabled', True), post2_path, game.get('post_2_overwrite', True)))
         self.table.setCellWidget(row_num, constants.EditorCols.POST2_RUN_WAIT.value, self._create_checkbox_widget(game.get('post_2_run_wait', post2_run_wait)))
 
         pre3_symbol, pre3_run_wait = self._get_propagation_symbol_and_run_wait('pre3_path')
-        pre3_path = f"{pre3_symbol} {game.get('pre3_path', '')}"
+        pre3_path = f"{pre3_symbol} {game.get('pre3_path', '').lstrip('<> ')}"
         self.table.setCellWidget(row_num, constants.EditorCols.PRE3_PATH.value, self._create_merged_path_widget(game.get('pre_3_enabled', True), pre3_path, game.get('pre_3_overwrite', True)))
         self.table.setCellWidget(row_num, constants.EditorCols.PRE3_RUN_WAIT.value, self._create_checkbox_widget(game.get('pre_3_run_wait', pre3_run_wait)))
 
         post3_symbol, post3_run_wait = self._get_propagation_symbol_and_run_wait('post3_path')
-        post3_path = f"{post3_symbol} {game.get('post3_path', '')}"
+        post3_path = f"{post3_symbol} {game.get('post3_path', '').lstrip('<> ')}"
         self.table.setCellWidget(row_num, constants.EditorCols.POST3_PATH.value, self._create_merged_path_widget(game.get('post_3_enabled', True), post3_path, game.get('post_3_overwrite', True)))
         self.table.setCellWidget(row_num, constants.EditorCols.POST3_RUN_WAIT.value, self._create_checkbox_widget(game.get('post_3_run_wait', post3_run_wait)))
 
-        # Kill List (CheckBox, Text)
-        self.table.setCellWidget(row_num, constants.EditorCols.KILL_LIST_ENABLED.value, self._create_checkbox_widget(game.get('kill_list_enabled', False)))
-        self.table.setItem(row_num, constants.EditorCols.KILL_LIST.value, QTableWidgetItem(game.get('kill_list', '')))
+        # Kill List (Merged: CheckBox + Text)
+        kl_item = QTableWidgetItem(game.get('kill_list', ''))
+        kl_enabled = game.get('kill_list_enabled', False)
+        kl_item.setCheckState(Qt.CheckState.Checked if kl_enabled else Qt.CheckState.Unchecked)
+        self.table.setItem(row_num, constants.EditorCols.KILL_LIST.value, kl_item)
 
         self.table.blockSignals(False) # Unblock signals
 
@@ -599,9 +757,14 @@ class EditorTab(QWidget):
             game['post_3_overwrite'] = post3_overwrite
             game['post_3_run_wait'] = self._get_checkbox_value(row, constants.EditorCols.POST3_RUN_WAIT.value)
 
-            # Kill List (cols 47-48)
-            game['kill_list_enabled'] = self._get_checkbox_value(row, constants.EditorCols.KILL_LIST_ENABLED.value)
-            game['kill_list'] = self.table.item(row, constants.EditorCols.KILL_LIST.value).text() if self.table.item(row, constants.EditorCols.KILL_LIST.value) else ''
+            # Kill List (Merged)
+            kl_item = self.table.item(row, constants.EditorCols.KILL_LIST.value)
+            if kl_item:
+                game['kill_list_enabled'] = (kl_item.checkState() == Qt.CheckState.Checked)
+                game['kill_list'] = kl_item.text()
+            else:
+                game['kill_list_enabled'] = False
+                game['kill_list'] = ''
 
             data.append(game)
         return data
@@ -655,7 +818,12 @@ class EditorTab(QWidget):
         
         item = self.table.item(row, col)
         if item:
-            return {'type': 'text', 'text': item.text()}
+            state = {'type': 'text', 'text': item.text()}
+            # Handle merged Kill List (checkable text)
+            if col == constants.EditorCols.KILL_LIST.value:
+                state['checked'] = (item.checkState() == Qt.CheckState.Checked)
+                state['type'] = 'checkable_text'
+            return state
         return None
 
     def _set_cell_state(self, row, col, state):
@@ -678,9 +846,22 @@ class EditorTab(QWidget):
                 if cbs:
                     cbs[0].setChecked(state['checked'])
                     
+        elif state['type'] == 'checkable_text':
+            item = self.table.item(row, col)
+            if not item:
+                item = QTableWidgetItem()
+                self.table.setItem(row, col, item)
+            item.setText(state['text'])
+            item.setCheckState(Qt.CheckState.Checked if state.get('checked', False) else Qt.CheckState.Unchecked)
+
         elif state['type'] == 'text':
             item = self.table.item(row, col)
             if not item:
                 item = QTableWidgetItem()
                 self.table.setItem(row, col, item)
             item.setText(state['text'])
+
+    def clear_table(self):
+        """Clear the table and reset original data."""
+        self.table.setRowCount(0)
+        self.original_data = []

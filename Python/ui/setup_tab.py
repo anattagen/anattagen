@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import configparser
@@ -7,7 +8,8 @@ import shutil
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QGroupBox, QLabel, QFormLayout, QPushButton,
     QComboBox, QHBoxLayout, QCheckBox, QTabWidget,
-    QFileDialog, QApplication, QStyleFactory, QSpinBox, QMessageBox, QProgressBar
+    QFileDialog, QApplication, QStyleFactory, QSpinBox, QMessageBox, QProgressBar,
+    QDialog, QDialogButtonBox, QLineEdit
 )
 from PyQt6.QtGui import QFontDatabase, QFont, QPalette, QColor
 from PyQt6.QtCore import pyqtSignal, Qt, QThread, pyqtSlot
@@ -82,7 +84,7 @@ class SetupTab(QWidget):
     config_changed = pyqtSignal()
     
     PATH_ATTRIBUTES = [
-        "profiles_dir", "launchers_dir", "controller_mapper_path", 
+        "profiles_dir", "launchers_dir", "launcher_executable", "controller_mapper_path", 
         "borderless_gaming_path", "multi_monitor_tool_path",
         "p1_profile_path", "p2_profile_path", "mediacenter_profile_path",
         "multimonitor_gaming_path", "multimonitor_media_path",
@@ -98,6 +100,13 @@ class SetupTab(QWidget):
         self.repos = self._parse_repos_set()
         self.download_thread = None
         self._setup_ui()
+
+    def _add_path_row(self, layout, label_text, config_key, row_widget):
+        """Helper to add a row with a context-menu-capable label."""
+        label = QLabel(label_text)
+        label.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        label.customContextMenuRequested.connect(lambda pos: self._show_options_args_dialog(pos, config_key, label_text))
+        layout.addRow(label, row_widget)
 
     def _setup_ui(self):
         """Create and arrange all widgets for the Setup tab."""
@@ -171,10 +180,13 @@ class SetupTab(QWidget):
         core_paths_layout = QFormLayout(core_paths_widget)
         self.path_rows["profiles_dir"] = PathConfigRow("profiles_dir", is_directory=True, add_enabled=True, add_cen_lc=True)
         self.path_rows["profiles_dir"].enabled_cb.setToolTip("Create Profile Folders")
-        core_paths_layout.addRow("Profiles Directory:", self.path_rows["profiles_dir"])
+        core_paths_layout.addRow("Profiles Directory:", self.path_rows["profiles_dir"]) # No options/args for dirs
         self.path_rows["launchers_dir"] = PathConfigRow("launchers_dir", is_directory=True, add_enabled=True, add_cen_lc=True)
         self.path_rows["launchers_dir"].enabled_cb.setToolTip("Create Launcher")
-        core_paths_layout.addRow("Launchers Directory:", self.path_rows["launchers_dir"])
+        core_paths_layout.addRow("Launchers Directory:", self.path_rows["launchers_dir"]) # No options/args for dirs
+        self.path_rows["launcher_executable"] = PathConfigRow("launcher_executable", is_directory=False, add_enabled=False, add_cen_lc=False)
+        self.path_rows["launcher_executable"].line_edit.setPlaceholderText(constants.LAUNCHER_EXECUTABLE)
+        core_paths_layout.addRow("Launcher Executable:", self.path_rows["launcher_executable"]) # Internal
         paths_tabs.addTab(core_paths_widget, "Core")
 
         # Application Paths Tab
@@ -182,19 +194,19 @@ class SetupTab(QWidget):
         app_paths_layout = QFormLayout(app_paths_widget)
         self.path_rows["controller_mapper_path"] = PathConfigRow("controller_mapper_path", add_run_wait=True, repo_items=self.repos.get("MAPPERS"))
         self.path_rows["controller_mapper_path"].enabled_cb.setToolTip("Enable Controller Mapper")
-        app_paths_layout.addRow("Controller Mapper:", self.path_rows["controller_mapper_path"])
+        self._add_path_row(app_paths_layout, "Controller Mapper:", "controller_mapper_path", self.path_rows["controller_mapper_path"])
         self.path_rows["borderless_gaming_path"] = PathConfigRow("borderless_gaming_path", add_run_wait=True, repo_items=self.repos.get("WINDOWING"))
         self.path_rows["borderless_gaming_path"].enabled_cb.setToolTip("Enable Borderless Windowing")
-        app_paths_layout.addRow("Borderless Windowing:", self.path_rows["borderless_gaming_path"])
+        self._add_path_row(app_paths_layout, "Borderless Windowing:", "borderless_gaming_path", self.path_rows["borderless_gaming_path"])
         self.path_rows["multi_monitor_tool_path"] = PathConfigRow("multi_monitor_tool_path", add_run_wait=True, repo_items=self.repos.get("DISPLAY"))
         self.path_rows["multi_monitor_tool_path"].enabled_cb.setToolTip("Enable Multi-Monitor Tool")
-        app_paths_layout.addRow("Multi-Monitor App:", self.path_rows["multi_monitor_tool_path"])
+        self._add_path_row(app_paths_layout, "Multi-Monitor App:", "multi_monitor_tool_path", self.path_rows["multi_monitor_tool_path"])
         self.path_rows["just_after_launch_path"] = PathConfigRow("just_after_launch_path", add_run_wait=True, repo_items=all_tools)
         self.path_rows["just_after_launch_path"].enabled_cb.setToolTip("Enable Just After Launch App")
-        app_paths_layout.addRow("Just After Launch:", self.path_rows["just_after_launch_path"])
+        self._add_path_row(app_paths_layout, "Just After Launch:", "just_after_launch_path", self.path_rows["just_after_launch_path"])
         self.path_rows["just_before_exit_path"] = PathConfigRow("just_before_exit_path", add_run_wait=True, repo_items=all_tools)
         self.path_rows["just_before_exit_path"].enabled_cb.setToolTip("Enable Just Before Exit App")
-        app_paths_layout.addRow("Just Before Exit:", self.path_rows["just_before_exit_path"])
+        self._add_path_row(app_paths_layout, "Just Before Exit:", "just_before_exit_path", self.path_rows["just_before_exit_path"])
         paths_tabs.addTab(app_paths_widget, "Applications")
 
         # Profile Paths Tab
@@ -219,12 +231,12 @@ class SetupTab(QWidget):
             key = f"pre{i}_path"
             self.path_rows[key] = PathConfigRow(key, add_run_wait=True, repo_items=all_tools)
             self.path_rows[key].enabled_cb.setToolTip(f"Enable Pre-Launch App {i}")
-            script_paths_layout.addRow(f"Pre-Launch App {i}:", self.path_rows[key])
+            self._add_path_row(script_paths_layout, f"Pre-Launch App {i}:", key, self.path_rows[key])
         for i in range(1, 4):
             key = f"post{i}_path"
             self.path_rows[key] = PathConfigRow(key, add_run_wait=True, repo_items=all_tools)
             self.path_rows[key].enabled_cb.setToolTip(f"Enable Post-Launch App {i}")
-            script_paths_layout.addRow(f"Post-Launch App {i}:", self.path_rows[key])
+            self._add_path_row(script_paths_layout, f"Post-Launch App {i}:", key, self.path_rows[key])
         paths_tabs.addTab(script_paths_widget, "Scripts")
         
         paths_section = AccordionSection("Paths & Profiles", paths_widget)
@@ -300,6 +312,30 @@ class SetupTab(QWidget):
         main_layout.addWidget(appearance_section)
         main_layout.addStretch()
         self._connect_signals()
+
+    def _show_options_args_dialog(self, pos, config_key, label_text):
+        """Show a modal dialog to edit options and arguments for the selected app."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Options & Arguments - {label_text.strip(':')}")
+        layout = QFormLayout(dialog)
+        
+        options_edit = QLineEdit()
+        options_edit.setText(getattr(self.main_window.config, f"{config_key}_options", ""))
+        layout.addRow("Options:", options_edit)
+        
+        args_edit = QLineEdit()
+        args_edit.setText(getattr(self.main_window.config, f"{config_key}_arguments", ""))
+        layout.addRow("Arguments:", args_edit)
+        
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addRow(buttons)
+        
+        if dialog.exec():
+            setattr(self.main_window.config, f"{config_key}_options", options_edit.text())
+            setattr(self.main_window.config, f"{config_key}_arguments", args_edit.text())
+            self.config_changed.emit()
 
     def _connect_signals(self):
         self.add_source_dir_button.clicked.connect(self._add_source_dir)

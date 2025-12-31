@@ -5,8 +5,10 @@ import shutil
 import logging
 import requests
 import json
+import subprocess
 
 from Python import constants
+from Python.ui.name_utils import make_safe_filename
 
 class CreationController:
     """
@@ -36,6 +38,7 @@ class CreationController:
         """
         app_config = self.main_window.config
         game_name_override = game_data.get('name_override', 'New Game')
+        safe_game_name = make_safe_filename(game_name_override)
         
         # Check if launcher creation is enabled in Setup Tab
         if not app_config.defaults.get('launchers_dir_enabled', True):
@@ -44,37 +47,46 @@ class CreationController:
 
         # 1. Define the launcher directory for this game
         launcher_base_dir = Path(app_config.launchers_dir)
-        game_launcher_dir = launcher_base_dir / game_name_override
+        launcher_executable_path = launcher_base_dir / f"{safe_game_name}.bat"
         
         try:
             # Check overwrite flag for launcher directory
-            if game_launcher_dir.exists() and not app_config.overwrite_states.get('launchers_dir', True): # Launcher dir overwrite is still global
+            if launcher_executable_path.exists() and not app_config.overwrite_states.get('launchers_dir', True): # Launcher dir overwrite is still global
                 logging.info(f"Skipping launcher creation for {game_name_override} (Overwrite disabled)")
                 return True
 
             # 2. Create the directory structure
-            game_launcher_dir.mkdir(parents=True, exist_ok=True)
+            launcher_base_dir.mkdir(parents=True, exist_ok=True)
             
+            # 2a. Create Profile Directory in the correct location (Profiles folder)
+            profiles_base_dir = Path(app_config.profiles_dir)
+            game_profile_dir = profiles_base_dir / safe_game_name
+
+            if app_config.defaults.get('profiles_dir_enabled', True):
+                try:
+                    game_profile_dir.mkdir(parents=True, exist_ok=True)
+                    (game_profile_dir / "Saves").mkdir(exist_ok=True)
+                except Exception as e:
+                    logging.error(f"Failed to create profile directory for {game_name_override}: {e}")
+
             # 3. Create the Game.ini file
-            ini_path = game_launcher_dir / "Game.ini"
-            self._create_game_ini(ini_path, game_data, app_config, game_launcher_dir)
+            ini_path = game_profile_dir / "Game.ini"
+            self._create_game_ini(ini_path, game_data, app_config, game_profile_dir)
             
             # 3b. Download Game.json if enabled
             if app_config.download_game_json:
-                self._download_game_json(game_data, game_launcher_dir)
+                self._download_game_json(game_data, game_profile_dir)
 
             # 4. Create the launcher executable (conceptual step)
             # In a real build, you'd copy a pre-compiled Launcher.exe.
             # Here, we create a batch file as a functional placeholder.
             launcher_script_path = Path(constants.APP_ROOT_DIR) / "Python" / "Launcher.py"
-            shortcut_path = game_launcher_dir / f"{game_name_override}.lnk"
-            launcher_executable_path = game_launcher_dir / f"{game_name_override}_launcher.bat"
 
             with open(launcher_executable_path, "w") as f:
-                f.write(f'@echo off\npython "{launcher_script_path}" "{shortcut_path}"')
+                f.write(f'@echo off\npython "{launcher_script_path}" "{ini_path}"')
 
             # 5. Handle CEN/LC file propagation (copying profiles)
-            self._propagate_files(game_data, game_launcher_dir)
+            self._propagate_files(game_data, game_profile_dir)
 
             # 6. Create the shortcut (.lnk) to the launcher executable
             # This step would use a library like `pylnk3` or cái `Shortcut.exe` tool.
@@ -87,6 +99,30 @@ class CreationController:
             logging.error(f"Failed to create launcher for {game_name_override}: {e}", exc_info=True)
             self.main_window.statusBar().showMessage(f"Error creating launcher for {game_name_override}: {e}", 5000)
             return False
+
+    def _create_shortcut(self, target_path, shortcut_path, arguments="", working_dir="", icon_path=None, description=""):
+        """Creates a Windows shortcut using the bundled Shortcut.exe."""
+        shortcut_exe = os.path.join(constants.APP_ROOT_DIR, "bin", "Shortcut.exe")
+        if not os.path.exists(shortcut_exe):
+            logging.error(f"Shortcut.exe not found at {shortcut_exe}")
+            return False
+
+        cmd = [
+            shortcut_exe,
+            "/F:" + str(shortcut_path),
+            "/A:C",
+            "/T:" + str(target_path)
+        ]
+        if arguments:
+            cmd.append("/P:" + str(arguments))
+        if working_dir:
+            cmd.append("/W:" + str(working_dir))
+        if icon_path:
+            cmd.append("/I:" + str(icon_path))
+        if description:
+            cmd.append("/D:" + str(description))
+
+        subprocess.run(cmd, check=True, capture_output=True)
 
     def _download_game_json(self, game_data, game_launcher_dir):
         """Downloads Game.json from Steam API if steam_id is present."""
@@ -126,6 +162,14 @@ class CreationController:
         config.set('Paths', 'BorderlessWindowingApp', game_data.get('borderless_windowing_path', ''))
         config.set('Paths', 'MultiMonitorTool', game_data.get('multi_monitor_app_path', ''))
         
+        # Add Options/Arguments for Paths
+        config.set('Paths', 'ControllerMapperOptions', app_config.controller_mapper_path_options)
+        config.set('Paths', 'ControllerMapperArguments', app_config.controller_mapper_path_arguments)
+        config.set('Paths', 'BorderlessWindowingOptions', app_config.borderless_gaming_path_options)
+        config.set('Paths', 'BorderlessWindowingArguments', app_config.borderless_gaming_path_arguments)
+        config.set('Paths', 'MultiMonitorOptions', app_config.multi_monitor_tool_path_options)
+        config.set('Paths', 'MultiMonitorArguments', app_config.multi_monitor_tool_path_arguments)
+        
         # Handle profile paths with CEN/LC logic
         config.set('Paths', 'Player1Profile', self._get_profile_path('player1_profile', game_data))
         config.set('Paths', 'Player2Profile', self._get_profile_path('player2_profile', game_data))
@@ -140,26 +184,47 @@ class CreationController:
         config.set('Options', 'UseKillList', str(game_data.get('kill_list_enabled', False)))
         config.set('Options', 'TerminateBorderlessOnExit', str(game_data.get('terminate_borderless_on_exit', app_config.terminate_borderless_on_exit)))
         config.set('Options', 'KillList', game_data.get('kill_list', ''))
-
         # --- [PreLaunch] & [PostLaunch] Sections ---
         config.add_section('PreLaunch')
         config.set('PreLaunch', 'App1', game_data.get('pre1_path', '').lstrip('<> '))
+        config.set('PreLaunch', 'App1Options', app_config.pre1_path_options)
+        config.set('PreLaunch', 'App1Arguments', app_config.pre1_path_arguments)
         config.set('PreLaunch', 'App1Wait', str(game_data.get('pre_1_run_wait', False)))
+        
         config.set('PreLaunch', 'App2', game_data.get('pre2_path', '').lstrip('<> '))
+        config.set('PreLaunch', 'App2Options', app_config.pre2_path_options)
+        config.set('PreLaunch', 'App2Arguments', app_config.pre2_path_arguments)
         config.set('PreLaunch', 'App2Wait', str(game_data.get('pre_2_run_wait', False)))
+        
         config.set('PreLaunch', 'App3', game_data.get('pre3_path', '').lstrip('<> '))
+        config.set('PreLaunch', 'App3Options', app_config.pre3_path_options)
+        config.set('PreLaunch', 'App3Arguments', app_config.pre3_path_arguments)
         config.set('PreLaunch', 'App3Wait', str(game_data.get('pre_3_run_wait', False)))
 
         config.add_section('PostLaunch')
         config.set('PostLaunch', 'App1', game_data.get('post1_path', '').lstrip('<> '))
+        config.set('PostLaunch', 'App1Options', app_config.post1_path_options)
+        config.set('PostLaunch', 'App1Arguments', app_config.post1_path_arguments)
         config.set('PostLaunch', 'App1Wait', str(game_data.get('post_1_run_wait', False)))
+        
         config.set('PostLaunch', 'App2', game_data.get('post2_path', '').lstrip('<> '))
+        config.set('PostLaunch', 'App2Options', app_config.post2_path_options)
+        config.set('PostLaunch', 'App2Arguments', app_config.post2_path_arguments)
         config.set('PostLaunch', 'App2Wait', str(game_data.get('post_2_run_wait', False)))
+        
         config.set('PostLaunch', 'App3', game_data.get('post3_path', '').lstrip('<> '))
+        config.set('PostLaunch', 'App3Options', app_config.post3_path_options)
+        config.set('PostLaunch', 'App3Arguments', app_config.post3_path_arguments)
         config.set('PostLaunch', 'App3Wait', str(game_data.get('post_3_run_wait', False)))
+        
         config.set('PostLaunch', 'JustAfterLaunchApp', game_data.get('just_after_launch_path', '').lstrip('<> '))
+        config.set('PostLaunch', 'JustAfterLaunchOptions', app_config.just_after_launch_path_options)
+        config.set('PostLaunch', 'JustAfterLaunchArguments', app_config.just_after_launch_path_arguments)
         config.set('PostLaunch', 'JustAfterLaunchWait', str(game_data.get('just_after_launch_run_wait', False)))
+        
         config.set('PostLaunch', 'JustBeforeExitApp', game_data.get('just_before_exit_path', '').lstrip('<> '))
+        config.set('PostLaunch', 'JustBeforeExitOptions', app_config.just_before_exit_path_options)
+        config.set('PostLaunch', 'JustBeforeExitArguments', app_config.just_before_exit_path_arguments)
         config.set('PostLaunch', 'JustBeforeExitWait', str(game_data.get('just_before_exit_run_wait', False)))
 
         # --- [Sequences] Section ---
@@ -174,59 +239,46 @@ class CreationController:
     def _get_profile_path(self, profile_key, game_data):
         """
         Determines the correct path for a profile based on CEN/LC mode from the editor data.
+        Enforces centralized path behavior to prevent profile folders in Launchers directory.
         """
         path_with_mode = game_data.get(profile_key, "")
-        mode = path_with_mode[0] if path_with_mode else '<'
         original_path = path_with_mode[2:] if len(path_with_mode) > 1 else ""
+        
+        # Always return the original path (Centralized behavior)
+        return original_path
 
-        if mode == '<':  # CEN (Centralized)
-            return original_path
-        else:  # LC (Launch Conditional)
-            if not original_path:
-                return ""
-            filename = os.path.basename(original_path)
-            relative_path = Path("Profiles") / profile_key / filename
-            return str(relative_path)
-
-    def _propagate_files(self, game_data, game_launcher_dir):
+    def _propagate_files(self, game_data, target_dir):
         """
-        Copies files to the game's launcher directory if they are set to LC mode.
+        Copies files to the target directory (Profiles folder) if they are set to LC mode.
         """
         app_config = self.main_window.config
         
-        # Check if profile folder creation is enabled
-        if not app_config.defaults.get('profiles_dir_enabled', True):
-            return
-
-        profile_keys = [
-            'player1_profile', 'player2_profile', 'mm_game_profile', 'mm_desktop_profile'
-        ]
         # Map profile keys to their overwrite config keys
-        key_map = {
+        profile_map = {
             'player1_profile': 'p1_profile_path',
             'player2_profile': 'p2_profile_path',
             'mm_game_profile': 'multimonitor_gaming_path',
             'mm_desktop_profile': 'multimonitor_media_path'
         }
 
-        for key in profile_keys:
+        for key, config_key in profile_map.items():
             path_with_mode = game_data.get(key, "")
-            mode = path_with_mode[0] if path_with_mode else '<'
+            if not path_with_mode:
+                continue
+                
+            mode = path_with_mode[0] if len(path_with_mode) > 0 else '<'
             original_path_str = path_with_mode[2:] if len(path_with_mode) > 1 else ""
 
+            # Only copy if mode is LC (>) and path exists
             if mode == '>' and original_path_str and os.path.exists(original_path_str):
                 original_path = Path(original_path_str)
-                target_dir = game_launcher_dir / "Profiles" / key
-                target_dir.mkdir(parents=True, exist_ok=True)
-                
                 target_file = target_dir / original_path.name
                 
-                # Check overwrite flag for this specific profile type
-                config_key = key_map.get(key)
-                if config_key and target_file.exists() and not app_config.overwrite_states.get(config_key, True): # Profiles overwrite is still global
+                if target_file.exists() and not app_config.overwrite_states.get(config_key, True):
                     continue
 
                 try:
                     shutil.copy2(original_path, target_file)
+                    logging.info(f"Copied profile {original_path} to {target_file}")
                 except Exception as e:
                     logging.error(f"Failed to copy profile {original_path} to {target_dir}: {e}")
