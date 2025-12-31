@@ -47,11 +47,11 @@ class CreationController:
 
         # 1. Define the launcher directory for this game
         launcher_base_dir = Path(app_config.launchers_dir)
-        launcher_executable_path = launcher_base_dir / f"{safe_game_name}.bat"
+        launcher_shortcut_path = launcher_base_dir / f"{safe_game_name}.lnk"
         
         try:
             # Check overwrite flag for launcher directory
-            if launcher_executable_path.exists() and not app_config.overwrite_states.get('launchers_dir', True): # Launcher dir overwrite is still global
+            if launcher_shortcut_path.exists() and not app_config.overwrite_states.get('launchers_dir', True): # Launcher dir overwrite is still global
                 logging.info(f"Skipping launcher creation for {game_name_override} (Overwrite disabled)")
                 return True
 
@@ -77,21 +77,30 @@ class CreationController:
             if app_config.download_game_json:
                 self._download_game_json(game_data, game_profile_dir)
 
-            # 4. Create the launcher executable (conceptual step)
-            # In a real build, you'd copy a pre-compiled Launcher.exe.
-            # Here, we create a batch file as a functional placeholder.
-            launcher_script_path = Path(constants.APP_ROOT_DIR) / "Python" / "Launcher.py"
-
-            with open(launcher_executable_path, "w") as f:
-                f.write(f'@echo off\npython "{launcher_script_path}" "{ini_path}"')
-
             # 5. Handle CEN/LC file propagation (copying profiles)
             self._propagate_files(game_data, game_profile_dir)
 
-            # 6. Create the shortcut (.lnk) to the launcher executable
-            # This step would use a library like `pylnk3` or cái `Shortcut.exe` tool.
-            # For now, we are creating the files the shortcut would point to.
+            # 6. Create Profile Shortcut (pointing to source title's executable)
+            game_exe_path = Path(game_data.get('directory', '')) / game_data.get('name', '')
+            profile_shortcut_path = game_profile_dir / f"{safe_game_name}.lnk"
             
+            self._create_shortcut(
+                target_path=game_exe_path,
+                shortcut_path=profile_shortcut_path,
+                working_dir=game_data.get('directory', ''),
+                description=f"Shortcut to {game_name_override}"
+            )
+
+            # 7. Create Launcher Shortcut (pointing to Launcher.exe)
+            self._create_shortcut(
+                target_path=constants.LAUNCHER_EXECUTABLE,
+                shortcut_path=launcher_shortcut_path,
+                arguments=f'"{profile_shortcut_path}"',
+                working_dir=game_data.get('directory', ''),
+                icon_path=game_exe_path,
+                description=f"Launch {game_name_override}"
+            )
+
             self.main_window.statusBar().showMessage(f"Successfully created launcher for {game_name_override}", 3000)
             return True
             
@@ -242,9 +251,17 @@ class CreationController:
         Enforces centralized path behavior to prevent profile folders in Launchers directory.
         """
         path_with_mode = game_data.get(profile_key, "")
+        if not path_with_mode:
+            return ""
+        
+        mode = path_with_mode[0] if len(path_with_mode) > 0 else '<'
         original_path = path_with_mode[2:] if len(path_with_mode) > 1 else ""
         
-        # Always return the original path (Centralized behavior)
+        if mode == '>': # LC (Launch Conditional / Local Copy)
+            # Return just the filename, as it will be in the same folder as Game.ini (Profile Dir)
+            return os.path.basename(original_path)
+        
+        # CEN (Centralized)
         return original_path
 
     def _propagate_files(self, game_data, target_dir):
