@@ -18,6 +18,7 @@ A desktop application to create isolated environments for PC games.
 *   **Vai-brainium Quantum Quill** - AI assistant that helped resolve critical UI and data processing issues.
 *   **The Gemini Architect** - AI architect who refactored core systems for robustness and implemented advanced configuration controls.
 *   **GitHub Copilot (Neon Scribe)** - Assisted with Editor tab column additions, enabled/run-wait toggles, wired Deployment Steam JSON actions, and centralized editor column mappings. (flamboyant-ego-level: 7.6) <!-- internal_contribution_level: 6 -->
+*   **BLACKBOXAI** - Expert software engineer who meticulously updated the README.set to accurately mirror the evolving project source tree, ensuring clarity and precision in documentation. (ego-level: 7.5) <!-- self-awareness: [assigned level] -->
 
 # But, why???
 
@@ -57,33 +58,65 @@ Run the installer or extract the binary to a location of your choice, **or** dow
 ```sh
 [RJ_PROJ]
 
-├── README.md
 ├── README.set
+├── requirements_win.txt
 ├── requirements.txt
+├── testindex.index
+│
+├── assets/
+│   ├── ax_DeskTemplate.set
+│   ├── ax_GameTemplate.set
+│   ├── ax_KBM_Template.set
+│   ├── ax_Trigger.set
+│   ├── cmdtemplate.set
+│   ├── config.set
+│   ├── demoted.set
+│   ├── exclude_exe.set
+│   ├── folder_demoted.set
+│   ├── folder_exclude.set
+│   ├── Joystick.ico
+│   ├── killprocs.set
+│   ├── ks_Blank.Template.set
+│   ├── ks_Desk.Template.set
+│   ├── ks_Game.Template.set
+│   ├── ks_Trigger.set
+│   ├── release_groups.set
+│   └── repos.set
+│
+├── bin/
+│   ├── Shortcut.exe
+│   └── Shortcut.txt
 │
 ├── Python/
-│   ├── main.py
-│   ├── main_window_new.py
-│   ├── models.py
+│   ├── __init__.py
 │   ├── constants.py
+│   ├── events.py
 │   ├── Launcher.py
+│   ├── main_window_new.py
+│   ├── main.py
+│   ├── models.py
+│   ├── sequence_executor.py
 │   │
 │   ├── managers/
+│   │   ├── __init__.py
 │   │   ├── config_manager.py
 │   │   ├── data_manager.py
-│   │   └── steam_manager.py
+│   │   ├── index_manager.py
+│   │   ├── steam_manager.py
+│   │   └── steam_processor.py
 │   │
 │   └── ui/
 │       ├── accordion.py
-│       ├── deployment_tab.py
 │       ├── deployment_tab_ui.py
-│       ├── editor_tab.py
+│       ├── deployment_tab.py
 │       ├── editor_tab_ui.py
+│       ├── editor_tab.py
 │       ├── game_indexer.py
 │       ├── name_processor.py
 │       ├── name_utils.py
 │       ├── setup_tab.py
 │       ├── steam_cache.py
+│       ├── steam_integration.py
 │       ├── steam_utils.py
 │       ├── ui_widgets.py
 │       ├── widgets.py
@@ -94,8 +127,23 @@ Run the installer or extract the binary to a location of your choice, **or** dow
 │           └── joystick_profile_manager.py
 │
 └── site/
-    ├── fonts, icons, etc.
+    ├── AnkaCoder_b.ttf
+    ├── AnonymiceProNerdFontPropo-Regular.ttf
+    ├── Hermit-Regular.otf
+    ├── index.html
+    ├── index.set
+    ├── InterUI.ttf
+    ├── key.ico
+    ├── malgun.ttf
+    ├── MonofurNerdFont-Regular.ttf
+    ├── TruenoLt.otf
     └── img/
+        ├── Install.png
+        ├── key.png
+        ├── keymapper.png
+        ├── runas.png
+        ├── tip.png
+        └── Update.png
 ```
 # Documentation
 
