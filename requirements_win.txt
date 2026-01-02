@@ -7,3 +7,4 @@ beautifulsoup4
 configparser
 psutil
 pygame
+pyqtdarktheme

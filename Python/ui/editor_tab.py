@@ -49,22 +49,22 @@ class EditorTab(QWidget):
         self.table.setColumnCount(max(c.value for c in constants.EditorCols) + 1)
         
         headers = [
-            "Create", "Name", "Directory", "SteamID",
+            "Create", "Name", "Dir", "SteamID",
             "NameOverride", "opts", "args", "AsAdmin",
-            "Controller Mapper", "CM Rw",
-            "Borderless Windowing", "BW Rw", "Win-Exit",
-            "Multi-Monitor", "MM Rw",
+            "Mapper", "Wait",
+            "Windowing", "Wait", "Win-Exit",
+            "Multi-Monitor", "Wait",
             "Hide TB",
-            "MM Game Profile", "MM Desktop Profile",
-            "Player 1 Profile", "Player 2 Profile", "MediaCenter Profile",
-            "OnStart", "JA Rw",
-            "PreQuit", "JB Rw",
-            "Pre1", "Pre1Rw",
-            "Post1", "Post1Rw",
-            "Pre2", "Pre2Rw",
-            "Post2", "Post2Rw",
-            "Pre3", "Pre3Rw",
-            "Post3", "Post3Rw",
+            "MM Game", "MM Desktop",
+            "Player 1", "Player 2", "MediaCenter",
+            "OnStart", "Wait",
+            "PreQuit", "Wait",
+            "Pre1", "Wait",
+            "Post1", "Wait",
+            "Pre2", "Wait",
+            "Post2", "Wait",
+            "Pre3", "Wait",
+            "Post3", "Wait",
             "Kill List"
         ]
         self.table.setHorizontalHeaderLabels(headers)
@@ -100,16 +100,19 @@ class EditorTab(QWidget):
                           constants.EditorCols.JB_RUN_WAIT.value, constants.EditorCols.PRE1_RUN_WAIT.value,
                           constants.EditorCols.POST1_RUN_WAIT.value, constants.EditorCols.PRE2_RUN_WAIT.value,
                           constants.EditorCols.POST2_RUN_WAIT.value, constants.EditorCols.PRE3_RUN_WAIT.value,
-                          constants.EditorCols.POST3_RUN_WAIT.value, constants.EditorCols.WIN_EXIT.value]
+                          constants.EditorCols.POST3_RUN_WAIT.value]
 
             for col in rw_columns:
                 # Use a conservative small width; UI can still resize if needed
-                self.table.setColumnWidth(col, 56)
+                self.table.setColumnWidth(col, 30)
+            
+            self.table.setColumnWidth(constants.EditorCols.WIN_EXIT.value, 56)
+            self.table.setColumnWidth(constants.EditorCols.RUN_AS_ADMIN.value, 60)
 
             # Reduce width of opts, args, and Directory by 80%
             shrink_cols = [constants.EditorCols.DIRECTORY.value, constants.EditorCols.OPTIONS.value, constants.EditorCols.ARGUMENTS.value]
             for col in shrink_cols:
-                self.table.setColumnWidth(col, 30)
+                self.table.setColumnWidth(col, 40)
         except Exception:
             pass
         header = self.table.horizontalHeader()

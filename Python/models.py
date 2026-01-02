@@ -74,7 +74,7 @@ class AppConfig:
 
         # Setup Tab: Appearance
         self.app_font = "System"
-        self.app_theme = "Default"
+        self.app_theme = "Dark"
         self.font_size = 10
 
         # Setup Tab: Execution Sequences

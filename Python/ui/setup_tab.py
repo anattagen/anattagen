@@ -98,6 +98,7 @@ class SetupTab(QWidget):
         self.main_window = parent
         self.path_rows = {}
         self.repos = self._parse_repos_set()
+        self.options_args_map = self._parse_options_arguments_set()
         self.download_thread = None
         self._setup_ui()
 
@@ -286,14 +287,7 @@ class SetupTab(QWidget):
         appearance_layout.addRow("Font:", font_layout)
         # Theme
         self.theme_combo = QComboBox()
-        self.theme_combo.addItems(["System", "Fusion Dark", "Fusion Light"])
-        available_styles = [s.lower() for s in QStyleFactory.keys()]
-        if "windows" in available_styles:
-            self.theme_combo.addItem("Windows")
-        if "windowsvista" in available_styles:
-            self.theme_combo.addItem("WindowsVista")
-        if "material" in available_styles:
-            self.theme_combo.addItems(["Material Light", "Material Dark"])
+        self.theme_combo.addItems(["System", "Dark", "Light", "Auto"])
         appearance_layout.addRow("Theme:", self.theme_combo)
         # Restart Button
         self.restart_btn = QPushButton("Reset to Defaults")
@@ -319,6 +313,21 @@ class SetupTab(QWidget):
         dialog.setWindowTitle(f"Options & Arguments - {label_text.strip(':')}")
         layout = QFormLayout(dialog)
         
+        # Determine defaults based on the current executable path
+        current_path = getattr(self.main_window.config, config_key, "")
+        exe_name = os.path.basename(current_path).lower() if current_path else ""
+        
+        # Mutable container for defaults
+        defaults_state = {
+            'opts': "",
+            'args': "",
+            'has_defaults': False
+        }
+        
+        if exe_name in self.options_args_map:
+            defaults_state['opts'], defaults_state['args'] = self.options_args_map[exe_name]
+            defaults_state['has_defaults'] = True
+
         options_edit = QLineEdit()
         options_edit.setText(getattr(self.main_window.config, f"{config_key}_options", ""))
         layout.addRow("Options:", options_edit)
@@ -327,15 +336,77 @@ class SetupTab(QWidget):
         args_edit.setText(getattr(self.main_window.config, f"{config_key}_arguments", ""))
         layout.addRow("Arguments:", args_edit)
         
+        # Visual indicator for defaults match
+        status_label = QLabel()
+        layout.addRow("", status_label)
+
+        def check_defaults():
+            if not defaults_state['has_defaults']:
+                status_label.setText("")
+                return
+            
+            is_match = (options_edit.text() == defaults_state['opts'] and 
+                        args_edit.text() == defaults_state['args'])
+            
+            if is_match:
+                status_label.setText("✓ Matches defaults")
+                status_label.setStyleSheet("color: green;")
+            else:
+                status_label.setText("⚠ Custom values")
+                status_label.setStyleSheet("color: orange;")
+
+        options_edit.textChanged.connect(check_defaults)
+        args_edit.textChanged.connect(check_defaults)
+        
+        # Initial check
+        check_defaults()
+
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        
+        # Add Reset button
+        reset_btn = buttons.addButton("Reset to Defaults", QDialogButtonBox.ButtonRole.ResetRole)
+        reset_btn.setVisible(defaults_state['has_defaults'])
+        
+        def reset_values():
+            if defaults_state['has_defaults']:
+                options_edit.setText(defaults_state['opts'])
+                args_edit.setText(defaults_state['args'])
+        reset_btn.clicked.connect(reset_values)
+
+        # Function to update defaults if path changes while dialog is open
+        def update_defaults_from_path():
+            if config_key in self.path_rows:
+                curr_path = self.path_rows[config_key].line_edit.text()
+            else:
+                curr_path = ""
+            
+            curr_exe = os.path.basename(curr_path).lower() if curr_path else ""
+            
+            if curr_exe in self.options_args_map:
+                defaults_state['opts'], defaults_state['args'] = self.options_args_map[curr_exe]
+                defaults_state['has_defaults'] = True
+            else:
+                defaults_state['opts'], defaults_state['args'] = "", ""
+                defaults_state['has_defaults'] = False
+            
+            check_defaults()
+            reset_btn.setVisible(defaults_state['has_defaults'])
+
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         layout.addRow(buttons)
         
-        if dialog.exec():
-            setattr(self.main_window.config, f"{config_key}_options", options_edit.text())
-            setattr(self.main_window.config, f"{config_key}_arguments", args_edit.text())
-            self.config_changed.emit()
+        self._current_dialog_key = config_key
+        self._current_dialog_updater = update_defaults_from_path
+        
+        try:
+            if dialog.exec():
+                setattr(self.main_window.config, f"{config_key}_options", options_edit.text())
+                setattr(self.main_window.config, f"{config_key}_arguments", args_edit.text())
+                self.config_changed.emit()
+        finally:
+            self._current_dialog_key = None
+            self._current_dialog_updater = None
 
     def _connect_signals(self):
         self.add_source_dir_button.clicked.connect(self._add_source_dir)
@@ -355,6 +426,9 @@ class SetupTab(QWidget):
         for row in self.path_rows.values():
             row.valueChanged.connect(self.config_changed.emit)
             row.downloadRequested.connect(self._on_download_requested)
+        
+        for key, row in self.path_rows.items():
+            row.line_edit.textChanged.connect(lambda text, k=key: self._on_path_text_changed(k, text))
 
         # Sequences
         self.launch_sequence_list.model().layoutChanged.connect(self.config_changed.emit)
@@ -406,6 +480,28 @@ class SetupTab(QWidget):
                         'exe_name': parts[2]
                     }
         return repos
+
+    def _parse_options_arguments_set(self):
+        """Parses the options_arguments.set file and returns a dictionary."""
+        mapping = {}
+        if not os.path.exists(constants.OPTIONS_ARGUMENTS_SET):
+            return mapping
+        
+        try:
+            with open(constants.OPTIONS_ARGUMENTS_SET, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith('#'):
+                        continue
+                    if '=' in line:
+                        key, val = line.split('=', 1)
+                        parts = val.split('|')
+                        options = parts[0].strip() if len(parts) > 0 else ""
+                        arguments = parts[1].strip() if len(parts) > 1 else ""
+                        mapping[key.strip().lower()] = (options, arguments)
+        except Exception as e:
+            logging.error(f"Error parsing options_arguments.set: {e}")
+        return mapping
 
     def _on_download_requested(self, tool_name, tool_data):
         """Initiates the download of a tool."""
@@ -588,37 +684,24 @@ class SetupTab(QWidget):
             app.setPalette(self.main_window.original_palette)
             return
 
-        # Map theme names to style keys
-        theme_map = {
-            "Basic": "windows",
-            "Fusion": "Fusion",
-            "Windows": "Windows",
-            "WindowsVista": "WindowsVista",
-            "Universal": "windowsvista",
-            "Material": "Material"
-        }
+        try:
+            import qdarktheme
+            theme_key = theme.lower()
+            if theme_key not in ["dark", "light", "auto"]:
+                theme_key = "dark"
 
-        parts = theme.split()
-        variant = "Light"
-        style_base_name = theme
-
-        if len(parts) > 1 and parts[-1] in ["Light", "Dark"]:
-            variant = parts[-1]
-            style_base_name = " ".join(parts[:-1])
-
-        style_key = theme_map.get(style_base_name, "Fusion")
-
-        available_styles = [s.lower() for s in QStyleFactory.keys()]
-        if style_key.lower() not in available_styles:
-            logging.warning(f"Style '{style_key}' not found. Falling back to 'Fusion'.")
-            style_key = "Fusion"
-
-        app.setStyle(style_key)
-
-        if variant == "Dark":
-            app.setPalette(self._create_dark_palette())
-        else:  # Light
-            app.setPalette(app.style().standardPalette())
+            if hasattr(qdarktheme, "setup_theme"):
+                qdarktheme.setup_theme(theme_key)
+            elif hasattr(qdarktheme, "load_stylesheet"):
+                if theme_key == "auto": theme_key = "dark"
+                app.setStyleSheet(qdarktheme.load_stylesheet(theme_key))
+        except Exception as e:
+            logging.warning(f"pyqtdarktheme module error: {e}. Falling back to Fusion.")
+            app.setStyle("Fusion")
+            if "Dark" in theme or theme == "Dark":
+                app.setPalette(self._create_dark_palette())
+            else:
+                app.setPalette(app.style().standardPalette())
 
     def sync_ui_from_config(self, config: AppConfig):
         self.blockSignals(True)
@@ -631,7 +714,18 @@ class SetupTab(QWidget):
         self.exclude_manager_checkbox.setChecked(config.exclude_selected_manager_games)
         self.logging_verbosity_combo.setCurrentText(config.logging_verbosity)
         self.font_combo.setCurrentText(config.app_font)
-        self.theme_combo.setCurrentText(config.app_theme)
+        
+        # Handle legacy themes
+        theme = config.app_theme
+        if theme not in ["System", "Dark", "Light", "Auto"]:
+            if "Dark" in theme:
+                theme = "Dark"
+            elif "Light" in theme:
+                theme = "Light"
+            else:
+                theme = "Dark"
+        self.theme_combo.setCurrentText(theme)
+        
         self.font_size_spin.setValue(config.font_size)
 
         for attr_name in self.PATH_ATTRIBUTES:
@@ -673,3 +767,33 @@ class SetupTab(QWidget):
 
         config.launch_sequence = [self.launch_sequence_list.item(i).text() for i in range(self.launch_sequence_list.count())]
         config.exit_sequence = [self.exit_sequence_list.item(i).text() for i in range(self.exit_sequence_list.count())]
+
+    def _on_path_text_changed(self, config_key, new_path):
+        """Updates options and arguments if the new path matches a known tool."""
+        if not new_path:
+            return
+            
+        exe_name = os.path.basename(new_path).lower()
+        if exe_name in self.options_args_map:
+            opts, args = self.options_args_map[exe_name]
+            
+            # Update config if fields exist
+            config = self.main_window.config
+            opt_key = f"{config_key}_options"
+            arg_key = f"{config_key}_arguments"
+            
+            updated = False
+            if hasattr(config, opt_key) and getattr(config, opt_key) != opts:
+                setattr(config, opt_key, opts)
+                updated = True
+            if hasattr(config, arg_key) and getattr(config, arg_key) != args:
+                setattr(config, arg_key, args)
+                updated = True
+                
+            if updated:
+                logging.info(f"Applied default options/args for {exe_name} to {config_key}")
+                self.config_changed.emit()
+        
+        # Update dialog if open
+        if getattr(self, '_current_dialog_key', None) == config_key and hasattr(self, '_current_dialog_updater'):
+            self._current_dialog_updater()

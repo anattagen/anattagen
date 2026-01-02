@@ -1,6 +1,7 @@
 PyQt6
 nltk
 requests
+pyqtdarktheme
 beautifulsoup4
 configparser
 psutil

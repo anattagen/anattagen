@@ -180,10 +180,10 @@ class CreationController:
         config.set('Paths', 'MultiMonitorArguments', app_config.multi_monitor_tool_path_arguments)
         
         # Handle profile paths with CEN/LC logic
-        config.set('Paths', 'Player1Profile', self._get_profile_path('player1_profile', game_data))
-        config.set('Paths', 'Player2Profile', self._get_profile_path('player2_profile', game_data))
-        config.set('Paths', 'MultiMonitorGamingConfig', self._get_profile_path('mm_game_profile', game_data))
-        config.set('Paths', 'MultiMonitorDesktopConfig', self._get_profile_path('mm_desktop_profile', game_data))
+        config.set('Paths', 'Player1Profile', self._get_profile_path('player1_profile', game_data, game_profile_dir))
+        config.set('Paths', 'Player2Profile', self._get_profile_path('player2_profile', game_data, game_profile_dir))
+        config.set('Paths', 'MultiMonitorGamingConfig', self._get_profile_path('mm_game_profile', game_data, game_profile_dir))
+        config.set('Paths', 'MultiMonitorDesktopConfig', self._get_profile_path('mm_desktop_profile', game_data, game_profile_dir))
         
         # --- [Options] Section ---
         config.add_section('Options')
@@ -245,7 +245,7 @@ class CreationController:
         with open(ini_path, 'w', encoding='utf-8') as configfile:
             config.write(configfile)
 
-    def _get_profile_path(self, profile_key, game_data):
+    def _get_profile_path(self, profile_key, game_data, game_profile_dir=None):
         """
         Determines the correct path for a profile based on CEN/LC mode from the editor data.
         Enforces centralized path behavior to prevent profile folders in Launchers directory.
@@ -258,7 +258,9 @@ class CreationController:
         original_path = path_with_mode[2:] if len(path_with_mode) > 1 else ""
         
         if mode == '>': # LC (Launch Conditional / Local Copy)
-            # Return just the filename, as it will be in the same folder as Game.ini (Profile Dir)
+            # Return absolute path to the file in the profile directory
+            if game_profile_dir:
+                return str(Path(game_profile_dir) / os.path.basename(original_path))
             return os.path.basename(original_path)
         
         # CEN (Centralized)
