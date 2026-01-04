@@ -6,6 +6,7 @@ import logging
 import requests
 import json
 import subprocess
+import zipfile
 
 from Python import constants
 from Python.ui.name_utils import make_safe_filename
@@ -16,6 +17,7 @@ class CreationController:
     """
     def __init__(self, main_window):
         self.main_window = main_window
+        self.repo_tools = self._parse_repos_set()
 
     def create_all(self, selected_games):
         """
@@ -79,6 +81,7 @@ class CreationController:
 
             # 5. Handle CEN/LC file propagation (copying profiles)
             self._propagate_files(game_data, game_profile_dir)
+            self._propagate_apps(game_data, game_profile_dir)
 
             # 6. Create Profile Shortcut (pointing to source title's executable)
             game_exe_path = Path(game_data.get('directory', '')) / game_data.get('name', '')
@@ -167,9 +170,9 @@ class CreationController:
 
         # --- [Paths] Section ---
         config.add_section('Paths')
-        config.set('Paths', 'ControllerMapperApp', game_data.get('controller_mapper_path', ''))
-        config.set('Paths', 'BorderlessWindowingApp', game_data.get('borderless_windowing_path', ''))
-        config.set('Paths', 'MultiMonitorTool', game_data.get('multi_monitor_app_path', ''))
+        config.set('Paths', 'ControllerMapperApp', self._get_app_path_for_ini('controller_mapper_path', game_data, game_profile_dir))
+        config.set('Paths', 'BorderlessWindowingApp', self._get_app_path_for_ini('borderless_windowing_path', game_data, game_profile_dir))
+        config.set('Paths', 'MultiMonitorTool', self._get_app_path_for_ini('multi_monitor_app_path', game_data, game_profile_dir))
         
         # Add Options/Arguments for Paths
         config.set('Paths', 'ControllerMapperOptions', app_config.controller_mapper_path_options)
@@ -195,43 +198,43 @@ class CreationController:
         config.set('Options', 'KillList', game_data.get('kill_list', ''))
         # --- [PreLaunch] & [PostLaunch] Sections ---
         config.add_section('PreLaunch')
-        config.set('PreLaunch', 'App1', game_data.get('pre1_path', '').lstrip('<> '))
+        config.set('PreLaunch', 'App1', self._get_app_path_for_ini('pre1_path', game_data, game_profile_dir))
         config.set('PreLaunch', 'App1Options', app_config.pre1_path_options)
         config.set('PreLaunch', 'App1Arguments', app_config.pre1_path_arguments)
         config.set('PreLaunch', 'App1Wait', str(game_data.get('pre_1_run_wait', False)))
         
-        config.set('PreLaunch', 'App2', game_data.get('pre2_path', '').lstrip('<> '))
+        config.set('PreLaunch', 'App2', self._get_app_path_for_ini('pre2_path', game_data, game_profile_dir))
         config.set('PreLaunch', 'App2Options', app_config.pre2_path_options)
         config.set('PreLaunch', 'App2Arguments', app_config.pre2_path_arguments)
         config.set('PreLaunch', 'App2Wait', str(game_data.get('pre_2_run_wait', False)))
         
-        config.set('PreLaunch', 'App3', game_data.get('pre3_path', '').lstrip('<> '))
+        config.set('PreLaunch', 'App3', self._get_app_path_for_ini('pre3_path', game_data, game_profile_dir))
         config.set('PreLaunch', 'App3Options', app_config.pre3_path_options)
         config.set('PreLaunch', 'App3Arguments', app_config.pre3_path_arguments)
         config.set('PreLaunch', 'App3Wait', str(game_data.get('pre_3_run_wait', False)))
 
         config.add_section('PostLaunch')
-        config.set('PostLaunch', 'App1', game_data.get('post1_path', '').lstrip('<> '))
+        config.set('PostLaunch', 'App1', self._get_app_path_for_ini('post1_path', game_data, game_profile_dir))
         config.set('PostLaunch', 'App1Options', app_config.post1_path_options)
         config.set('PostLaunch', 'App1Arguments', app_config.post1_path_arguments)
         config.set('PostLaunch', 'App1Wait', str(game_data.get('post_1_run_wait', False)))
         
-        config.set('PostLaunch', 'App2', game_data.get('post2_path', '').lstrip('<> '))
+        config.set('PostLaunch', 'App2', self._get_app_path_for_ini('post2_path', game_data, game_profile_dir))
         config.set('PostLaunch', 'App2Options', app_config.post2_path_options)
         config.set('PostLaunch', 'App2Arguments', app_config.post2_path_arguments)
         config.set('PostLaunch', 'App2Wait', str(game_data.get('post_2_run_wait', False)))
         
-        config.set('PostLaunch', 'App3', game_data.get('post3_path', '').lstrip('<> '))
+        config.set('PostLaunch', 'App3', self._get_app_path_for_ini('post3_path', game_data, game_profile_dir))
         config.set('PostLaunch', 'App3Options', app_config.post3_path_options)
         config.set('PostLaunch', 'App3Arguments', app_config.post3_path_arguments)
         config.set('PostLaunch', 'App3Wait', str(game_data.get('post_3_run_wait', False)))
         
-        config.set('PostLaunch', 'JustAfterLaunchApp', game_data.get('just_after_launch_path', '').lstrip('<> '))
+        config.set('PostLaunch', 'JustAfterLaunchApp', self._get_app_path_for_ini('just_after_launch_path', game_data, game_profile_dir))
         config.set('PostLaunch', 'JustAfterLaunchOptions', app_config.just_after_launch_path_options)
         config.set('PostLaunch', 'JustAfterLaunchArguments', app_config.just_after_launch_path_arguments)
         config.set('PostLaunch', 'JustAfterLaunchWait', str(game_data.get('just_after_launch_run_wait', False)))
         
-        config.set('PostLaunch', 'JustBeforeExitApp', game_data.get('just_before_exit_path', '').lstrip('<> '))
+        config.set('PostLaunch', 'JustBeforeExitApp', self._get_app_path_for_ini('just_before_exit_path', game_data, game_profile_dir))
         config.set('PostLaunch', 'JustBeforeExitOptions', app_config.just_before_exit_path_options)
         config.set('PostLaunch', 'JustBeforeExitArguments', app_config.just_before_exit_path_arguments)
         config.set('PostLaunch', 'JustBeforeExitWait', str(game_data.get('just_before_exit_run_wait', False)))
@@ -265,6 +268,102 @@ class CreationController:
         
         # CEN (Centralized)
         return original_path
+
+    def _get_app_path_for_ini(self, key, game_data, target_dir):
+        """
+        Determines the correct path for an app/script based on CEN/LC mode.
+        If LC, returns the relative path to the file in the profile directory.
+        """
+        path_val = game_data.get(key, "")
+        if not path_val:
+            return ""
+            
+        if path_val.startswith('>'):
+            # LC mode
+            original_path = path_val[2:].strip()
+            exe_name = os.path.basename(original_path)
+            
+            # Try to find it in target_dir (it might be in a subfolder if extracted)
+            found = self._find_file_recursive(target_dir, exe_name)
+            if found:
+                try:
+                    return str(Path(found).relative_to(target_dir))
+                except ValueError:
+                    return exe_name
+            return exe_name
+        else:
+            # CEN mode
+            return path_val.lstrip('<> ')
+
+    def _propagate_apps(self, game_data, target_dir):
+        """
+        Handles LC propagation for applications and scripts.
+        Downloads/Extracts if supported in repos.set, otherwise copies.
+        """
+        app_keys = [
+            'controller_mapper_path', 'borderless_windowing_path', 'multi_monitor_app_path',
+            'just_after_launch_path', 'just_before_exit_path',
+            'pre1_path', 'pre2_path', 'pre3_path',
+            'post1_path', 'post2_path', 'post3_path'
+        ]
+
+        for key in app_keys:
+            path_val = game_data.get(key, "")
+            if not path_val or not path_val.startswith('>'):
+                continue
+
+            # It is LC
+            original_path = path_val[2:].strip()
+            if not original_path:
+                continue
+
+            exe_name = os.path.basename(original_path)
+            exe_lower = exe_name.lower()
+
+            # Check if it's a supported repo tool
+            if exe_lower in self.repo_tools:
+                url = self.repo_tools[exe_lower]
+                # Check if already exists in target_dir (recursively)
+                if self._find_file_recursive(target_dir, exe_name):
+                    logging.info(f"Tool {exe_name} already present in {target_dir}, skipping download.")
+                    continue
+                
+                # Download and extract
+                try:
+                    logging.info(f"Downloading {exe_name} from {url}...")
+                    response = requests.get(url, stream=True)
+                    response.raise_for_status()
+                    
+                    zip_path = target_dir / f"{exe_name}.zip"
+                    with open(zip_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            f.write(chunk)
+                    
+                    logging.info(f"Extracting {exe_name}...")
+                    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                        zip_ref.extractall(target_dir)
+                    
+                    os.remove(zip_path)
+                except Exception as e:
+                    logging.error(f"Failed to download/extract {exe_name}: {e}")
+            else:
+                # Not a repo tool, just copy the file
+                src_path = Path(original_path)
+                if src_path.exists():
+                    dest_path = target_dir / src_path.name
+                    if not dest_path.exists() or self.main_window.config.overwrite_states.get(key, True):
+                        try:
+                            shutil.copy2(src_path, dest_path)
+                            logging.info(f"Copied {src_path} to {dest_path}")
+                        except Exception as e:
+                            logging.error(f"Failed to copy {src_path}: {e}")
+
+    def _find_file_recursive(self, root_dir, filename):
+        """Recursively find a file in a directory."""
+        for root, dirs, files in os.walk(root_dir):
+            if filename in files:
+                return os.path.join(root, filename)
+        return None
 
     def _propagate_files(self, game_data, target_dir):
         """
@@ -301,3 +400,37 @@ class CreationController:
                     logging.info(f"Copied profile {original_path} to {target_file}")
                 except Exception as e:
                     logging.error(f"Failed to copy profile {original_path} to {target_dir}: {e}")
+
+    def _parse_repos_set(self):
+        """Parses the repos.set file to get tool download URLs."""
+        repos = {}
+        if not os.path.exists(constants.REPOS_SET):
+            return repos
+
+        config = configparser.ConfigParser()
+        config.read(constants.REPOS_SET)
+
+        global_vars = {}
+        if "GLOBAL" in config:
+            global_vars = dict(config["GLOBAL"])
+            global_vars["app_directory"] = constants.APP_ROOT_DIR
+
+        # Map exe_name -> url
+        tool_map = {}
+
+        for section in config.sections():
+            if section == "GLOBAL": continue
+            for key, value in config[section].items():
+                # Substitute vars
+                val = value
+                for var_name, var_val in global_vars.items():
+                    val = val.replace(f"${var_name.upper()}", var_val)
+                    val = val.replace(f"${var_name}", var_val)
+                val = val.replace("$ITEMNAME", key)
+                
+                parts = val.split('|')
+                if len(parts) >= 3:
+                    url = parts[0]
+                    exe_name = parts[2].lower() # Normalize to lower for matching
+                    tool_map[exe_name] = url
+        return tool_map

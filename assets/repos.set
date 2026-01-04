@@ -18,21 +18,21 @@ STEAMDBI = https://steamdb.info/app/
 
 
 [WINDOWING]
-borderlessGaming = $EXHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|borderless-gaming-portable.exe
+borderlessgaming = $EXHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 border_stripper = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 FullScreenIzer = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 
 
 [MAPPERS]
-keysticks = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
-antimicrox = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+keysticks = $EXHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+antimicrox = $EXHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 DS4Windows = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 DS4WindowsCmd = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 
 
 [DISPLAY]
-multiMonitorTool = https://www.nirsoft.net/utils/multimonitortool-x64.zip|$EXTRACTLOC|$ITEMNAME.exe
-displayChanger = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|DC2.exe
+multimonitortool = $EXHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+displaychanger = $EXHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe|$EXTRACTLOC|DC2.exe
 
 
 [SYNC]
@@ -44,6 +44,6 @@ ludusavi = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRA
 [AUDIO]
 setSoundDevice = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|SSD.exe
 syncthing = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
-SoundVolumeView = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+soundvolumeview = $EXHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 SWRE = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 

@@ -130,8 +130,8 @@ class DeploymentTab(QWidget):
         index_sources_button.clicked.connect(lambda: self.index_sources_requested.emit())
 
         # Create button shows dynamic count of selected items
-        create_button = QPushButton()
-        create_button.setStyleSheet("QPushButton { font-weight: bold; background-color: #4CAF50; color: white; padding: 8px; }")
+        self.create_button = QPushButton()
+        self.create_button.setStyleSheet("QPushButton { font-weight: bold; background-color: #4CAF50; color: white; padding: 8px; }")
 
         # Two-column layout for creation options: left = creation + enable items, right = runtime flags
         creation_columns_layout = QHBoxLayout()
@@ -162,7 +162,7 @@ class DeploymentTab(QWidget):
         right_col.addWidget(self.use_kill_list_checkbox)
         right_col.addWidget(self.terminate_bw_on_exit_checkbox)
         right_col.addSpacing(6)
-        right_col.addWidget(create_button)
+        right_col.addWidget(self.create_button)
         right_col.addWidget(self.download_game_json_checkbox)
         right_col.addStretch(1)
 
@@ -191,7 +191,7 @@ class DeploymentTab(QWidget):
         self.download_game_json_checkbox.stateChanged.connect(self.config_changed.emit)
 
         index_sources_button.clicked.connect(self.index_sources_requested.emit)
-        create_button.clicked.connect(self.create_selected_requested.emit)
+        self.create_button.clicked.connect(self.create_selected_requested.emit)
         self.download_steam_json_button.clicked.connect(self._on_download_clicked)
         self.delete_json_button.clicked.connect(self.delete_steam_json_requested.emit)
         self.delete_cache_button.clicked.connect(self.delete_steam_cache_requested.emit)
@@ -204,50 +204,24 @@ class DeploymentTab(QWidget):
         except Exception:
             pass
 
-        # Configure dynamic create button text based on checked items in editor table
-        def _update_create_button_text():
-            try:
-                wnd = self.window()
-                if hasattr(wnd, 'editor_tab') and hasattr(wnd.editor_tab, 'table'):
-                    table = wnd.editor_tab.table
-                    count = 0
-                    # Count checked checkboxes in column 0 (Create column)
-                    for row in range(table.rowCount()):
-                        cell_widget = table.cellWidget(row, 0)  # Column 0 is "Create"
-                        if cell_widget is not None:
-                            # Look for QCheckBox in the cell widget
-                            from PyQt6.QtWidgets import QCheckBox
-                            checkbox = None
-                            if isinstance(cell_widget, QCheckBox):
-                                checkbox = cell_widget
-                            else:
-                                # Search for checkbox in child widgets
-                                for child in cell_widget.findChildren(QCheckBox):
-                                    checkbox = child
-                                    break
-                            if checkbox and checkbox.isChecked():
-                                count += 1
-                else:
-                    count = 0
-            except Exception:
-                count = 0
-            try:
-                create_button.setText(f"CREATE  [{count}]  ITEMS")
-            except Exception:
-                create_button.setText(f"CREATE  [0]  ITEMS")
-
-        # Initialize and connect checkbox change signals if possible
+        # Initialize and connect to editor tab data changes
         try:
-            _update_create_button_text()
-            wnd = self.window()
-            if hasattr(wnd, 'editor_tab') and hasattr(wnd.editor_tab, 'table'):
-                # Connect to itemChanged which fires when cells are modified (including checkboxes)
-                wnd.editor_tab.table.itemChanged.connect(_update_create_button_text)
+            self.update_create_button_count()
+            if hasattr(self.main_window, 'editor_tab'):
+                self.main_window.editor_tab.data_changed.connect(self.update_create_button_count)
         except Exception:
             pass
 
-        # Wire create button click to signal
-        create_button.clicked.connect(self.create_selected_requested.emit)
+    def update_create_button_count(self):
+        """Update the create button text with the number of items marked for creation."""
+        count = 0
+        try:
+            if hasattr(self.main_window, 'editor_tab'):
+                count = self.main_window.editor_tab.get_create_count()
+        except Exception:
+            pass
+        self.create_button.setText(f"CREATE {count} ITEMS")
+        self.create_button.setEnabled(count > 0)
 
     def _on_download_clicked(self):
         """Emit the download signal with the currently selected version."""
