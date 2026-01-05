@@ -19,7 +19,7 @@ GAME_DIRECTORY_NAMES = [
 ANTIMICROX_EXES = ["antimicrox.exe", "antimicrox"]
 KEYSTICKS_EXES = ["keysticks.exe"]
 MULTIMONITOR_EXES = ["multimonitortool.exe"]
-BORDERLESS_EXES = ["borderless-gaming-portable.exe"]
+BORDERLESS_EXES = ["borderlessgaming.exe"]
 
 
 class ConfigManager(QObject):

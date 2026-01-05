@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QScrollArea,
     QPushButton, QCheckBox, QGroupBox, QMenu, QRadioButton, QButtonGroup
 )
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import pyqtSignal, Qt
 from Python.ui.accordion import AccordionSection
 from Python.models import AppConfig
 import os
@@ -55,8 +55,9 @@ class DeploymentTab(QWidget):
     delete_steam_cache_requested = pyqtSignal()
     process_steam_json_requested = pyqtSignal()
     
-    def __init__(self, parent=None):
-        super().__init__(parent)
+    def __init__(self, main_window):
+        super().__init__(main_window)
+        self.main_window = main_window
         self.overwrite_checkboxes = {}
         self._populate_ui()
 
@@ -161,9 +162,9 @@ class DeploymentTab(QWidget):
         right_col.addWidget(self.run_as_admin_checkbox)
         right_col.addWidget(self.use_kill_list_checkbox)
         right_col.addWidget(self.terminate_bw_on_exit_checkbox)
-        right_col.addSpacing(6)
+        right_col.addSpacing(20)
         right_col.addWidget(self.create_button)
-        right_col.addWidget(self.download_game_json_checkbox)
+        right_col.addWidget(self.download_game_json_checkbox, 0, Qt.AlignmentFlag.AlignRight)
         right_col.addStretch(1)
 
         creation_columns_layout.addLayout(left_col)
@@ -205,12 +206,7 @@ class DeploymentTab(QWidget):
             pass
 
         # Initialize and connect to editor tab data changes
-        try:
-            self.update_create_button_count()
-            if hasattr(self.main_window, 'editor_tab'):
-                self.main_window.editor_tab.data_changed.connect(self.update_create_button_count)
-        except Exception:
-            pass
+        self.update_create_button_count()
 
     def update_create_button_count(self):
         """Update the create button text with the number of items marked for creation."""

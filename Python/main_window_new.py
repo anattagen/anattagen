@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget, QStatusBar, 
-    QMessageBox, QMenu, QFileDialog, QTableWidgetItem, QCheckBox, QVBoxLayout, 
-    QHBoxLayout, QHeaderView
+    QMessageBox, QMenu, QFileDialog, QTableWidgetItem, QCheckBox, QVBoxLayout,
+    QHBoxLayout, QHeaderView, QProgressDialog
 )
 from PyQt6.QtCore import Qt, QCoreApplication, pyqtSlot, QEvent
 from PyQt6.QtGui import QCursor, QIcon
@@ -74,7 +74,7 @@ class MainWindow(QMainWindow):
 
         # Create all tab widgets first
         self.setup_tab = SetupTab(self)
-        self.deployment_tab = DeploymentTab()
+        self.deployment_tab = DeploymentTab(self)
         self.editor_tab = EditorTab(self)
         # Add tabs to the tab widget
         self.tabs.addTab(self.setup_tab, "Setup")
@@ -83,8 +83,6 @@ class MainWindow(QMainWindow):
 
         # Highlight unpopulated items in deployment tab with red color
         self.deployment_tab.highlight_unpopulated_items(self)
-
-        self._connect_signals()
         
         # Create status bar
         self.statusBar().showMessage("Ready")
@@ -131,6 +129,7 @@ class MainWindow(QMainWindow):
         self.deployment_tab.delete_steam_cache_requested.connect(self.steam_cache_manager.delete_cache_files)
         self.deployment_tab.process_steam_json_requested.connect(self._on_process_existing_json_requested)
 
+        self.editor_tab.data_changed.connect(self.deployment_tab.update_create_button_count)
         self.editor_tab.save_index_requested.connect(self._on_save_index_requested)
         self.editor_tab.load_index_requested.connect(self._on_load_index_requested)
         self.editor_tab.delete_indexes_requested.connect(self._on_delete_indexes_requested)
@@ -364,14 +363,69 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "No Games to Create", "Please mark at least one game with 'Create' in the Editor tab.")
             return
         
+        # Validation Step
+        missing_items = self.creation_controller.validate_prerequisites(games_to_process)
+        if missing_items:
+            msg = "The following referenced files are missing:\n\n"
+            # Limit to first 10 items to avoid huge dialog
+            for item in missing_items[:10]:
+                msg += f"- {item}\n"
+            if len(missing_items) > 10:
+                msg += f"... and {len(missing_items) - 10} more.\n"
+            msg += "\nDo you want to proceed anyway?"
+            
+            reply = QMessageBox.warning(self, "Missing Files Detected", msg, 
+                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
+                                        QMessageBox.StandardButton.No)
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+        # Confirmation Dialog
+        count = len(games_to_process)
+        msg_text = f"Ready to create {count} item(s).\n\nSelected items:"
+        
+        # Show first 10 items
+        preview_limit = 10
+        for i, game in enumerate(games_to_process[:preview_limit]):
+            name = game.get('name_override') or game.get('name') or "Unknown"
+            msg_text += f"\n- {name}"
+            
+        if count > preview_limit:
+            msg_text += f"\n... and {count - preview_limit} more."
+            
+        msg_text += "\n\nProceed with creation?"
+        
+        reply = QMessageBox.question(self, "Confirm Creation", msg_text, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # Create Progress Dialog
+        progress = QProgressDialog("Creating launchers...", "Cancel", 0, count, self)
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0)
+        
+        def update_progress(current, total, game_name):
+            if progress.wasCanceled():
+                return False
+            progress.setValue(current)
+            progress.setLabelText(f"Creating launcher for: {game_name}")
+            QApplication.processEvents()
+            return True
+
         # Debug output to verify selected games
         print(f"Found {len(games_to_process)} games marked for creation")
         for i, game in enumerate(games_to_process):
             print(f"Game {i+1}: {game.get('name_override', '')}")
         
         # Call create_all with the selected games
-        result = self.creation_controller.create_all(games_to_process)
-        self.statusBar().showMessage(f"Creation process finished. Processed: {result['processed_count']}, Failed: {result['failed_count']}", 5000)
+        result = self.creation_controller.create_all(games_to_process, progress_callback=update_progress)
+        
+        progress.setValue(count)
+        
+        if progress.wasCanceled():
+            self.statusBar().showMessage(f"Creation cancelled. Processed: {result['processed_count']}", 5000)
+        else:
+            self.statusBar().showMessage(f"Creation process finished. Processed: {result['processed_count']}, Failed: {result['failed_count']}", 5000)
 
     def _backup_steam_cache_files(self):
         """Backup Steam cache files before processing"""

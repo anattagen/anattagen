@@ -102,11 +102,6 @@ class DataManager(QObject):
 
     def save_editor_table_to_index(self, data, file_path):
         """Saves the current editor table data to a .index file."""
-        print(f"\n--- [DataManager] Attempting to save {len(data)} items to '{os.path.basename(file_path)}' ---")
-        # Log steam_id for the first few items to check
-        for i, game in enumerate(data[:5]):
-            print(f"  [DataManager:save] Item {i} ('{game.get('name')}'): steam_id is '{game.get('steam_id')}'")
-
         try:
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=4)

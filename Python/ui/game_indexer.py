@@ -77,16 +77,13 @@ def _get_steam_match(
         return steam_name, steam_id, name_override
 
     match_name = name_processor.get_match_name(name_override)
-    print(f"  [Steam Match] Attempting to match normalized name: '{match_name}'")
     match_data = steam_match_index.get(match_name)
 
     if not match_data:
-        print(f"  [Steam Match] -> No match found for '{match_name}'")
         return steam_name, steam_id, name_override
 
     steam_name = match_data.get("name", "")
     steam_id = match_data.get("id", "")
-    print(f"  [Steam Match] -> Found match! steam_id: '{steam_id}', steam_name: '{steam_name}'")
 
     if steam_name:
         # Clean the steam name for use as a display name
@@ -207,7 +204,6 @@ def _process_executable(
             'pre_1_run_wait': config.run_wait_states.get('pre1_path_run_wait', False), 'pre_2_run_wait': config.run_wait_states.get('pre2_path_run_wait', False), 'pre_3_run_wait': config.run_wait_states.get('pre3_path_run_wait', False),
             'post_1_run_wait': config.run_wait_states.get('post1_path_run_wait', False), 'post_2_run_wait': config.run_wait_states.get('post2_path_run_wait', False), 'post_3_run_wait': config.run_wait_states.get('post3_path_run_wait', False),
         }
-        print(f"  [Indexer] Processed '{filename}'. steam_id='{steam_id}'")
         return game_data
     except PermissionError:
         logging.warning(f"Permission denied for: {exec_full_path}")

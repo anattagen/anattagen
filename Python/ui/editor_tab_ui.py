@@ -145,8 +145,6 @@ def populate_editor_tab(main_window):
     
     main_window.editor_tab_layout.addWidget(main_window.editor_table)
     
-    # Print debug info
-    print("Editor tab populated successfully")
 
     # Connect editor table signals
     main_window.editor_table.itemChanged.connect(main_window._on_editor_table_edited)

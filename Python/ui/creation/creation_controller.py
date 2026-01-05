@@ -19,20 +19,182 @@ class CreationController:
         self.main_window = main_window
         self.repo_tools = self._parse_repos_set()
 
-    def create_all(self, selected_games):
+    def create_all(self, selected_games, progress_callback=None):
         """
         Processes all selected games from the editor tab to create their launchers.
         """
         processed_count = 0
         failed_count = 0
+        total_count = len(selected_games)
 
-        for game_data in selected_games:
+        for i, game_data in enumerate(selected_games):
+            if progress_callback:
+                game_name = game_data.get('name_override', 'New Game')
+                if progress_callback(i, total_count, game_name) is False:
+                    break
             if self._create_for_single_game(game_data):
                 processed_count += 1
             else:
                 failed_count += 1
         
         return {"processed_count": processed_count, "failed_count": failed_count}
+
+    def validate_prerequisites(self, selected_games):
+        """
+        Checks if all referenced files (profiles, apps) exist for the selected games.
+        Returns a list of missing file warnings.
+        """
+        missing_items = []
+        checked_paths = {}
+
+        def path_exists(p):
+            if not p: return True
+            if p in checked_paths: return checked_paths[p]
+            exists = os.path.exists(p)
+            checked_paths[p] = exists
+            return exists
+
+        for game in selected_games:
+            game_name = game.get('name_override', 'Unknown')
+            
+            # 1. Profiles
+            profile_keys = [
+                ('player1_profile', 'Player 1 Profile'),
+                ('player2_profile', 'Player 2 Profile'),
+                ('mm_game_profile', 'MM Game Config'),
+                ('mm_desktop_profile', 'MM Desktop Config'),
+                ('mediacenter_profile', 'Media Center Profile')
+            ]
+            
+            for key, label in profile_keys:
+                val = game.get(key, "")
+                if not val: continue
+                
+                clean_path = val
+                if val.startswith(('< ', '> ')):
+                    clean_path = val[2:].strip()
+                
+                extra_context = {}
+                if key == 'player1_profile':
+                    extra_context['$player_number'] = '1'
+                elif key == 'player2_profile':
+                    extra_context['$player_number'] = '2'
+                elif key == 'player3_profile':
+                    extra_context['$player_number'] = '3'
+                elif key == 'player4_profile':
+                    extra_context['$player_number'] = '4'
+            
+                clean_path = self._transform_path(clean_path, game, extra_context)
+                
+                if clean_path and not path_exists(clean_path):
+                    missing_items.append(f"Game '{game_name}': {label} missing ({clean_path})")
+
+            # 2. Apps
+            app_keys = [
+                ('controller_mapper_path', 'Controller Mapper', 'controller_mapper_enabled'),
+                ('borderless_windowing_path', 'Borderless Gaming', 'borderless_windowing_enabled'),
+                ('multi_monitor_app_path', 'Multi-Monitor Tool', 'multi_monitor_app_enabled'),
+                ('just_after_launch_path', 'Just After Launch', 'just_after_launch_enabled'),
+                ('just_before_exit_path', 'Just Before Exit', 'just_before_exit_enabled'),
+                ('pre1_path', 'Pre-Launch 1', 'pre_1_enabled'),
+                ('pre2_path', 'Pre-Launch 2', 'pre_2_enabled'),
+                ('pre3_path', 'Pre-Launch 3', 'pre_3_enabled'),
+                ('post1_path', 'Post-Launch 1', 'post_1_enabled'),
+                ('post2_path', 'Post-Launch 2', 'post_2_enabled'),
+                ('post3_path', 'Post-Launch 3', 'post_3_enabled'),
+            ]
+
+            for key, label, enabled_key in app_keys:
+                if not game.get(enabled_key, True):
+                    continue
+                
+                val = game.get(key, "")
+                if not val: continue
+                
+                clean_path = val.lstrip('<> ').strip()
+                if not clean_path: continue
+                
+                clean_path = self._transform_path(clean_path, game)
+
+                # If LC mode (starts with >), check if it's a repo tool
+                if val.startswith('>'):
+                    exe_name = os.path.basename(clean_path).lower()
+                    if exe_name in self.repo_tools:
+                        continue # Will be downloaded
+                
+                if not path_exists(clean_path):
+                    missing_items.append(f"Game '{game_name}': {label} missing ({clean_path})")
+
+        return missing_items
+
+    def _transform_path(self, path, game_data, extra_context=None):
+        """Transforms variables in the path string."""
+        if not path:
+            return path
+            
+        # Load mappings if not already loaded
+        if not hasattr(self, 'var_mapping'):
+            self.var_mapping = {}
+            set_path = os.path.join(constants.ASSETS_DIR, "transformed_vars.set")
+            if os.path.exists(set_path):
+                try:
+                    with open(set_path, 'r') as f:
+                        for line in f:
+                            line = line.strip()
+                            if '=' in line and not line.startswith('['):
+                                k, v = line.split('=', 1)
+                                self.var_mapping[k.strip()] = v.strip()
+                except Exception as e:
+                    logging.error(f"Error loading transformed_vars.set: {e}")
+
+        # Prepare context variables
+        safe_name = make_safe_filename(game_data.get('name_override', ''))
+        if not safe_name:
+             safe_name = make_safe_filename(game_data.get('name', 'Game'))
+
+        context = {
+            '$safe_game_name': safe_name,
+            '$game_title': safe_name,
+            '$APP_ROOT_DIR': constants.APP_ROOT_DIR,
+            '$app_dir': constants.APP_ROOT_DIR,
+            '$game_directory': game_data.get('directory', ''),
+            '$game_executable': game_data.get('name', ''),
+            '$steam_id': str(game_data.get('steam_id', ''))
+        }
+
+        if extra_context:
+            context.update(extra_context)
+
+        temp_path = path
+        for k, v in self.var_mapping.items():
+            if k in temp_path:
+                temp_path = temp_path.replace(k, v)
+        
+        for k, v in context.items():
+            if k in temp_path:
+                temp_path = temp_path.replace(k, str(v))
+                
+        return temp_path
+
+    def _resolve_mode(self, path_val, config_key):
+        """
+        Resolves the path and mode (CEN vs LC) based on prefix or config default.
+        Returns (clean_path, mode_symbol) where mode_symbol is '<' or '>'.
+        """
+        if not path_val:
+            return "", '<'
+            
+        if path_val.startswith('> '):
+            return path_val[2:].strip(), '>'
+        elif path_val.startswith('< '):
+            return path_val[2:].strip(), '<'
+            
+        # Check config default
+        if hasattr(self.main_window.config, 'deployment_path_modes'):
+            mode_str = self.main_window.config.deployment_path_modes.get(config_key, 'CEN')
+            return path_val, ('>' if mode_str != 'CEN' else '<')
+            
+        return path_val, '<'
 
     def _create_for_single_game(self, game_data):
         """
@@ -73,7 +235,7 @@ class CreationController:
 
             # 3. Create the Game.ini file
             ini_path = game_profile_dir / "Game.ini"
-            self._create_game_ini(ini_path, game_data, app_config, game_profile_dir)
+            self._create_game_ini(ini_path, game_data, app_config, game_profile_dir, launcher_shortcut_path)
             
             # 3b. Download Game.json if enabled
             if app_config.download_game_json:
@@ -156,7 +318,7 @@ class CreationController:
         except Exception as e:
             logging.error(f"Failed to download Game.json for {game_data.get('name_override')} (AppID: {steam_id}): {e}")
 
-    def _create_game_ini(self, ini_path, game_data, app_config, game_launcher_dir):
+    def _create_game_ini(self, ini_path, game_data, app_config, game_profile_dir, launcher_shortcut_path):
         """
         Generates and saves the Game.ini file based on game-specific and global settings.
         """
@@ -183,11 +345,28 @@ class CreationController:
         config.set('Paths', 'MultiMonitorArguments', app_config.multi_monitor_tool_path_arguments)
         
         # Handle profile paths with CEN/LC logic
-        config.set('Paths', 'Player1Profile', self._get_profile_path('player1_profile', game_data, game_profile_dir))
-        config.set('Paths', 'Player2Profile', self._get_profile_path('player2_profile', game_data, game_profile_dir))
-        config.set('Paths', 'MultiMonitorGamingConfig', self._get_profile_path('mm_game_profile', game_data, game_profile_dir))
-        config.set('Paths', 'MultiMonitorDesktopConfig', self._get_profile_path('mm_desktop_profile', game_data, game_profile_dir))
+        val = self._get_profile_path('player1_profile', game_data, game_profile_dir)
+        config.set('Paths', 'Player1Profile', val)
         
+        val = self._get_profile_path('player2_profile', game_data, game_profile_dir)
+        config.set('Paths', 'Player2Profile', val)
+        
+        val = self._get_profile_path('mm_game_profile', game_data, game_profile_dir)
+        config.set('Paths', 'MultiMonitorGamingConfig', val)
+        
+        val = self._get_profile_path('mm_desktop_profile', game_data, game_profile_dir)
+        config.set('Paths', 'MultiMonitorDesktopConfig', val)
+        
+        val = self._get_profile_path('mediacenter_profile', game_data, game_profile_dir)
+        config.set('Paths', 'MediaCenterProfile', val)
+        
+        # Additional requested paths
+        game_exe_path = os.path.join(game_data.get('directory', ''), game_data.get('name', ''))
+        config.set('Paths', 'GameExecutablePath', str(game_exe_path))
+        config.set('Paths', 'LauncherExecutable', str(constants.LAUNCHER_EXECUTABLE))
+        config.set('Paths', 'LauncherShortcut', str(launcher_shortcut_path))
+        config.set('Paths', 'ProfileDirectory', str(game_profile_dir))
+
         # --- [Options] Section ---
         config.add_section('Options')
         config.set('Options', 'RunAsAdmin', str(game_data.get('run_as_admin', False)))
@@ -244,6 +423,45 @@ class CreationController:
         config.set('Sequences', 'LaunchSequence', ",".join(app_config.launch_sequence))
         config.set('Sequences', 'ExitSequence', ",".join(app_config.exit_sequence))
 
+        # --- [SourcePaths] Section ---
+        config.add_section('SourcePaths')
+        
+        source_map = [
+            ('Player1Profile', 'player1_profile', 'p1_profile_path'),
+            ('Player2Profile', 'player2_profile', 'p2_profile_path'),
+            ('MultiMonitorGamingConfig', 'mm_game_profile', 'multimonitor_gaming_path'),
+            ('MultiMonitorDesktopConfig', 'mm_desktop_profile', 'multimonitor_media_path'),
+            ('MediaCenterProfile', 'mediacenter_profile', 'mediacenter_profile_path'),
+            ('ControllerMapperApp', 'controller_mapper_path', 'controller_mapper_path'),
+            ('BorderlessWindowingApp', 'borderless_windowing_path', 'borderless_gaming_path'),
+            ('MultiMonitorTool', 'multi_monitor_app_path', 'multi_monitor_tool_path'),
+            ('JustAfterLaunchApp', 'just_after_launch_path', 'just_after_launch_path'),
+            ('JustBeforeExitApp', 'just_before_exit_path', 'just_before_exit_path'),
+            ('PreLaunchApp1', 'pre1_path', 'pre1_path'),
+            ('PreLaunchApp2', 'pre2_path', 'pre2_path'),
+            ('PreLaunchApp3', 'pre3_path', 'pre3_path'),
+            ('PostLaunchApp1', 'post1_path', 'post1_path'),
+            ('PostLaunchApp2', 'post2_path', 'post2_path'),
+            ('PostLaunchApp3', 'post3_path', 'post3_path'),
+        ]
+
+        for ini_key, data_key, config_key in source_map:
+            path_val = game_data.get(data_key, "")
+            if not path_val: continue
+            
+            clean_path, mode = self._resolve_mode(path_val, config_key)
+            if mode == '>':
+                # It is LC, write resolved source path
+                extra_context = {}
+                if 'player' in data_key and 'profile' in data_key:
+                    if '1' in data_key: extra_context['$player_number'] = '1'
+                    elif '2' in data_key: extra_context['$player_number'] = '2'
+                    elif '3' in data_key: extra_context['$player_number'] = '3'
+                    elif '4' in data_key: extra_context['$player_number'] = '4'
+                
+                resolved_source = self._transform_path(clean_path, game_data, extra_context)
+                config.set('SourcePaths', ini_key, resolved_source)
+
         # Write the INI file
         with open(ini_path, 'w', encoding='utf-8') as configfile:
             config.write(configfile)
@@ -253,35 +471,68 @@ class CreationController:
         Determines the correct path for a profile based on CEN/LC mode from the editor data.
         Enforces centralized path behavior to prevent profile folders in Launchers directory.
         """
+        # Map profile_key to config_key
+        config_key_map = {
+            'player1_profile': 'p1_profile_path',
+            'player2_profile': 'p2_profile_path',
+            'player3_profile': 'p3_profile_path',
+            'player4_profile': 'p4_profile_path',
+            'mm_game_profile': 'multimonitor_gaming_path',
+            'mm_desktop_profile': 'multimonitor_media_path',
+            'mediacenter_profile': 'mediacenter_profile_path'
+        }
+        config_key = config_key_map.get(profile_key, profile_key)
+        
         path_with_mode = game_data.get(profile_key, "")
-        if not path_with_mode:
+        original_path, mode = self._resolve_mode(path_with_mode, config_key)
+        
+        if not original_path:
             return ""
-        
-        mode = path_with_mode[0] if len(path_with_mode) > 0 else '<'
-        original_path = path_with_mode[2:] if len(path_with_mode) > 1 else ""
-        
+
+        # Prepare context for transformation
+        extra_context = {}
+        if profile_key == 'player1_profile':
+            extra_context['$player_number'] = '1'
+        elif profile_key == 'player2_profile':
+            extra_context['$player_number'] = '2'
+        elif profile_key == 'player3_profile':
+            extra_context['$player_number'] = '3'
+        elif profile_key == 'player4_profile':
+            extra_context['$player_number'] = '4'
+
+        resolved_path = self._transform_path(original_path, game_data, extra_context)
+
         if mode == '>': # LC (Launch Conditional / Local Copy)
             # Return absolute path to the file in the profile directory
             if game_profile_dir:
-                return str(Path(game_profile_dir) / os.path.basename(original_path))
-            return os.path.basename(original_path)
+                full_path = Path(game_profile_dir) / os.path.basename(resolved_path)
+                return str(os.path.abspath(full_path))
+            return os.path.basename(resolved_path)
         
         # CEN (Centralized)
-        return original_path
+        return resolved_path
 
     def _get_app_path_for_ini(self, key, game_data, target_dir):
         """
         Determines the correct path for an app/script based on CEN/LC mode.
         If LC, returns the relative path to the file in the profile directory.
         """
+        # Map key to config_key
+        config_key_map = {
+            'borderless_windowing_path': 'borderless_gaming_path',
+            'multi_monitor_app_path': 'multi_monitor_tool_path'
+        }
+        config_key = config_key_map.get(key, key)
+        
         path_val = game_data.get(key, "")
-        if not path_val:
-            return ""
-            
-        if path_val.startswith('>'):
+        clean_path, mode = self._resolve_mode(path_val, config_key)
+        
+        if not clean_path: return ""
+
+        if mode == '>':
             # LC mode
-            original_path = path_val[2:].strip()
-            exe_name = os.path.basename(original_path)
+            resolved_path = self._transform_path(clean_path, game_data)
+            exe_name = os.path.basename(resolved_path)
             
             # Try to find it in target_dir (it might be in a subfolder if extracted)
             found = self._find_file_recursive(target_dir, exe_name)
@@ -293,7 +544,7 @@ class CreationController:
             return exe_name
         else:
             # CEN mode
-            return path_val.lstrip('<> ')
+            return self._transform_path(clean_path, game_data)
 
     def _propagate_apps(self, game_data, target_dir):
         """
@@ -307,17 +558,24 @@ class CreationController:
             'post1_path', 'post2_path', 'post3_path'
         ]
 
+        config_key_map = {
+            'borderless_windowing_path': 'borderless_gaming_path',
+            'multi_monitor_app_path': 'multi_monitor_tool_path'
+        }
+
         for key in app_keys:
             path_val = game_data.get(key, "")
-            if not path_val or not path_val.startswith('>'):
+            config_key = config_key_map.get(key, key)
+            original_path, mode = self._resolve_mode(path_val, config_key)
+            
+            if not original_path or mode != '>':
                 continue
 
-            # It is LC
-            original_path = path_val[2:].strip()
-            if not original_path:
+            resolved_path = self._transform_path(original_path, game_data)
+            if not resolved_path:
                 continue
 
-            exe_name = os.path.basename(original_path)
+            exe_name = os.path.basename(resolved_path)
             exe_lower = exe_name.lower()
 
             # Check if it's a supported repo tool
@@ -348,7 +606,7 @@ class CreationController:
                     logging.error(f"Failed to download/extract {exe_name}: {e}")
             else:
                 # Not a repo tool, just copy the file
-                src_path = Path(original_path)
+                src_path = Path(resolved_path)
                 if src_path.exists():
                     dest_path = target_dir / src_path.name
                     if not dest_path.exists() or self.main_window.config.overwrite_states.get(key, True):
@@ -376,7 +634,8 @@ class CreationController:
             'player1_profile': 'p1_profile_path',
             'player2_profile': 'p2_profile_path',
             'mm_game_profile': 'multimonitor_gaming_path',
-            'mm_desktop_profile': 'multimonitor_media_path'
+            'mm_desktop_profile': 'multimonitor_media_path',
+            'mediacenter_profile': 'mediacenter_profile_path'
         }
 
         for key, config_key in profile_map.items():
@@ -384,12 +643,22 @@ class CreationController:
             if not path_with_mode:
                 continue
                 
-            mode = path_with_mode[0] if len(path_with_mode) > 0 else '<'
-            original_path_str = path_with_mode[2:] if len(path_with_mode) > 1 else ""
+            original_path_str, mode = self._resolve_mode(path_with_mode, config_key)
 
+            extra_context = {}
+            if key == 'player1_profile':
+                extra_context['$player_number'] = '1'
+            elif key == 'player2_profile':
+                extra_context['$player_number'] = '2'
+            elif key == 'player3_profile':
+                extra_context['$player_number'] = '3'
+            elif key == 'player4_profile':
+                extra_context['$player_number'] = '4'
+            resolved_path_str = self._transform_path(original_path_str, game_data, extra_context)
+            
             # Only copy if mode is LC (>) and path exists
-            if mode == '>' and original_path_str and os.path.exists(original_path_str):
-                original_path = Path(original_path_str)
+            if mode == '>' and resolved_path_str and os.path.exists(resolved_path_str):
+                original_path = Path(resolved_path_str)
                 target_file = target_dir / original_path.name
                 
                 if target_file.exists() and not app_config.overwrite_states.get(config_key, True):

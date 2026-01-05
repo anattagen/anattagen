@@ -1,0 +1,7 @@
+[GLOBALVARS]
+$game_title = $safe_game_name
+$Player$+ = Player[$player_number]
+$app_dir =  $APP_ROOT_DIR
+$install_dir = $game_directory
+$exe_name = $game_executable
+$steamid = $steam_id

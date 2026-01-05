@@ -118,7 +118,6 @@ def load_index(main_window=None, directory=None, prompt_for_filename=False):
     # Load the data
     data = []
     try:
-        print(f"Loading index from {file_path}")
         with open(file_path, "r", encoding="utf-8") as f:
             line_number = 0
             for line in f:
@@ -155,7 +154,7 @@ def load_index(main_window=None, directory=None, prompt_for_filename=False):
                                 # For path fields (using EditorCols mapping), extract the indicator
                                 if i in path_columns:
                                     path_indicators[f"col_{i}_indicator"] = parts[i]
-                                    row_dict[field] = "" # Value is stored separately or derived
+                                    row_dict[field] = parts[i]
                                 else:
                                     # For boolean fields, convert to boolean
                                     if field in ["include", "as_admin", "no_tb", "kill_list_enabled"]:
@@ -169,13 +168,10 @@ def load_index(main_window=None, directory=None, prompt_for_filename=False):
                         # Add the row to the data
                         data.append(row_dict)
                     except Exception as e:
-                        print(f"Error processing line {line_number}: {line.strip()}")
-                        print(f"Error details: {str(e)}")
                         traceback.print_exc()
                         # Continue with the next line instead of failing completely
                         continue
         
-        print(f"Loaded {len(data)} entries from index")
         if main_window and hasattr(main_window, 'statusBar'):
             main_window.statusBar().showMessage(f"Loaded {len(data)} entries from {file_path}", 3000)
     except Exception as e:

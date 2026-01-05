@@ -354,6 +354,24 @@ class EditorTab(QWidget):
 
         menu = QMenu(self)
         
+        # Toggle Create Action
+        toggle_create_action = menu.addAction("Toggle 'Create' for Selected")
+        toggle_create_action.triggered.connect(self.toggle_create_for_selection)
+        
+        # Clone Game Action
+        clone_action = menu.addAction("Clone Game")
+        clone_action.triggered.connect(lambda: self.clone_game(row))
+
+        # Open Game.ini Action
+        open_ini_action = menu.addAction("Open Game.ini")
+        open_ini_action.triggered.connect(lambda: self.open_game_ini(row))
+
+        # Open Profile Folder Action
+        open_profile_action = menu.addAction("Open Profile Folder")
+        open_profile_action.triggered.connect(lambda: self.open_profile_folder(row))
+
+        menu.addSeparator()
+
         # Edit
         edit_action = menu.addAction("Edit this Field")
         edit_action.triggered.connect(lambda: self.edit_cell(row, col))
@@ -361,6 +379,12 @@ class EditorTab(QWidget):
         # Select Row
         select_row_action = menu.addAction("Select Row")
         select_row_action.triggered.connect(lambda: self.table.selectRow(row))
+        
+        menu.addSeparator()
+        select_all_action = menu.addAction("Select All")
+        select_all_action.triggered.connect(self.table.selectAll)
+        deselect_all_action = menu.addAction("Deselect All")
+        deselect_all_action.triggered.connect(self.table.clearSelection)
         
         menu.addSeparator()
         
@@ -392,6 +416,92 @@ class EditorTab(QWidget):
             
         if not menu.isEmpty():
             menu.exec(self.table.viewport().mapToGlobal(position))
+
+    def clone_game(self, row):
+        """Clone the game at the specified row."""
+        real_index = (self.current_page * self.page_size) + row
+        if real_index < len(self.filtered_data):
+            game_to_clone = self.filtered_data[real_index]
+            new_game = copy.deepcopy(game_to_clone)
+            
+            # Modify name to indicate clone
+            new_game['name_override'] = f"{new_game.get('name_override', '')} (Copy)"
+            
+            # Insert after the current item in original_data
+            try:
+                original_index = self.original_data.index(game_to_clone)
+                self.original_data.insert(original_index + 1, new_game)
+            except ValueError:
+                self.original_data.append(new_game)
+                
+            # Refresh view
+            self.filter_table(self.search_bar.text())
+            self.main_window._on_editor_table_edited(None)
+
+    def open_game_ini(self, row):
+        """Open the Game.ini file for the selected game."""
+        real_index = (self.current_page * self.page_size) + row
+        if real_index < len(self.filtered_data):
+            game_data = self.filtered_data[real_index]
+            
+            from Python.ui.name_utils import make_safe_filename
+            safe_name = make_safe_filename(game_data.get('name_override', ''))
+            if not safe_name:
+                 safe_name = make_safe_filename(game_data.get('name', ''))
+            
+            profiles_dir = self.main_window.config.profiles_dir
+            ini_path = os.path.join(profiles_dir, safe_name, "Game.ini")
+            
+            if os.path.exists(ini_path):
+                os.startfile(ini_path)
+            else:
+                QMessageBox.warning(self, "File Not Found", f"Game.ini not found at:\n{ini_path}\n\nHas the game been created yet?")
+
+    def open_profile_folder(self, row):
+        """Open the profile folder for the selected game."""
+        real_index = (self.current_page * self.page_size) + row
+        if real_index < len(self.filtered_data):
+            game_data = self.filtered_data[real_index]
+            
+            from Python.ui.name_utils import make_safe_filename
+            safe_name = make_safe_filename(game_data.get('name_override', ''))
+            if not safe_name:
+                 safe_name = make_safe_filename(game_data.get('name', ''))
+            
+            profiles_dir = self.main_window.config.profiles_dir
+            profile_path = os.path.join(profiles_dir, safe_name)
+            
+            if os.path.exists(profile_path):
+                os.startfile(profile_path)
+            else:
+                QMessageBox.warning(self, "Folder Not Found", f"Profile folder not found at:\n{profile_path}\n\nHas the game been created yet?")
+
+    def toggle_create_for_selection(self):
+        """Toggle the 'create' status for all selected rows."""
+        selected_rows = set()
+        for range_ in self.table.selectedRanges():
+            for r in range(range_.topRow(), range_.bottomRow() + 1):
+                selected_rows.add(r)
+        
+        if not selected_rows:
+            return
+
+        # Determine target state: if any are unchecked, check all. Otherwise uncheck all.
+        target_state = False
+        for row in selected_rows:
+            real_index = (self.current_page * self.page_size) + row
+            if real_index < len(self.filtered_data):
+                if not self.filtered_data[real_index].get('create', False):
+                    target_state = True
+                    break
+        
+        for row in selected_rows:
+            real_index = (self.current_page * self.page_size) + row
+            if real_index < len(self.filtered_data):
+                self.filtered_data[real_index]['create'] = target_state
+                self._update_widget_state(row, constants.EditorCols.INCLUDE.value, target_state)
+        
+        self.data_changed.emit()
 
     def edit_cell(self, row, col):
         item = self.table.item(row, col)
@@ -548,8 +658,9 @@ class EditorTab(QWidget):
         cb_enabled.setToolTip("Enable")
         cb_enabled.stateChanged.connect(lambda state: self._on_merged_widget_changed(row, col))
         
-        label = QLabel(path_text)
-        label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        line_edit = QLineEdit(path_text)
+        line_edit.setToolTip(path_text)
+        line_edit.textChanged.connect(lambda text: self._on_merged_widget_changed(row, col))
         
         cb_overwrite = QCheckBox()
         cb_overwrite.setChecked(overwrite)
@@ -557,7 +668,7 @@ class EditorTab(QWidget):
         cb_overwrite.stateChanged.connect(lambda state: self._on_merged_widget_changed(row, col))
         
         layout.addWidget(cb_enabled)
-        layout.addWidget(label, 1)
+        layout.addWidget(line_edit, 1)
         layout.addWidget(cb_overwrite)
         
         return widget
@@ -604,12 +715,14 @@ class EditorTab(QWidget):
         elif col == constants.EditorCols.CM_PATH.value:
             en, path, ov = self._get_merged_path_data(row, col)
             game['controller_mapper_enabled'] = en
+            game['controller_mapper_path'] = path
             game['controller_mapper_overwrite'] = ov
         elif col == constants.EditorCols.CM_RUN_WAIT.value:
             game['controller_mapper_run_wait'] = self._get_checkbox_value(row, col)
         elif col == constants.EditorCols.BW_PATH.value:
             en, path, ov = self._get_merged_path_data(row, col)
             game['borderless_windowing_enabled'] = en
+            game['borderless_windowing_path'] = path
             game['borderless_windowing_overwrite'] = ov
         elif col == constants.EditorCols.BW_RUN_WAIT.value:
             game['borderless_windowing_run_wait'] = self._get_checkbox_value(row, col)
@@ -618,6 +731,7 @@ class EditorTab(QWidget):
         elif col == constants.EditorCols.MM_PATH.value:
             en, path, ov = self._get_merged_path_data(row, col)
             game['multi_monitor_app_enabled'] = en
+            game['multi_monitor_app_path'] = path
             game['multi_monitor_app_overwrite'] = ov
         elif col == constants.EditorCols.MM_RUN_WAIT.value:
             game['multi_monitor_app_run_wait'] = self._get_checkbox_value(row, col)
@@ -641,48 +755,56 @@ class EditorTab(QWidget):
         elif col == constants.EditorCols.JA_PATH.value:
             en, path, ov = self._get_merged_path_data(row, col)
             game['just_after_launch_enabled'] = en
+            game['just_after_launch_path'] = path
             game['just_after_launch_overwrite'] = ov
         elif col == constants.EditorCols.JA_RUN_WAIT.value:
             game['just_after_launch_run_wait'] = self._get_checkbox_value(row, col)
         elif col == constants.EditorCols.JB_PATH.value:
             en, path, ov = self._get_merged_path_data(row, col)
             game['just_before_exit_enabled'] = en
+            game['just_before_exit_path'] = path
             game['just_before_exit_overwrite'] = ov
         elif col == constants.EditorCols.JB_RUN_WAIT.value:
             game['just_before_exit_run_wait'] = self._get_checkbox_value(row, col)
         elif col == constants.EditorCols.PRE1_PATH.value:
             en, path, ov = self._get_merged_path_data(row, col)
             game['pre_1_enabled'] = en
+            game['pre1_path'] = path
             game['pre_1_overwrite'] = ov
         elif col == constants.EditorCols.PRE1_RUN_WAIT.value:
             game['pre_1_run_wait'] = self._get_checkbox_value(row, col)
         elif col == constants.EditorCols.POST1_PATH.value:
             en, path, ov = self._get_merged_path_data(row, col)
             game['post_1_enabled'] = en
+            game['post1_path'] = path
             game['post_1_overwrite'] = ov
         elif col == constants.EditorCols.POST1_RUN_WAIT.value:
             game['post_1_run_wait'] = self._get_checkbox_value(row, col)
         elif col == constants.EditorCols.PRE2_PATH.value:
             en, path, ov = self._get_merged_path_data(row, col)
             game['pre_2_enabled'] = en
+            game['pre2_path'] = path
             game['pre_2_overwrite'] = ov
         elif col == constants.EditorCols.PRE2_RUN_WAIT.value:
             game['pre_2_run_wait'] = self._get_checkbox_value(row, col)
         elif col == constants.EditorCols.POST2_PATH.value:
             en, path, ov = self._get_merged_path_data(row, col)
             game['post_2_enabled'] = en
+            game['post2_path'] = path
             game['post_2_overwrite'] = ov
         elif col == constants.EditorCols.POST2_RUN_WAIT.value:
             game['post_2_run_wait'] = self._get_checkbox_value(row, col)
         elif col == constants.EditorCols.PRE3_PATH.value:
             en, path, ov = self._get_merged_path_data(row, col)
             game['pre_3_enabled'] = en
+            game['pre3_path'] = path
             game['pre_3_overwrite'] = ov
         elif col == constants.EditorCols.PRE3_RUN_WAIT.value:
             game['pre_3_run_wait'] = self._get_checkbox_value(row, col)
         elif col == constants.EditorCols.POST3_PATH.value:
             en, path, ov = self._get_merged_path_data(row, col)
             game['post_3_enabled'] = en
+            game['post3_path'] = path
             game['post_3_overwrite'] = ov
         elif col == constants.EditorCols.POST3_RUN_WAIT.value:
             game['post_3_run_wait'] = self._get_checkbox_value(row, col)
@@ -718,8 +840,8 @@ class EditorTab(QWidget):
             cbs = widget.findChildren(QCheckBox)
             enabled = cbs[0].isChecked() if len(cbs) > 0 else False
             overwrite = cbs[1].isChecked() if len(cbs) > 1 else False
-            lbl = widget.findChild(QLabel)
-            path = lbl.text() if lbl else ""
+            le = widget.findChild(QLineEdit)
+            path = le.text() if le else ""
             return enabled, path, overwrite
         return False, "", False
 
@@ -739,10 +861,8 @@ class EditorTab(QWidget):
     def populate_from_data(self, data):
         """Populate the table with data."""
         if not data:
-            print("populate_from_data: No data received, returning.")
             return
 
-        print(f"populate_from_data: Received {len(data)} items to populate.")
         self.original_data = [copy.deepcopy(game) for game in data]
         self.filtered_data = self.original_data
         self.current_page = 0
@@ -751,6 +871,14 @@ class EditorTab(QWidget):
     def _populate_row(self, row_num, game):
         """Populate a single row with game data."""
         self.table.blockSignals(True) # Block signals during population
+        
+        def get_path_display(key, config_key):
+            val = game.get(key, '')
+            if not val: return ""
+            if val.startswith('> ') or val.startswith('< '):
+                return val
+            symbol, _ = self._get_propagation_symbol_and_run_wait(config_key)
+            return f"{symbol} {val.lstrip('<> ')}"
 
         # Create (CheckBox) - col INCLUDE
         self.table.setCellWidget(row_num, constants.EditorCols.INCLUDE.value, self._create_checkbox_widget(game.get('create', False), row_num, constants.EditorCols.INCLUDE.value))
@@ -809,24 +937,19 @@ class EditorTab(QWidget):
         self.table.setCellWidget(row_num, constants.EditorCols.HIDE_TASKBAR.value, self._create_checkbox_widget(game.get('hide_taskbar', False), row_num, constants.EditorCols.HIDE_TASKBAR.value))
 
         # Profiles with propagation symbols
-        mm_game_symbol, _ = self._get_propagation_symbol_and_run_wait('multimonitor_gaming_path')
-        mm_game_profile = f"{mm_game_symbol} {game.get('mm_game_profile', '').lstrip('<> ')}"
+        mm_game_profile = get_path_display('mm_game_profile', 'multimonitor_gaming_path')
         self.table.setItem(row_num, constants.EditorCols.MM_GAME_PROFILE.value, QTableWidgetItem(mm_game_profile))
         
-        mm_desktop_symbol, _ = self._get_propagation_symbol_and_run_wait('multimonitor_media_path')
-        mm_desktop_profile = f"{mm_desktop_symbol} {game.get('mm_desktop_profile', '').lstrip('<> ')}"
+        mm_desktop_profile = get_path_display('mm_desktop_profile', 'multimonitor_media_path')
         self.table.setItem(row_num, constants.EditorCols.MM_DESKTOP_PROFILE.value, QTableWidgetItem(mm_desktop_profile))
         
-        p1_symbol, _ = self._get_propagation_symbol_and_run_wait('p1_profile_path')
-        player1_profile = f"{p1_symbol} {game.get('player1_profile', '').lstrip('<> ')}"
+        player1_profile = get_path_display('player1_profile', 'p1_profile_path')
         self.table.setItem(row_num, constants.EditorCols.PLAYER1_PROFILE.value, QTableWidgetItem(player1_profile))
         
-        p2_symbol, _ = self._get_propagation_symbol_and_run_wait('p2_profile_path')
-        player2_profile = f"{p2_symbol} {game.get('player2_profile', '').lstrip('<> ')}"
+        player2_profile = get_path_display('player2_profile', 'p2_profile_path')
         self.table.setItem(row_num, constants.EditorCols.PLAYER2_PROFILE.value, QTableWidgetItem(player2_profile))
         
-        mc_symbol, _ = self._get_propagation_symbol_and_run_wait('mediacenter_profile_path')
-        mediacenter_profile = f"{mc_symbol} {game.get('mediacenter_profile', '').lstrip('<> ')}"
+        mediacenter_profile = get_path_display('mediacenter_profile', 'mediacenter_profile_path')
         self.table.setItem(row_num, constants.EditorCols.MEDIACENTER_PROFILE.value, QTableWidgetItem(mediacenter_profile))
 
         # Just After Launch (CheckBox, Path with symbol, RunWait)
@@ -932,8 +1055,8 @@ class EditorTab(QWidget):
             if len(cbs) >= 2: # Merged
                 enabled = cbs[0].isChecked()
                 overwrite = cbs[1].isChecked()
-                lbl = widget.findChild(QLabel)
-                path = lbl.text() if lbl else ""
+                le = widget.findChild(QLineEdit)
+                path = le.text() if le else ""
                 return {'type': 'merged', 'enabled': enabled, 'path': path, 'overwrite': overwrite}
             elif len(cbs) == 1: # Simple Checkbox
                 return {'type': 'checkbox', 'checked': cbs[0].isChecked()}
@@ -958,8 +1081,8 @@ class EditorTab(QWidget):
                 if len(cbs) >= 2:
                     cbs[0].setChecked(state['enabled'])
                     cbs[1].setChecked(state['overwrite'])
-                    lbl = widget.findChild(QLabel)
-                    if lbl: lbl.setText(state['path'])
+                    le = widget.findChild(QLineEdit)
+                    if le: le.setText(state['path'])
         
         elif state['type'] == 'checkbox':
             widget = self.table.cellWidget(row, col)
