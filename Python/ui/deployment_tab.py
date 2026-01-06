@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QScrollArea,
-    QPushButton, QCheckBox, QGroupBox, QMenu, QRadioButton, QButtonGroup
+    QPushButton, QCheckBox, QGroupBox, QMenu, QRadioButton, QButtonGroup, QGridLayout
 )
 from PyQt6.QtCore import pyqtSignal, Qt
 from Python.ui.accordion import AccordionSection
@@ -19,8 +19,8 @@ PATH_KEYS = [
     "just_after_launch_path", "just_before_exit_path",
     "p1_profile_path", "p2_profile_path", "mediacenter_profile_path",
     "multimonitor_gaming_path", "multimonitor_media_path",
-    "pre1_path", "pre2_path", "pre3_path",
-    "post1_path", "post2_path", "post3_path"
+    "pre1_path", "post1_path", "pre2_path", "post2_path", "pre3_path", 
+    "post3_path"
 ]
 
 PATH_LABELS = {
@@ -37,10 +37,10 @@ PATH_LABELS = {
     "multimonitor_gaming_path": "Overwrite MM Gaming Config",
     "multimonitor_media_path": "Overwrite MM Media Config",
     "pre1_path": "Overwrite Pre-Launch App 1",
-    "pre2_path": "Overwrite Pre-Launch App 2",
-    "pre3_path": "Overwrite Pre-Launch App 3",
     "post1_path": "Overwrite Post-Launch App 1",
+    "pre2_path": "Overwrite Pre-Launch App 2",
     "post2_path": "Overwrite Post-Launch App 2",
+    "pre3_path": "Overwrite Pre-Launch App 3",
     "post3_path": "Overwrite Post-Launch App 3"
 }
 
@@ -72,6 +72,7 @@ class DeploymentTab(QWidget):
 
         # Row 3: Enable Steam Name Matching (moved from Setup Tab)
         self.name_check_checkbox = QCheckBox("Enable Steam Name Matching")
+
         self.name_check_checkbox.setToolTip("Attempt to match indexed games with Steam titles for better naming. Requires steam.json.")
         general_options_layout.addWidget(self.name_check_checkbox)
 
@@ -113,16 +114,7 @@ class DeploymentTab(QWidget):
         creation_options_widget = QWidget()
         creation_options_layout = QVBoxLayout(creation_options_widget)
         
-        self.hide_taskbar_checkbox = QCheckBox("Hide Taskbar")
-        self.hide_taskbar_checkbox.setChecked(False)
-        self.run_as_admin_checkbox = QCheckBox("Run As Admin")
-        self.run_as_admin_checkbox.setChecked(True)
-        self.use_kill_list_checkbox = QCheckBox("Use Kill List")
-        self.use_kill_list_checkbox.setChecked(True)
-        self.terminate_bw_on_exit_checkbox = QCheckBox("Terminate Borderless on Exit")
-        self.terminate_bw_on_exit_checkbox.setChecked(True)
-        
-        self.download_game_json_checkbox = QCheckBox("Download Game.json")
+        self.download_game_json_checkbox = QCheckBox("Download Steam's Game.json")
         self.download_game_json_checkbox.setToolTip("If checked, attempts to download game metadata from Steam using the Steam ID during creation.")
 
         # Index Sources moved to Database Indexing (General Options) section
@@ -134,61 +126,52 @@ class DeploymentTab(QWidget):
         self.create_button = QPushButton()
         self.create_button.setStyleSheet("QPushButton { font-weight: bold; background-color: #4CAF50; color: white; padding: 8px; }")
 
-        # Two-column layout for creation options: left = creation + enable items, right = runtime flags
-        creation_columns_layout = QHBoxLayout()
-        left_col = QVBoxLayout()
-        right_col = QVBoxLayout()
+        # Layout for creation options
+        creation_content_layout = QVBoxLayout()
 
-        # Left column: Overwrite checkboxes for all 18 items
+        # Overwrite checkboxes for all 18 items in a grid
         overwrite_scroll = QScrollArea()
         overwrite_scroll.setWidgetResizable(True)
         overwrite_widget = QWidget()
-        overwrite_layout = QVBoxLayout(overwrite_widget)
+        overwrite_layout = QGridLayout(overwrite_widget)
         overwrite_layout.setContentsMargins(0, 0, 0, 0)
         
-        for key in PATH_KEYS:
+        for i, key in enumerate(PATH_KEYS):
             label = PATH_LABELS.get(key, f"Overwrite {key}")
-            cb = QCheckBox(label)
+            cb = QCheckBox(f"{label}")
             cb.setChecked(True)
             cb.stateChanged.connect(self.config_changed.emit)
             self.overwrite_checkboxes[key] = cb
-            overwrite_layout.addWidget(cb)
+            overwrite_layout.addWidget(cb, i // 2, i % 2)
             
         overwrite_scroll.setWidget(overwrite_widget)
-        left_col.addWidget(overwrite_scroll)
+        creation_content_layout.addWidget(overwrite_scroll)
 
-        # Right column: runtime/creation flags requested to be on right
-        right_col.addWidget(self.hide_taskbar_checkbox)
-        right_col.addWidget(self.run_as_admin_checkbox)
-        right_col.addWidget(self.use_kill_list_checkbox)
-        right_col.addWidget(self.terminate_bw_on_exit_checkbox)
-        right_col.addSpacing(20)
-        right_col.addWidget(self.create_button)
-        right_col.addWidget(self.download_game_json_checkbox, 0, Qt.AlignmentFlag.AlignRight)
-        right_col.addStretch(1)
+        # Bottom controls
+        bottom_controls = QHBoxLayout()
+        bottom_controls.addWidget(self.download_game_json_checkbox)
+        bottom_controls.addStretch(1)
+        bottom_controls.addWidget(self.create_button)
+        
+        creation_content_layout.addLayout(bottom_controls)
 
-        creation_columns_layout.addLayout(left_col)
-        creation_columns_layout.addLayout(right_col)
-        creation_options_layout.addLayout(creation_columns_layout)
+        creation_options_layout.addLayout(creation_content_layout)
 
         # --- Accordion Setup ---
         # Rename General Options to Database Indexing
-        general_options_section = AccordionSection("Database Indexing", general_options_widget)
+        general_options_section = AccordionSection("DATABASE INDEXING", general_options_widget)
         general_options_section.content_height += 75
-        creation_section = AccordionSection("Creation", creation_options_widget)
+        creation_section = AccordionSection("CREATION", creation_options_widget)
+        creation_section.content_height += 75
 
         main_layout.addWidget(general_options_section)
         main_layout.addWidget(creation_section)
         main_layout.addStretch(1)
 
         # --- Connect Signals ---
-        self.hide_taskbar_checkbox.stateChanged.connect(self.config_changed.emit)
-        self.run_as_admin_checkbox.stateChanged.connect(self.config_changed.emit)
         self.name_check_checkbox.stateChanged.connect(self.config_changed.emit)
         self.steam_json_v1_radio.toggled.connect(self.config_changed.emit)
         self.steam_json_v2_radio.toggled.connect(self.config_changed.emit)
-        self.use_kill_list_checkbox.stateChanged.connect(self.config_changed.emit)
-        self.terminate_bw_on_exit_checkbox.stateChanged.connect(self.config_changed.emit)
         self.download_game_json_checkbox.stateChanged.connect(self.config_changed.emit)
 
         index_sources_button.clicked.connect(self.index_sources_requested.emit)
@@ -232,8 +215,6 @@ class DeploymentTab(QWidget):
         """Updates the UI widgets with values from the AppConfig model."""
         self.blockSignals(True)
 
-        self.hide_taskbar_checkbox.setChecked(config.hide_taskbar)
-        self.run_as_admin_checkbox.setChecked(config.run_as_admin)
         self.name_check_checkbox.setChecked(config.enable_name_matching)
         
         if config.steam_json_version == 1:
@@ -241,8 +222,6 @@ class DeploymentTab(QWidget):
         else:
             self.steam_json_v2_radio.setChecked(True)
 
-        self.use_kill_list_checkbox.setChecked(config.use_kill_list)
-        self.terminate_bw_on_exit_checkbox.setChecked(config.terminate_borderless_on_exit)
         self.download_game_json_checkbox.setChecked(config.download_game_json)
         
         # Sync overwrite checkboxes
@@ -253,13 +232,9 @@ class DeploymentTab(QWidget):
 
     def sync_config_from_ui(self, config: AppConfig):
         """Updates the AppConfig model with values from the UI widgets."""
-        config.hide_taskbar = self.hide_taskbar_checkbox.isChecked()
-        config.run_as_admin = self.run_as_admin_checkbox.isChecked()
         config.enable_name_matching = self.name_check_checkbox.isChecked()
         config.steam_json_version = 1 if self.steam_json_v1_radio.isChecked() else 2
 
-        config.use_kill_list = self.use_kill_list_checkbox.isChecked()
-        config.terminate_borderless_on_exit = self.terminate_bw_on_exit_checkbox.isChecked()
         config.download_game_json = self.download_game_json_checkbox.isChecked()
         
         # Sync overwrite states

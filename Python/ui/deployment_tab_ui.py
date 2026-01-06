@@ -5,7 +5,6 @@ from PyQt6.QtWidgets import (
     QButtonGroup, QRadioButton, QMessageBox, QTabWidget, QMenu
 )
 from PyQt6.QtCore import Qt
-from .ui_widgets import create_deployment_path_row_widget
 from .widgets import DragDropListWidget
 from .accordion import AccordionSection  # Add this import
 
@@ -129,7 +128,7 @@ def populate_deployment_tab(main_window):
     path_config_widget = QWidget()
     path_config_layout = QFormLayout(path_config_widget)
     
-    path_details_label = QLabel("<b>Application & Profile Paths (from Setup Tab):</b>")
+    path_details_label = QLabel("Application & Profile Paths (from Setup Tab):")
     path_config_layout.addRow(path_details_label)
     
     # These attributes are expected to be set on main_window by populate_setup_tab
@@ -199,7 +198,7 @@ def populate_deployment_tab(main_window):
     # Launch/Exit sequence title and lists
     launch_sequence_group = QGroupBox("")
     launch_sequence_layout = QVBoxLayout(launch_sequence_group)
-    sequence_title = QLabel("<b>Launch/Exit Sequence</b>")
+    sequence_title = QLabel("Launch/Exit Sequence")
     sequence_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
     
     # Create the launch sequence list with improved styling
@@ -372,9 +371,9 @@ def populate_deployment_tab(main_window):
     sequences_layout.addWidget(splitter)
     
     # Create accordion sections
-    general_options_section = AccordionSection("Database Indexing", general_options_widget)
-    path_config_section = AccordionSection("Path Configurations", path_config_widget)
-    sequences_section = AccordionSection("Sequences and Creation", sequences_widget)
+    general_options_section = AccordionSection("DATABASE INDEXING", general_options_widget)
+    path_config_section = AccordionSection("PATH CONFIGURATIONS", path_config_widget)
+    sequences_section = AccordionSection("SEQUENCES AND CREATION", sequences_widget)
     
     # Add sections to main layout
     main_layout.addWidget(general_options_section)

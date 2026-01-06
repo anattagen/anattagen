@@ -77,9 +77,9 @@ class MainWindow(QMainWindow):
         self.deployment_tab = DeploymentTab(self)
         self.editor_tab = EditorTab(self)
         # Add tabs to the tab widget
-        self.tabs.addTab(self.setup_tab, "Setup")
-        self.tabs.addTab(self.deployment_tab, "Deployment")
-        self.tabs.addTab(self.editor_tab, "Editor")
+        self.tabs.addTab(self.setup_tab, "   SETUP   ")
+        self.tabs.addTab(self.deployment_tab, "DEPLOYMENT")
+        self.tabs.addTab(self.editor_tab, "   EDITOR   ")
 
         # Highlight unpopulated items in deployment tab with red color
         self.deployment_tab.highlight_unpopulated_items(self)

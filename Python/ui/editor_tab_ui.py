@@ -92,32 +92,21 @@ def populate_editor_tab(main_window):
     main_window.editor_table.setHorizontalHeaderLabels([
         "Create", "Name", "Directory", "SteamID",
         "NameOverride", "Options", "Arguments", "RunAsAdmin",
-        "CM En", "Controller Mapper", "CM Rw",
-        "BW En", "Borderless Windowing", "BW Rw",
-        "MM En", "Multi-Monitor", "MM Rw",
+        "Controller Mapper", "CM Rw",
+        "Borderless Windowing", "BW Rw", "Win-Exit",
+        "Multi-Monitor", "MM Rw",
         "Hide Taskbar",
         "MM Game Profile", "MM Desktop Profile", "Player 1 Profile", "Player 2 Profile", "MediaCenter Profile",
-        "JA En", "Just After Launch", "JA Rw",
-        "JB En", "Just Before Exit", "JB Rw",
-        "Pre1En", "Pre1", "Pre1Rw", "Pst1En", "Post1", "Pst1Rw",
-        "Pre2En", "Pre2", "Pre2Rw", "Pst2En", "Post2", "Pst2Rw",
-        "Pre3En", "Pre3", "Pre3Rw", "Pst3En", "Post3", "Pst3Rw",
-        "KL En", "Kill List"
+        "Just After Launch", "JA Rw",
+        "Just Before Exit", "JB Rw",
+        "Pre1", "Pre1Rw", "Post1", "Pst1Rw",
+        "Pre2", "Pre2Rw", "Post2", "Pst2Rw",
+        "Pre3", "Pre3Rw", "Post3", "Pst3Rw",
+        "Kill List"
     ])
 
     # Shorten width for Enabled (En) and Run/Wait (Rw) columns to save space
     try:
-        en_columns = [constants.EditorCols.CM_ENABLED.value, constants.EditorCols.BW_ENABLED.value,
-                      constants.EditorCols.MM_ENABLED.value, constants.EditorCols.JA_ENABLED.value,
-                      constants.EditorCols.JB_ENABLED.value, constants.EditorCols.PRE1_ENABLED.value,
-                      constants.EditorCols.POST1_ENABLED.value, constants.EditorCols.PRE2_ENABLED.value,
-                      constants.EditorCols.POST2_ENABLED.value, constants.EditorCols.PRE3_ENABLED.value,
-                      constants.EditorCols.POST3_ENABLED.value]
-        
-        # Hide the Enabled columns as they are now merged into the path columns
-        for col in en_columns:
-            main_window.editor_table.setColumnHidden(col, True)
-
         rw_columns = [constants.EditorCols.CM_RUN_WAIT.value, constants.EditorCols.BW_RUN_WAIT.value,
                       constants.EditorCols.MM_RUN_WAIT.value, constants.EditorCols.JA_RUN_WAIT.value,
                       constants.EditorCols.JB_RUN_WAIT.value, constants.EditorCols.PRE1_RUN_WAIT.value,

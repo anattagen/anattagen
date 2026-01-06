@@ -173,14 +173,14 @@ def _process_executable(
             'pre1_path': config.pre1_path, 'pre2_path': config.pre2_path, 'pre3_path': config.pre3_path,
             'post1_path': config.post1_path, 'post2_path': config.post2_path, 'post3_path': config.post3_path,
 
-            # Enabled states from deployment tab
-            'controller_mapper_enabled': config.enable_controller_mapper,
-            'borderless_windowing_enabled': config.enable_borderless_app,
-            'multi_monitor_app_enabled': config.enable_multimonitor_app,
-            'just_after_launch_enabled': config.enable_after_launch_app,
-            'just_before_exit_enabled': config.enable_before_exit_app,
-            'pre_1_enabled': config.enable_pre1, 'pre_2_enabled': config.enable_pre2, 'pre_3_enabled': config.enable_pre3,
-            'post_1_enabled': config.enable_post1, 'post_2_enabled': config.enable_post2, 'post_3_enabled': config.enable_post3,
+            # Enabled states from setup tab (defaults)
+            'controller_mapper_enabled': config.defaults.get('controller_mapper_path_enabled', True),
+            'borderless_windowing_enabled': config.defaults.get('borderless_gaming_path_enabled', True),
+            'multi_monitor_app_enabled': config.defaults.get('multi_monitor_tool_path_enabled', True),
+            'just_after_launch_enabled': config.defaults.get('just_after_launch_path_enabled', True),
+            'just_before_exit_enabled': config.defaults.get('just_before_exit_path_enabled', True),
+            'pre_1_enabled': config.defaults.get('pre1_path_enabled', True), 'pre_2_enabled': config.defaults.get('pre2_path_enabled', True), 'pre_3_enabled': config.defaults.get('pre3_path_enabled', True),
+            'post_1_enabled': config.defaults.get('post1_path_enabled', True), 'post_2_enabled': config.defaults.get('post2_path_enabled', True), 'post_3_enabled': config.defaults.get('post3_path_enabled', True),
 
             # Overwrite states (default to global config)
             'controller_mapper_overwrite': config.overwrite_states.get('controller_mapper_path', True),
@@ -212,7 +212,7 @@ def _process_executable(
     return None
 
 
-def index_games(main_window) -> list:
+def index_games(main_window, progress_callback=None) -> list:
     """
     Indexes games from source directories and returns a list of game data dictionaries.
     This function is decoupled from the UI and returns data, not a count.
@@ -236,6 +236,9 @@ def index_games(main_window) -> list:
             continue
 
         for root, _, files in os.walk(source_dir):
+            if progress_callback:
+                progress_callback(root)
+
             if getattr(main_window, 'indexing_cancelled', False):
                 logging.info("Indexing cancelled by user.")
                 return found_executables

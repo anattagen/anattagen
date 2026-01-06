@@ -17,33 +17,33 @@ PCGWAPI = https://www.pcgamingwiki.com/api/appid.php?appid=
 STEAMDBI = https://steamdb.info/app/
 
 
-[WINDOWING]
-borderlessgaming = $EXHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
-border_stripper = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
-FullScreenIzer = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
-
-
 [MAPPERS]
-keysticks = $EXHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
-antimicrox = $EXHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
-DS4Windows = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
-DS4WindowsCmd = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+antimicrox = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+keysticks = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+ds4windows = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+ds4windowscmd = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+
+
+[WINDOWING]
+borderlessgaming = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+borderstripper = $SOURCEHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+fullscreenizer = $SOURCEHOST/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAMEraw/refs/heads/main]
 
 
 [DISPLAY]
-multimonitortool = $EXHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
-displaychanger = $EXHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe|$EXTRACTLOC|DC2.exe
+multimonitortool = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+displaychanger = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$dc2.exe|$EXTRACTLOC|dc64.exe|$EXTRACTLOC|dc64cmd.exe
 
 
 [SYNC]
-OpenCloudSave = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+opencloudsave = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 rclone = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 ludusavi = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 
 
 [AUDIO]
-setSoundDevice = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|SSD.exe
+setsounddevice = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|SSD.exe
 syncthing = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
-soundvolumeview = $EXHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
-SWRE = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+soundvolumeview = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+swre = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 

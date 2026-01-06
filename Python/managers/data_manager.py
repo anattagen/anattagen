@@ -2,7 +2,7 @@ import os
 import json
 import logging
 from PyQt6.QtCore import QObject, pyqtSignal, Qt
-from PyQt6.QtWidgets import QProgressDialog
+from PyQt6.QtWidgets import QProgressDialog, QApplication
 
 from .. import constants
 from ..models import AppConfig
@@ -56,6 +56,10 @@ class DataManager(QObject):
         progress.canceled.connect(lambda: setattr(self.main_window, 'indexing_cancelled', True))
         progress.show()
 
+        def update_progress(path):
+            progress.setLabelText(f"Scanning: {path}")
+            QApplication.processEvents()
+
         try:
             # Load necessary data sets for the indexer
             self.main_window.exclude_exe_set = self._load_set_file("exclude_exe.set")
@@ -65,7 +69,7 @@ class DataManager(QObject):
             self.main_window.release_groups_set = self._load_set_file("release_groups.set")
 
             # Call the refactored, UI-agnostic indexer
-            found_games = index_games(self.main_window)
+            found_games = index_games(self.main_window, progress_callback=update_progress)
 
             if self.main_window.indexing_cancelled:
                 logging.info("Indexing was cancelled by the user.")

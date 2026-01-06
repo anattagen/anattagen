@@ -6,23 +6,23 @@ arguments = --next --profile-controller 2 --profile
 options = 
 arguments = 
 
-[borderlessGaming]
+[borderlessgaming]
 options = 
 arguments = 
 
-[displayChanger]
+[displaychanger]
 options = -configure=
 arguments = 
 
-[DS4Windows]
+[ds4windows]
 options = 
 arguments = 
 
-[DS4WindowsCmd]
+[ds4windowscmd]
 options = 
 arguments = 
 
-[FullScreenIzer]
+[fullscreenizer]
 options = 
 arguments = 
 
@@ -34,11 +34,11 @@ arguments =
 options = 
 arguments = 
 
-[multiMonitorTool]
-options = /LoadConfig
+[multimonitortool]
+options = /loadconfig
 arguments = 
 
-[OpenCloudSave]
+[opencloudsave]
 options = 
 arguments = 
 
@@ -46,15 +46,15 @@ arguments =
 options = 
 arguments = 
 
-[setSoundDevice]
+[setsounddevice]
 options = 
 arguments = 
 
-[SoundVolumeView]
+[soundvolumeview]
 options = 
 arguments = 
 
-[SWRE]
+[swre]
 options = 
 arguments = 
 

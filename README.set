@@ -61,7 +61,7 @@ Run the installer or extract the binary to a location of your choice, **or** dow
 ├── README.set
 ├── requirements_win.txt
 ├── requirements.txt
-├── testindex.index
+├── steam.json
 │
 ├── assets/
 │   ├── ax_DeskTemplate.set
@@ -69,7 +69,6 @@ Run the installer or extract the binary to a location of your choice, **or** dow
 │   ├── ax_KBM_Template.set
 │   ├── ax_Trigger.set
 │   ├── cmdtemplate.set
-│   ├── config.set
 │   ├── demoted.set
 │   ├── exclude_exe.set
 │   ├── folder_demoted.set
@@ -81,7 +80,8 @@ Run the installer or extract the binary to a location of your choice, **or** dow
 │   ├── ks_Game.Template.set
 │   ├── ks_Trigger.set
 │   ├── release_groups.set
-│   └── repos.set
+│   ├── repos.set
+│   └── transformed_vars.set
 │
 ├── bin/
 │   ├── Shortcut.exe
@@ -116,9 +116,7 @@ Run the installer or extract the binary to a location of your choice, **or** dow
 │       ├── name_utils.py
 │       ├── setup_tab.py
 │       ├── steam_cache.py
-│       ├── steam_integration.py
 │       ├── steam_utils.py
-│       ├── ui_widgets.py
 │       ├── widgets.py
 │       │
 │       └── creation/

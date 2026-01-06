@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QGroupBox, QLabel, QFormLayout, QPushButton,
     QComboBox, QHBoxLayout, QCheckBox, QTabWidget,
     QFileDialog, QApplication, QStyleFactory, QSpinBox, QMessageBox, QProgressBar,
-    QDialog, QDialogButtonBox, QLineEdit
+    QDialog, QDialogButtonBox, QLineEdit, QProgressDialog, QGridLayout
 )
 from PyQt6.QtGui import QFontDatabase, QFont, QPalette, QColor
 from PyQt6.QtCore import pyqtSignal, Qt, QThread, pyqtSlot
@@ -104,7 +104,8 @@ class SetupTab(QWidget):
 
     def _add_path_row(self, layout, label_text, config_key, row_widget):
         """Helper to add a row with a context-menu-capable label."""
-        label = QLabel(label_text)
+        formatted_text = f"{label_text}"
+        label = QLabel(formatted_text)
         label.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         label.customContextMenuRequested.connect(lambda pos: self._show_options_args_dialog(pos, config_key, label_text))
         layout.addRow(label, row_widget)
@@ -159,9 +160,9 @@ class SetupTab(QWidget):
         game_managers_layout.addWidget(self.other_managers_combo)
         game_managers_layout.addWidget(self.exclude_manager_checkbox)
         game_managers_layout.addStretch(1)
-        source_config_layout.addRow("Game Managers Present:", game_managers_layout)
+        source_config_layout.addRow("Game Managers Present", game_managers_layout)
 
-        source_config_section = AccordionSection("Sources & Indexing", source_config_widget)
+        source_config_section = AccordionSection("SOURCES AND INDEXING", source_config_widget)
 
         # --- Section 2: Paths & Profiles ---
         paths_widget = QWidget()
@@ -188,7 +189,23 @@ class SetupTab(QWidget):
         self.path_rows["launcher_executable"] = PathConfigRow("launcher_executable", is_directory=False, add_enabled=False, add_cen_lc=False)
         self.path_rows["launcher_executable"].line_edit.setPlaceholderText(constants.LAUNCHER_EXECUTABLE)
         core_paths_layout.addRow("Launcher Executable:", self.path_rows["launcher_executable"]) # Internal
-        paths_tabs.addTab(core_paths_widget, "Core")
+
+        # Moved checkboxes from Deployment Tab
+        self.run_as_admin_checkbox = QCheckBox("Run As Admin")
+        self.use_kill_list_checkbox = QCheckBox("Use Kill List")
+        self.hide_taskbar_checkbox = QCheckBox("Hide Taskbar")
+        self.terminate_bw_on_exit_checkbox = QCheckBox("Terminate Borderless on Exit")
+
+        cb_container = QWidget()
+        cb_layout = QGridLayout(cb_container)
+        cb_layout.setContentsMargins(0, 0, 0, 0)
+        cb_layout.addWidget(self.run_as_admin_checkbox, 0, 0)
+        cb_layout.addWidget(self.use_kill_list_checkbox, 0, 1)
+        cb_layout.addWidget(self.hide_taskbar_checkbox, 1, 0)
+        cb_layout.addWidget(self.terminate_bw_on_exit_checkbox, 1, 1)
+        core_paths_layout.addRow(cb_container)
+
+        paths_tabs.addTab(core_paths_widget, "   CORE   ")
 
         # Application Paths Tab
         app_paths_widget = QWidget()
@@ -208,7 +225,7 @@ class SetupTab(QWidget):
         self.path_rows["just_before_exit_path"] = PathConfigRow("just_before_exit_path", add_run_wait=True, repo_items=all_tools)
         self.path_rows["just_before_exit_path"].enabled_cb.setToolTip("Enable Just Before Exit App")
         self._add_path_row(app_paths_layout, "Just Before Exit:", "just_before_exit_path", self.path_rows["just_before_exit_path"])
-        paths_tabs.addTab(app_paths_widget, "Applications")
+        paths_tabs.addTab(app_paths_widget, "APPLICATIONS")
 
         # Profile Paths Tab
         profile_paths_widget = QWidget()
@@ -218,12 +235,12 @@ class SetupTab(QWidget):
         self.path_rows["p2_profile_path"] = PathConfigRow("p2_profile_path", add_enabled=False)
         profile_paths_layout.addRow("Player 2 Profile:", self.path_rows["p2_profile_path"])
         self.path_rows["mediacenter_profile_path"] = PathConfigRow("mediacenter_profile_path", add_enabled=False)
-        profile_paths_layout.addRow("Media Center Profile:", self.path_rows["mediacenter_profile_path"])
+        profile_paths_layout.addRow("MediaCenter Profile:", self.path_rows["mediacenter_profile_path"])
         self.path_rows["multimonitor_gaming_path"] = PathConfigRow("multimonitor_gaming_path", add_enabled=False)
         profile_paths_layout.addRow("MM Gaming Config:", self.path_rows["multimonitor_gaming_path"])
         self.path_rows["multimonitor_media_path"] = PathConfigRow("multimonitor_media_path", add_enabled=False)
-        profile_paths_layout.addRow("MM Media/Desktop Config:", self.path_rows["multimonitor_media_path"])
-        paths_tabs.addTab(profile_paths_widget, "Profiles")
+        profile_paths_layout.addRow("MM Desktop Config:", self.path_rows["multimonitor_media_path"])
+        paths_tabs.addTab(profile_paths_widget, "   PROFILES   ")
 
         # Script Paths Tab
         script_paths_widget = QWidget()
@@ -238,16 +255,16 @@ class SetupTab(QWidget):
             self.path_rows[key] = PathConfigRow(key, add_run_wait=True, repo_items=all_tools)
             self.path_rows[key].enabled_cb.setToolTip(f"Enable Post-Launch App {i}")
             self._add_path_row(script_paths_layout, f"Post-Launch App {i}:", key, self.path_rows[key])
-        paths_tabs.addTab(script_paths_widget, "Scripts")
+        paths_tabs.addTab(script_paths_widget, "   SCRIPTS   ")
         
-        paths_section = AccordionSection("Paths & Profiles", paths_widget)
+        paths_section = AccordionSection("PATHS AND PROFILES", paths_widget)
 
         # --- Section 3: Execution Sequence ---
         sequences_widget = QWidget()
         sequences_layout = QHBoxLayout(sequences_widget)
 
         # Launch Sequence
-        launch_sequence_group = QGroupBox("Launch Order")
+        launch_sequence_group = QGroupBox("LAUNCH ORDER")
         launch_sequence_layout = QVBoxLayout(launch_sequence_group)
         self.launch_sequence_list = DragDropListWidget()
         self.reset_launch_btn = QPushButton("Reset")
@@ -256,14 +273,14 @@ class SetupTab(QWidget):
         sequences_layout.addWidget(launch_sequence_group)
 
         # Exit Sequence
-        exit_sequence_group = QGroupBox("Exit Order")
+        exit_sequence_group = QGroupBox("EXIT ORDER")
         exit_sequence_layout = QVBoxLayout(exit_sequence_group)
         self.exit_sequence_list = DragDropListWidget()
         self.reset_exit_btn = QPushButton("Reset")
         exit_sequence_layout.addWidget(self.exit_sequence_list)
         exit_sequence_layout.addWidget(self.reset_exit_btn)
         sequences_layout.addWidget(exit_sequence_group)
-        sequences_section = AccordionSection("Execution Sequences", sequences_widget)
+        sequences_section = AccordionSection("EXECUTION SEQUENCES", sequences_widget)
 
         # --- Section 4: Appearance & Behavior ---
         appearance_widget = QWidget()
@@ -271,7 +288,7 @@ class SetupTab(QWidget):
         # Logging Verbosity
         self.logging_verbosity_combo = QComboBox()
         self.logging_verbosity_combo.addItems(["None", "Low", "Medium", "High", "Debug"])
-        appearance_layout.addRow("Logging Verbosity:", self.logging_verbosity_combo)
+        appearance_layout.addRow("LOGGING VERBOSITY:", self.logging_verbosity_combo)
         # Font
         font_layout = QHBoxLayout()
         self.font_combo = QComboBox()
@@ -293,12 +310,7 @@ class SetupTab(QWidget):
         self.restart_btn = QPushButton("Reset to Defaults")
         self.restart_btn.setToolTip("Reset all application configuration to defaults")
         appearance_layout.addRow(self.restart_btn)
-        appearance_section = AccordionSection("Appearance & Behavior", appearance_widget)
-
-        # Progress Bar for downloads
-        self.download_progress = QProgressBar()
-        self.download_progress.setVisible(False)
-        main_layout.addWidget(self.download_progress)
+        appearance_section = AccordionSection("APPEARANCE AND BEHAVIOR", appearance_widget)
 
         main_layout.addWidget(source_config_section)
         main_layout.addWidget(paths_section)
@@ -416,6 +428,11 @@ class SetupTab(QWidget):
         self.reset_launch_btn.clicked.connect(self._reset_launch_sequence)
         self.reset_exit_btn.clicked.connect(self._reset_exit_sequence)
 
+        self.run_as_admin_checkbox.stateChanged.connect(self.config_changed.emit)
+        self.use_kill_list_checkbox.stateChanged.connect(self.config_changed.emit)
+        self.hide_taskbar_checkbox.stateChanged.connect(self.config_changed.emit)
+        self.terminate_bw_on_exit_checkbox.stateChanged.connect(self.config_changed.emit)
+
         self.source_dirs_list.model().rowsMoved.connect(self.config_changed.emit)
         self.source_dirs_list.model().rowsInserted.connect(self.config_changed.emit)
         self.source_dirs_list.model().rowsRemoved.connect(self.config_changed.emit)
@@ -459,7 +476,7 @@ class SetupTab(QWidget):
             global_vars["app_directory"] = constants.APP_ROOT_DIR
 
         for section in config.sections():
-            repos[section] = {}
+            repos[section.upper()] = {}
             for key, value in config[section].items():
                 if section == "GLOBAL": continue
                 
@@ -474,7 +491,7 @@ class SetupTab(QWidget):
                 
                 parts = val.split('|')
                 if len(parts) >= 3:
-                    repos[section][key] = {
+                    repos[section.upper()][key] = {
                         'url': parts[0],
                         'extract_dir': parts[1],
                         'exe_name': parts[2]
@@ -487,81 +504,60 @@ class SetupTab(QWidget):
         if not os.path.exists(constants.OPTIONS_ARGUMENTS_SET):
             return mapping
         
+        config = configparser.ConfigParser()
         try:
-            with open(constants.OPTIONS_ARGUMENTS_SET, 'r', encoding='utf-8') as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith('#'):
-                        continue
-                    if '=' in line:
-                        key, val = line.split('=', 1)
-                        parts = val.split('|')
-                        options = parts[0].strip() if len(parts) > 0 else ""
-                        arguments = parts[1].strip() if len(parts) > 1 else ""
-                        mapping[key.strip().lower()] = (options, arguments)
+            config.read(constants.OPTIONS_ARGUMENTS_SET)
+            for section in config.sections():
+                options = config.get(section, 'options', fallback="").strip()
+                arguments = config.get(section, 'arguments', fallback="").strip()
+                mapping[section.lower()] = (options, arguments)
         except Exception as e:
             logging.error(f"Error parsing options_arguments.set: {e}")
         return mapping
 
     def _on_download_requested(self, tool_name, tool_data):
-        """Initiates the download of a tool."""
         if self.download_thread and self.download_thread.isRunning():
             QMessageBox.warning(self, "Download in Progress", "Please wait for the current download to finish.")
             return
 
-        self.download_progress.setValue(0)
-        self.download_progress.setVisible(True)
-        self.download_progress.setFormat(f"Downloading {tool_name}... %p%")
-
-        self.download_thread = DownloadThread(tool_data['url'], tool_data['extract_dir'], tool_data['exe_name'])
-        self.download_thread.progress.connect(self.download_progress.setValue)
-        self.download_thread.finished.connect(lambda success, msg, path: self._on_download_finished(success, msg, path, self.sender()))
-        self.download_thread.start()
-
-    def _on_download_finished(self, success, message, result_path, sender_row):
-        self.download_progress.setVisible(False)
-        if success:
-            # Find which row sent the request (this is tricky with async, so we might need to store the active row)
-            # For simplicity, we can iterate rows to find which one matches the tool or just update the one that triggered it if we passed it.
-            # Actually, the sender() in _on_download_requested is the PathConfigRow.
-            # We need to pass that reference to the finished callback.
-            # I updated the lambda above to pass self.sender() but self.sender() in _on_download_requested is the row.
-            # However, in the lambda for finished, self.sender() is the thread.
-            # So we need to capture the row in _on_download_requested.
-            pass # Logic handled by closure in _on_download_requested if implemented correctly, 
-                 # but here I need to update the UI.
-            
-            # Since I can't easily pass the row instance through the thread without modifying the thread class or using a closure
-            # Let's assume the user wants to set the path for the row they clicked.
-            # A robust way is to store self.active_download_row in _on_download_requested.
-            if hasattr(self, 'active_download_row') and self.active_download_row:
-                self.active_download_row.line_edit.setText(result_path)
-                self.active_download_row = None
-            
-            QMessageBox.information(self, "Download Complete", f"Successfully downloaded to:\n{result_path}")
-        else:
-            QMessageBox.critical(self, "Download Failed", f"Error: {message}")
-            self.active_download_row = None
-
-    # Update _on_download_requested to store the row
-    def _on_download_requested(self, tool_name, tool_data):
-        if self.download_thread and self.download_thread.isRunning():
-            QMessageBox.warning(self, "Download in Progress", "Please wait for the current download to finish.")
-            return
+        # Check if files exist
+        extract_dir = tool_data['extract_dir']
+        exe_name = tool_data['exe_name']
+        url = tool_data['url']
+        
+        exe_path = os.path.join(extract_dir, exe_name)
+        zip_name = url.split('/')[-1]
+        zip_path = os.path.join(extract_dir, zip_name)
+        
+        if os.path.exists(exe_path) or os.path.exists(zip_path):
+            reply = QMessageBox.question(
+                self, "File Exists",
+                f"The tool '{tool_name}' appears to be already downloaded.\n"
+                "Do you want to download and overwrite it?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
 
         self.active_download_row = self.sender() # Store the row that requested the download
         
-        self.download_progress.setValue(0)
-        self.download_progress.setVisible(True)
-        self.download_progress.setFormat(f"Downloading {tool_name}... %p%")
+        # Use QProgressDialog instead of embedded bar
+        self.progress_dialog = QProgressDialog(f"Downloading {tool_name}...", "Cancel", 0, 100, self)
+        self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progress_dialog.setMinimumDuration(0)
+        self.progress_dialog.setAutoClose(False)
+        self.progress_dialog.show()
 
         self.download_thread = DownloadThread(tool_data['url'], tool_data['extract_dir'], tool_data['exe_name'])
-        self.download_thread.progress.connect(self.download_progress.setValue)
+        self.download_thread.progress.connect(self.progress_dialog.setValue)
         self.download_thread.finished.connect(self._on_download_finished_slot)
         self.download_thread.start()
 
     def _on_download_finished_slot(self, success, message, result_path):
-        self.download_progress.setVisible(False)
+        if hasattr(self, 'progress_dialog'):
+            self.progress_dialog.close()
+            
         if success:
             if hasattr(self, 'active_download_row') and self.active_download_row:
                 self.active_download_row.line_edit.setText(result_path)
@@ -715,6 +711,11 @@ class SetupTab(QWidget):
         self.logging_verbosity_combo.setCurrentText(config.logging_verbosity)
         self.font_combo.setCurrentText(config.app_font)
         
+        self.run_as_admin_checkbox.setChecked(config.run_as_admin)
+        self.use_kill_list_checkbox.setChecked(config.use_kill_list)
+        self.hide_taskbar_checkbox.setChecked(config.hide_taskbar)
+        self.terminate_bw_on_exit_checkbox.setChecked(config.terminate_borderless_on_exit)
+
         # Handle legacy themes
         theme = config.app_theme
         if theme not in ["System", "Dark", "Light", "Auto"]:
@@ -754,6 +755,11 @@ class SetupTab(QWidget):
         config.app_font = self.font_combo.currentText()
         config.app_theme = self.theme_combo.currentText()
         config.font_size = self.font_size_spin.value()
+
+        config.run_as_admin = self.run_as_admin_checkbox.isChecked()
+        config.use_kill_list = self.use_kill_list_checkbox.isChecked()
+        config.hide_taskbar = self.hide_taskbar_checkbox.isChecked()
+        config.terminate_borderless_on_exit = self.terminate_bw_on_exit_checkbox.isChecked()
 
         for attr_name in self.PATH_ATTRIBUTES:
             if attr_name in self.path_rows:
