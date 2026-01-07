@@ -7,7 +7,6 @@ import os
 import json 
 import copy
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QCursor
 from Python import constants
 
 class EditorTab(QWidget):
@@ -26,7 +25,7 @@ class EditorTab(QWidget):
         self.original_data = []
         self.filtered_data = []
         self.current_page = 0
-        self.page_size = 75
+        self.page_size = self.main_window.config.editor_page_size
         self.populate_ui()
 
     def populate_ui(self):
@@ -176,6 +175,12 @@ class EditorTab(QWidget):
         self.table.customContextMenuRequested.connect(self.on_context_menu)
         self.table.cellClicked.connect(self.on_cell_clicked)
         self.table.itemChanged.connect(self.on_item_changed)
+
+    def update_from_config(self):
+        """Update settings from main window config."""
+        if self.page_size != self.main_window.config.editor_page_size:
+            self.page_size = self.main_window.config.editor_page_size
+            self.refresh_view()
 
     def prev_page(self):
         if self.current_page > 0:

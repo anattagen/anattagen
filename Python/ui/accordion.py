@@ -12,6 +12,7 @@ class AccordionSection(QWidget):
         self.toggle_button = QToolButton(text=title, checkable=True, checked=False)
         self.toggle_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         self.toggle_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.toggle_button.setStyleSheet("QToolButton { font-weight: bold; }")
         self.toggle_button.clicked.connect(self.toggle)
 
         self.content_area = QScrollArea()

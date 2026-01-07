@@ -1,5 +1,4 @@
 import re
-import os
 
 # Keep these constants
 ILLEGAL_WINDOWS_CHARS = '<>:"/\\|?*'

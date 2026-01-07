@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 import requests
 from PyQt6.QtCore import QObject, pyqtSignal
 from .. import constants
-from ..ui.steam_cache import STEAM_FILTERED_TXT, NORMALIZED_INDEX_CACHE
 
 if TYPE_CHECKING:
     from ..ui.steam_cache import SteamCacheManager

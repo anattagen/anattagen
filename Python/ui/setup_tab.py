@@ -1,6 +1,5 @@
 import logging
 import os
-import sys
 import configparser
 import requests
 import zipfile
@@ -304,8 +303,14 @@ class SetupTab(QWidget):
         appearance_layout.addRow("Font:", font_layout)
         # Theme
         self.theme_combo = QComboBox()
-        self.theme_combo.addItems(["System", "Dark", "Light", "Auto"])
+        self.theme_combo.addItems(["System", "Dark", "Light", "Auto", "Midnight", "Ocean"])
         appearance_layout.addRow("Theme:", self.theme_combo)
+        # Editor Page Size
+        self.page_size_spin = QSpinBox()
+        self.page_size_spin.setRange(75, 2000)
+        self.page_size_spin.setValue(150)
+        self.page_size_spin.setToolTip("Number of rows per page in the Editor tab (75-2000)")
+        appearance_layout.addRow("Editor Page Size:", self.page_size_spin)
         # Restart Button
         self.restart_btn = QPushButton("Reset to Defaults")
         self.restart_btn.setToolTip("Reset all application configuration to defaults")
@@ -458,6 +463,7 @@ class SetupTab(QWidget):
         self.font_combo.currentTextChanged.connect(self._on_appearance_changed)
         self.font_size_spin.valueChanged.connect(self._on_appearance_changed)
         self.theme_combo.currentTextChanged.connect(self._on_appearance_changed)
+        self.page_size_spin.valueChanged.connect(self.config_changed.emit)
         self.restart_btn.clicked.connect(self._reset_to_defaults)
 
     def _parse_repos_set(self):
@@ -655,6 +661,34 @@ class SetupTab(QWidget):
         dark_palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor(127, 127, 127))
         return dark_palette
 
+    def _create_midnight_palette(self):
+        """Creates a QPalette for a Midnight (blue-black) theme."""
+        p = QPalette()
+        p.setColor(QPalette.ColorRole.Window, QColor(15, 15, 30))
+        p.setColor(QPalette.ColorRole.WindowText, QColor(220, 220, 220))
+        p.setColor(QPalette.ColorRole.Base, QColor(10, 10, 20))
+        p.setColor(QPalette.ColorRole.AlternateBase, QColor(20, 20, 40))
+        p.setColor(QPalette.ColorRole.ToolTipBase, QColor(255, 255, 220))
+        p.setColor(QPalette.ColorRole.ToolTipText, QColor(0, 0, 0))
+        p.setColor(QPalette.ColorRole.Text, QColor(220, 220, 220))
+        p.setColor(QPalette.ColorRole.Button, QColor(25, 25, 50))
+        p.setColor(QPalette.ColorRole.ButtonText, QColor(220, 220, 220))
+        p.setColor(QPalette.ColorRole.Link, QColor(80, 180, 255))
+        p.setColor(QPalette.ColorRole.Highlight, QColor(60, 80, 140))
+        p.setColor(QPalette.ColorRole.HighlightedText, QColor(255, 255, 255))
+        return p
+
+    def _create_ocean_palette(self):
+        """Creates a QPalette for an Ocean (teal/slate) theme."""
+        p = self._create_dark_palette() # Start with dark base
+        p.setColor(QPalette.ColorRole.Window, QColor(30, 45, 50))
+        p.setColor(QPalette.ColorRole.Base, QColor(20, 30, 35))
+        p.setColor(QPalette.ColorRole.AlternateBase, QColor(35, 50, 55))
+        p.setColor(QPalette.ColorRole.Button, QColor(40, 60, 65))
+        p.setColor(QPalette.ColorRole.Highlight, QColor(0, 150, 136)) # Teal highlight
+        p.setColor(QPalette.ColorRole.Link, QColor(0, 188, 212))
+        return p
+
     def _apply_visual_settings(self):
         """Apply theme and font settings from configuration."""
         app = QApplication.instance()
@@ -679,6 +713,15 @@ class SetupTab(QWidget):
             # Restore original system style and palette
             app.setStyle(self.main_window.original_style_name)
             app.setPalette(self.main_window.original_palette)
+            return
+
+        if theme == "Midnight":
+            app.setStyle("Fusion")
+            app.setPalette(self._create_midnight_palette())
+            return
+        elif theme == "Ocean":
+            app.setStyle("Fusion")
+            app.setPalette(self._create_ocean_palette())
             return
 
         try:
@@ -719,7 +762,7 @@ class SetupTab(QWidget):
 
         # Handle legacy themes
         theme = config.app_theme
-        if theme not in ["System", "Dark", "Light", "Auto"]:
+        if theme not in ["System", "Dark", "Light", "Auto", "Midnight", "Ocean"]:
             if "Dark" in theme:
                 theme = "Dark"
             elif "Light" in theme:
@@ -729,6 +772,7 @@ class SetupTab(QWidget):
         self.theme_combo.setCurrentText(theme)
         
         self.font_size_spin.setValue(config.font_size)
+        self.page_size_spin.setValue(config.editor_page_size)
 
         for attr_name in self.PATH_ATTRIBUTES:
             if attr_name in self.path_rows:
@@ -756,6 +800,7 @@ class SetupTab(QWidget):
         config.app_font = self.font_combo.currentText()
         config.app_theme = self.theme_combo.currentText()
         config.font_size = self.font_size_spin.value()
+        config.editor_page_size = self.page_size_spin.value()
 
         config.run_as_admin = self.run_as_admin_checkbox.isChecked()
         config.use_kill_list = self.use_kill_list_checkbox.isChecked()

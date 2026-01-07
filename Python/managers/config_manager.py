@@ -1,7 +1,6 @@
 import os
 import json
 import logging
-import shutil
 import string
 from pathlib import Path
 from PyQt6.QtCore import QObject, pyqtSignal

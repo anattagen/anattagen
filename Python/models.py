@@ -76,6 +76,7 @@ class AppConfig:
         self.app_font = "System"
         self.app_theme = "Dark"
         self.font_size = 10
+        self.editor_page_size = 150
 
         # Setup Tab: Execution Sequences
         self.launch_sequence = []

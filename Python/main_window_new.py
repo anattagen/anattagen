@@ -1,11 +1,9 @@
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget, 
-    QMessageBox, QMenu, QFileDialog, QTableWidgetItem, QCheckBox, QVBoxLayout,
-    QHBoxLayout, QHeaderView, QProgressDialog
+    QMessageBox, QMenu, QFileDialog, QProgressDialog
 )
 from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtGui import QCursor, QIcon
-import shutil
 import os
 from Python.ui.deployment_tab import DeploymentTab
 from Python.ui.setup_tab import SetupTab
@@ -70,6 +68,7 @@ class MainWindow(QMainWindow):
         self.setGeometry(100, 100, 740, 240)  # Reduced from 950, 750 to 800, 600
 
         self.tabs = QTabWidget()
+        self.tabs.setStyleSheet("QTabBar::tab { font-weight: bold; }")
         self.setCentralWidget(self.tabs)
 
         # Create all tab widgets first
@@ -120,6 +119,7 @@ class MainWindow(QMainWindow):
 
         # --- UI Signals ---
         self.setup_tab.config_changed.connect(self._sync_config_from_ui_and_save)
+        self.setup_tab.config_changed.connect(self.editor_tab.update_from_config)
         
         self.deployment_tab.config_changed.connect(self._sync_config_from_ui_and_save)
         self.deployment_tab.index_sources_requested.connect(self.data_manager.index_sources)

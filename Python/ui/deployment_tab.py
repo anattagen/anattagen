@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QScrollArea,
-    QPushButton, QCheckBox, QGroupBox, QMenu, QRadioButton, QButtonGroup, QGridLayout
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
+    QPushButton, QCheckBox, QGroupBox, QRadioButton, QButtonGroup, QGridLayout
 )
 from PyQt6.QtCore import pyqtSignal, Qt
 from Python.ui.accordion import AccordionSection
