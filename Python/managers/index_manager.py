@@ -1,6 +1,5 @@
 import os
 import shutil
-from datetime import datetime
 from PyQt6.QtWidgets import QFileDialog
 
 INDEX_FILENAME = "current.index"

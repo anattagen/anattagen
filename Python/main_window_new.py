@@ -1,9 +1,9 @@
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QTabWidget, QWidget, QStatusBar, 
+    QApplication, QMainWindow, QTabWidget, QWidget, 
     QMessageBox, QMenu, QFileDialog, QTableWidgetItem, QCheckBox, QVBoxLayout,
     QHBoxLayout, QHeaderView, QProgressDialog
 )
-from PyQt6.QtCore import Qt, QCoreApplication, pyqtSlot, QEvent
+from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtGui import QCursor, QIcon
 import shutil
 import os
@@ -404,7 +404,7 @@ class MainWindow(QMainWindow):
         progress.setWindowModality(Qt.WindowModality.WindowModal)
         progress.setMinimumDuration(0)
         
-        def update_progress(current, total, game_name):
+        def update_progress(current, _, game_name):
             if progress.wasCanceled():
                 return False
             progress.setValue(current)

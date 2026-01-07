@@ -8,7 +8,7 @@ import shutil
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QGroupBox, QLabel, QFormLayout, QPushButton,
     QComboBox, QHBoxLayout, QCheckBox, QTabWidget,
-    QFileDialog, QApplication, QStyleFactory, QSpinBox, QMessageBox, QProgressBar,
+    QFileDialog, QApplication, QSpinBox, QMessageBox,
     QDialog, QDialogButtonBox, QLineEdit, QProgressDialog, QGridLayout
 )
 from PyQt6.QtGui import QFontDatabase, QFont, QPalette, QColor
@@ -230,15 +230,15 @@ class SetupTab(QWidget):
         # Profile Paths Tab
         profile_paths_widget = QWidget()
         profile_paths_layout = QFormLayout(profile_paths_widget)
-        self.path_rows["p1_profile_path"] = PathConfigRow("p1_profile_path", add_enabled=False)
+        self.path_rows["p1_profile_path"] = PathConfigRow("p1_profile_path", add_enabled=True)
         profile_paths_layout.addRow("Player 1 Profile:", self.path_rows["p1_profile_path"])
-        self.path_rows["p2_profile_path"] = PathConfigRow("p2_profile_path", add_enabled=False)
+        self.path_rows["p2_profile_path"] = PathConfigRow("p2_profile_path", add_enabled=True)
         profile_paths_layout.addRow("Player 2 Profile:", self.path_rows["p2_profile_path"])
-        self.path_rows["mediacenter_profile_path"] = PathConfigRow("mediacenter_profile_path", add_enabled=False)
+        self.path_rows["mediacenter_profile_path"] = PathConfigRow("mediacenter_profile_path", add_enabled=True)
         profile_paths_layout.addRow("MediaCenter Profile:", self.path_rows["mediacenter_profile_path"])
-        self.path_rows["multimonitor_gaming_path"] = PathConfigRow("multimonitor_gaming_path", add_enabled=False)
+        self.path_rows["multimonitor_gaming_path"] = PathConfigRow("multimonitor_gaming_path", add_enabled=True)
         profile_paths_layout.addRow("MM Gaming Config:", self.path_rows["multimonitor_gaming_path"])
-        self.path_rows["multimonitor_media_path"] = PathConfigRow("multimonitor_media_path", add_enabled=False)
+        self.path_rows["multimonitor_media_path"] = PathConfigRow("multimonitor_media_path", add_enabled=True)
         profile_paths_layout.addRow("MM Desktop Config:", self.path_rows["multimonitor_media_path"])
         paths_tabs.addTab(profile_paths_widget, "   PROFILES   ")
 
@@ -506,7 +506,8 @@ class SetupTab(QWidget):
         
         config = configparser.ConfigParser()
         try:
-            config.read(constants.OPTIONS_ARGUMENTS_SET)
+            with open(constants.OPTIONS_ARGUMENTS_SET, 'r', encoding='utf-8-sig') as f:
+                config.read_file(f)
             for section in config.sections():
                 options = config.get(section, 'options', fallback="").strip()
                 arguments = config.get(section, 'arguments', fallback="").strip()
@@ -780,9 +781,17 @@ class SetupTab(QWidget):
             return
             
         exe_name = os.path.basename(new_path).lower()
+        exe_no_ext = os.path.splitext(exe_name)[0]
+        
+        target = None
         if exe_name in self.options_args_map:
-            opts, args = self.options_args_map[exe_name]
+            target = exe_name
+        elif exe_no_ext in self.options_args_map:
+            target = exe_no_ext
             
+        if target:
+            opts, args = self.options_args_map[target]
+                                 
             # Update config if fields exist
             config = self.main_window.config
             opt_key = f"{config_key}_options"
@@ -798,6 +807,8 @@ class SetupTab(QWidget):
                 
             if updated:
                 logging.info(f"Applied default options/args for {exe_name} to {config_key}")
+                logging.info(f"Applied default options/args for {target} to {config_key}")
+
                 self.config_changed.emit()
         
         # Update dialog if open

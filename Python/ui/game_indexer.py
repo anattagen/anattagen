@@ -182,6 +182,13 @@ def _process_executable(
             'pre_1_enabled': config.defaults.get('pre1_path_enabled', True), 'pre_2_enabled': config.defaults.get('pre2_path_enabled', True), 'pre_3_enabled': config.defaults.get('pre3_path_enabled', True),
             'post_1_enabled': config.defaults.get('post1_path_enabled', True), 'post_2_enabled': config.defaults.get('post2_path_enabled', True), 'post_3_enabled': config.defaults.get('post3_path_enabled', True),
 
+            # Profile enabled states
+            'player1_profile_enabled': config.defaults.get('p1_profile_path_enabled', True),
+            'player2_profile_enabled': config.defaults.get('p2_profile_path_enabled', True),
+            'mediacenter_profile_enabled': config.defaults.get('mediacenter_profile_path_enabled', True),
+            'mm_game_profile_enabled': config.defaults.get('multimonitor_gaming_path_enabled', True),
+            'mm_desktop_profile_enabled': config.defaults.get('multimonitor_media_path_enabled', True),
+
             # Overwrite states (default to global config)
             'controller_mapper_overwrite': config.overwrite_states.get('controller_mapper_path', True),
             'borderless_windowing_overwrite': config.overwrite_states.get('borderless_gaming_path', True),
@@ -194,6 +201,11 @@ def _process_executable(
             'post_1_overwrite': config.overwrite_states.get('post1_path', True),
             'post_2_overwrite': config.overwrite_states.get('post2_path', True),
             'post_3_overwrite': config.overwrite_states.get('post3_path', True),
+            'player1_profile_overwrite': config.overwrite_states.get('p1_profile_path', True),
+            'player2_profile_overwrite': config.overwrite_states.get('p2_profile_path', True),
+            'mediacenter_profile_overwrite': config.overwrite_states.get('mediacenter_profile_path', True),
+            'mm_game_profile_overwrite': config.overwrite_states.get('multimonitor_gaming_path', True),
+            'mm_desktop_profile_overwrite': config.overwrite_states.get('multimonitor_media_path', True),
 
             # Run-wait states from setup tab
             'controller_mapper_run_wait': config.run_wait_states.get('controller_mapper_path_run_wait', False),

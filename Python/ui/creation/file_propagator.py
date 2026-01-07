@@ -1,7 +1,6 @@
 import os
 import shutil
 import logging
-from PyQt6.QtCore import QCoreApplication
 
 class FilePropagator:
     """Handles file copying and template operations for game environments"""

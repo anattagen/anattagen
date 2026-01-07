@@ -738,20 +738,30 @@ class EditorTab(QWidget):
         elif col == constants.EditorCols.HIDE_TASKBAR.value:
             game['hide_taskbar'] = self._get_checkbox_value(row, col)
         elif col == constants.EditorCols.MM_GAME_PROFILE.value:
-            item = self.table.item(row, col)
-            game['mm_game_profile'] = item.text() if item else ""
+            en, path, ov = self._get_merged_path_data(row, col)
+            game['mm_game_profile_enabled'] = en
+            game['mm_game_profile'] = path
+            game['mm_game_profile_overwrite'] = ov
         elif col == constants.EditorCols.MM_DESKTOP_PROFILE.value:
-            item = self.table.item(row, col)
-            game['mm_desktop_profile'] = item.text() if item else ""
+            en, path, ov = self._get_merged_path_data(row, col)
+            game['mm_desktop_profile_enabled'] = en
+            game['mm_desktop_profile'] = path
+            game['mm_desktop_profile_overwrite'] = ov
         elif col == constants.EditorCols.PLAYER1_PROFILE.value:
-            item = self.table.item(row, col)
-            game['player1_profile'] = item.text() if item else ""
+            en, path, ov = self._get_merged_path_data(row, col)
+            game['player1_profile_enabled'] = en
+            game['player1_profile'] = path
+            game['player1_profile_overwrite'] = ov
         elif col == constants.EditorCols.PLAYER2_PROFILE.value:
-            item = self.table.item(row, col)
-            game['player2_profile'] = item.text() if item else ""
+            en, path, ov = self._get_merged_path_data(row, col)
+            game['player2_profile_enabled'] = en
+            game['player2_profile'] = path
+            game['player2_profile_overwrite'] = ov
         elif col == constants.EditorCols.MEDIACENTER_PROFILE.value:
-            item = self.table.item(row, col)
-            game['mediacenter_profile'] = item.text() if item else ""
+            en, path, ov = self._get_merged_path_data(row, col)
+            game['mediacenter_profile_enabled'] = en
+            game['mediacenter_profile'] = path
+            game['mediacenter_profile_overwrite'] = ov
         elif col == constants.EditorCols.JA_PATH.value:
             en, path, ov = self._get_merged_path_data(row, col)
             game['just_after_launch_enabled'] = en
@@ -938,19 +948,19 @@ class EditorTab(QWidget):
 
         # Profiles with propagation symbols
         mm_game_profile = get_path_display('mm_game_profile', 'multimonitor_gaming_path')
-        self.table.setItem(row_num, constants.EditorCols.MM_GAME_PROFILE.value, QTableWidgetItem(mm_game_profile))
+        self.table.setCellWidget(row_num, constants.EditorCols.MM_GAME_PROFILE.value, self._create_merged_path_widget(game.get('mm_game_profile_enabled', True), mm_game_profile, game.get('mm_game_profile_overwrite', True), row_num, constants.EditorCols.MM_GAME_PROFILE.value))
         
         mm_desktop_profile = get_path_display('mm_desktop_profile', 'multimonitor_media_path')
-        self.table.setItem(row_num, constants.EditorCols.MM_DESKTOP_PROFILE.value, QTableWidgetItem(mm_desktop_profile))
+        self.table.setCellWidget(row_num, constants.EditorCols.MM_DESKTOP_PROFILE.value, self._create_merged_path_widget(game.get('mm_desktop_profile_enabled', True), mm_desktop_profile, game.get('mm_desktop_profile_overwrite', True), row_num, constants.EditorCols.MM_DESKTOP_PROFILE.value))
         
         player1_profile = get_path_display('player1_profile', 'p1_profile_path')
-        self.table.setItem(row_num, constants.EditorCols.PLAYER1_PROFILE.value, QTableWidgetItem(player1_profile))
+        self.table.setCellWidget(row_num, constants.EditorCols.PLAYER1_PROFILE.value, self._create_merged_path_widget(game.get('player1_profile_enabled', True), player1_profile, game.get('player1_profile_overwrite', True), row_num, constants.EditorCols.PLAYER1_PROFILE.value))
         
         player2_profile = get_path_display('player2_profile', 'p2_profile_path')
-        self.table.setItem(row_num, constants.EditorCols.PLAYER2_PROFILE.value, QTableWidgetItem(player2_profile))
+        self.table.setCellWidget(row_num, constants.EditorCols.PLAYER2_PROFILE.value, self._create_merged_path_widget(game.get('player2_profile_enabled', True), player2_profile, game.get('player2_profile_overwrite', True), row_num, constants.EditorCols.PLAYER2_PROFILE.value))
         
         mediacenter_profile = get_path_display('mediacenter_profile', 'mediacenter_profile_path')
-        self.table.setItem(row_num, constants.EditorCols.MEDIACENTER_PROFILE.value, QTableWidgetItem(mediacenter_profile))
+        self.table.setCellWidget(row_num, constants.EditorCols.MEDIACENTER_PROFILE.value, self._create_merged_path_widget(game.get('mediacenter_profile_enabled', True), mediacenter_profile, game.get('mediacenter_profile_overwrite', True), row_num, constants.EditorCols.MEDIACENTER_PROFILE.value))
 
         # Just After Launch (CheckBox, Path with symbol, RunWait)
         ja_symbol, ja_run_wait = self._get_propagation_symbol_and_run_wait('just_after_launch_path')

@@ -1,8 +1,7 @@
 from PyQt6.QtWidgets import (QListWidget, QAbstractItemView, QWidget, QHBoxLayout,
                              QCheckBox, QLineEdit, QPushButton, QRadioButton,
                              QButtonGroup, QFileDialog, QToolButton, QMenu)
-from PyQt6.QtCore import Qt, QMimeData, pyqtSignal, QSize
-from PyQt6.QtGui import QDrag
+from PyQt6.QtCore import Qt, pyqtSignal
 
 class DragDropListWidget(QListWidget):
     """A list widget that supports drag and drop for reordering items"""

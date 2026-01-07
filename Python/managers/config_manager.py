@@ -102,6 +102,11 @@ class ConfigManager(QObject):
             'post2_path_enabled': True,
             'pre3_path_enabled': True,
             'post3_path_enabled': True,
+            'p1_profile_path_enabled': True,
+            'p2_profile_path_enabled': True,
+            'mediacenter_profile_path_enabled': True,
+            'multimonitor_gaming_path_enabled': True,
+            'multimonitor_media_path_enabled': True,
         }
 
         # Set default run-wait states

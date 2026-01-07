@@ -1,8 +1,8 @@
 from PyQt6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem,
-    QHeaderView, QMenu, QWidget, QListWidget, QListWidgetItem, QCheckBox
+    QHeaderView, QMenu, QWidget, QListWidget, QCheckBox
 )
-from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtCore import Qt
 
 def create_editor_tab_item_status_widget(parent, initial_text="", row=-1, col=-1, data_key=None):
     """Create a widget containing a checkbox for table cells
@@ -161,4 +161,4 @@ def populate_editor_tab(main_window):
 
     # Connect to rowsInserted signal to handle new rows
     main_window.editor_table.model().rowsInserted.connect(
-        lambda parent, first, last, mw=main_window: connect_checkbox_changes(mw.editor_table))
+        lambda parent, _1, _2, mw=main_window: connect_checkbox_changes(mw.editor_table))

@@ -6,7 +6,6 @@ import logging
 if platform.system() == 'Windows':
     import win32gui
     import win32con
-    import psutil
 
 class SequenceExecutor:
     """Handles the execution of launch and exit sequences for the GameLauncher."""

@@ -1,6 +1,6 @@
 import os
 import re
-from typing import Set, List, Dict, Tuple, Optional, Any, AnyStr
+from typing import Set, Dict, Tuple, Optional, Any
 
 class NameProcessor:
     """

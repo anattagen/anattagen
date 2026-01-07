@@ -1,5 +1,4 @@
 import os
-from Python.ui.name_utils import normalize_name_for_matching
 
 def locate_and_exclude_manager_config(main_window):
     """Locate and exclude games from other managers' configurations"""

@@ -67,6 +67,9 @@ class CreationController:
             ]
             
             for key, label in profile_keys:
+                # Check enabled key if it exists
+                if not game.get(f"{key}_enabled", True): continue
+
                 val = game.get(key, "")
                 if not val: continue
                 
@@ -345,20 +348,35 @@ class CreationController:
         config.set('Paths', 'MultiMonitorArguments', app_config.multi_monitor_tool_path_arguments)
         
         # Handle profile paths with CEN/LC logic
-        val = self._get_profile_path('player1_profile', game_data, game_profile_dir)
-        config.set('Paths', 'Player1Profile', val)
+        if game_data.get('player1_profile_enabled', True):
+            val = self._get_profile_path('player1_profile', game_data, game_profile_dir)
+            config.set('Paths', 'Player1Profile', val)
+        else:
+            config.set('Paths', 'Player1Profile', "")
         
-        val = self._get_profile_path('player2_profile', game_data, game_profile_dir)
-        config.set('Paths', 'Player2Profile', val)
+        if game_data.get('player2_profile_enabled', True):
+            val = self._get_profile_path('player2_profile', game_data, game_profile_dir)
+            config.set('Paths', 'Player2Profile', val)
+        else:
+            config.set('Paths', 'Player2Profile', "")
         
-        val = self._get_profile_path('mm_game_profile', game_data, game_profile_dir)
-        config.set('Paths', 'MultiMonitorGamingConfig', val)
+        if game_data.get('mm_game_profile_enabled', True):
+            val = self._get_profile_path('mm_game_profile', game_data, game_profile_dir)
+            config.set('Paths', 'MultiMonitorGamingConfig', val)
+        else:
+            config.set('Paths', 'MultiMonitorGamingConfig', "")
         
-        val = self._get_profile_path('mm_desktop_profile', game_data, game_profile_dir)
-        config.set('Paths', 'MultiMonitorDesktopConfig', val)
+        if game_data.get('mm_desktop_profile_enabled', True):
+            val = self._get_profile_path('mm_desktop_profile', game_data, game_profile_dir)
+            config.set('Paths', 'MultiMonitorDesktopConfig', val)
+        else:
+            config.set('Paths', 'MultiMonitorDesktopConfig', "")
         
-        val = self._get_profile_path('mediacenter_profile', game_data, game_profile_dir)
-        config.set('Paths', 'MediaCenterProfile', val)
+        if game_data.get('mediacenter_profile_enabled', True):
+            val = self._get_profile_path('mediacenter_profile', game_data, game_profile_dir)
+            config.set('Paths', 'MediaCenterProfile', val)
+        else:
+            config.set('Paths', 'MediaCenterProfile', "")
         
         # Additional requested paths
         game_exe_path = os.path.join(game_data.get('directory', ''), game_data.get('name', ''))
@@ -639,6 +657,9 @@ class CreationController:
         }
 
         for key, config_key in profile_map.items():
+            if not game_data.get(f"{key}_enabled", True):
+                continue
+
             path_with_mode = game_data.get(key, "")
             if not path_with_mode:
                 continue
