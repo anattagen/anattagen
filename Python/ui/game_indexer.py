@@ -172,6 +172,7 @@ def _process_executable(
             'just_before_exit_path': config.just_before_exit_path,
             'pre1_path': config.pre1_path, 'pre2_path': config.pre2_path, 'pre3_path': config.pre3_path,
             'post1_path': config.post1_path, 'post2_path': config.post2_path, 'post3_path': config.post3_path,
+            'launcher_executable': config.launcher_executable,
 
             # Enabled states from setup tab (defaults)
             'controller_mapper_enabled': config.defaults.get('controller_mapper_path_enabled', True),
@@ -181,6 +182,7 @@ def _process_executable(
             'just_before_exit_enabled': config.defaults.get('just_before_exit_path_enabled', True),
             'pre_1_enabled': config.defaults.get('pre1_path_enabled', True), 'pre_2_enabled': config.defaults.get('pre2_path_enabled', True), 'pre_3_enabled': config.defaults.get('pre3_path_enabled', True),
             'post_1_enabled': config.defaults.get('post1_path_enabled', True), 'post_2_enabled': config.defaults.get('post2_path_enabled', True), 'post_3_enabled': config.defaults.get('post3_path_enabled', True),
+            'launcher_executable_enabled': config.defaults.get('launcher_executable_enabled', True),
 
             # Profile enabled states
             'player1_profile_enabled': config.defaults.get('p1_profile_path_enabled', True),
@@ -206,6 +208,7 @@ def _process_executable(
             'mediacenter_profile_overwrite': config.overwrite_states.get('mediacenter_profile_path', True),
             'mm_game_profile_overwrite': config.overwrite_states.get('multimonitor_gaming_path', True),
             'mm_desktop_profile_overwrite': config.overwrite_states.get('multimonitor_media_path', True),
+            'launcher_executable_overwrite': config.overwrite_states.get('launcher_executable', True),
 
             # Run-wait states from setup tab
             'controller_mapper_run_wait': config.run_wait_states.get('controller_mapper_path_run_wait', False),

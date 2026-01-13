@@ -123,7 +123,7 @@ class ConfigManager(QObject):
         # Set default overwrite states (Deployment Tab -> Creation)
         config.overwrite_states = {
             key: True for key in [
-                "profiles_dir", "launchers_dir", "controller_mapper_path", "borderless_gaming_path",
+                "profiles_dir", "launchers_dir", "launcher_executable", "controller_mapper_path", "borderless_gaming_path",
                 "multi_monitor_tool_path", "just_after_launch_path", "just_before_exit_path",
                 "p1_profile_path", "p2_profile_path", "mediacenter_profile_path",
                 "multimonitor_gaming_path", "multimonitor_media_path",

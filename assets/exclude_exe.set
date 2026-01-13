@@ -116,6 +116,7 @@ crackintro
 crashdump
 crashhand
 crashpadhandler
+crashpad_handler
 crashreport
 crashreportclient
 crashsend

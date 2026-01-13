@@ -73,7 +73,8 @@ class EditorTab(QWidget):
             "Post2", "Wait",
             "Pre3", "Wait",
             "Post3", "Wait",
-            "Kill List"
+            "Kill List",
+            "Launcher Exe"
         ]
         self.table.setHorizontalHeaderLabels(headers)
 
@@ -94,7 +95,8 @@ class EditorTab(QWidget):
             "Post-launch script 2", "Wait for Post2?",
             "Pre-launch script 3", "Wait for Pre3?",
             "Post-launch script 3", "Wait for Post3?",
-            "Comma-separated list of processes to kill (Checked = Enabled)"
+            "Comma-separated list of processes to kill (Checked = Enabled)",
+            "Custom Launcher Executable to use/copy"
         ]
         for i, tooltip in enumerate(tooltips):
             item = self.table.horizontalHeaderItem(i)
@@ -828,6 +830,11 @@ class EditorTab(QWidget):
             if item:
                 game['kill_list_enabled'] = (item.checkState() == Qt.CheckState.Checked)
                 game['kill_list'] = item.text()
+        elif col == constants.EditorCols.LAUNCHER_EXE.value:
+            en, path, ov = self._get_merged_path_data(row, col)
+            game['launcher_executable_enabled'] = en
+            game['launcher_executable'] = path
+            game['launcher_executable_overwrite'] = ov
 
     def _update_widget_state(self, row, col, value):
         """Update a widget's visual state without triggering data sync."""
@@ -1015,6 +1022,11 @@ class EditorTab(QWidget):
         kl_enabled = game.get('kill_list_enabled', False)
         kl_item.setCheckState(Qt.CheckState.Checked if kl_enabled else Qt.CheckState.Unchecked)
         self.table.setItem(row_num, constants.EditorCols.KILL_LIST.value, kl_item)
+
+        # Launcher Executable (Merged: CheckBox + Path + Overwrite)
+        le_symbol, _ = self._get_propagation_symbol_and_run_wait('launcher_executable')
+        le_path = f"{le_symbol} {game.get('launcher_executable', '').lstrip('<> ')}"
+        self.table.setCellWidget(row_num, constants.EditorCols.LAUNCHER_EXE.value, self._create_merged_path_widget(game.get('launcher_executable_enabled', True), le_path, game.get('launcher_executable_overwrite', True), row_num, constants.EditorCols.LAUNCHER_EXE.value))
 
         self.table.blockSignals(False) # Unblock signals
 

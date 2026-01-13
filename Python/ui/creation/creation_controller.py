@@ -236,9 +236,36 @@ class CreationController:
                 except Exception as e:
                     logging.error(f"Failed to create profile directory for {game_name_override}: {e}")
 
+            # Resolve Launcher Executable
+            # Check game_data first (populated from editor)
+            launcher_val = game_data.get('launcher_executable', '')
+            if launcher_val:
+                launcher_source, launcher_mode_symbol = self._resolve_mode(launcher_val, 'launcher_executable')
+                launcher_mode = 'LC' if launcher_mode_symbol == '>' else 'CEN'
+                launcher_source = self._transform_path(launcher_source, game_data)
+            else:
+                launcher_source = app_config.launcher_executable
+                launcher_mode = app_config.deployment_path_modes.get('launcher_executable', 'CEN')
+
+            if not launcher_source:
+                launcher_source = constants.LAUNCHER_EXECUTABLE
+            
+            target_launcher_exe = launcher_source
+
+            if launcher_mode == 'LC' or launcher_mode == '>':
+                if os.path.exists(launcher_source):
+                    dest_path = game_profile_dir / os.path.basename(launcher_source)
+                    if not dest_path.exists() or game_data.get('launcher_executable_overwrite', app_config.overwrite_states.get('launcher_executable', True)):
+                        try:
+                            shutil.copy2(launcher_source, dest_path)
+                            logging.info(f"Copied launcher executable to {dest_path}")
+                        except Exception as e:
+                            logging.error(f"Failed to copy launcher executable: {e}")
+                    target_launcher_exe = dest_path
+
             # 3. Create the Game.ini file
             ini_path = game_profile_dir / "Game.ini"
-            self._create_game_ini(ini_path, game_data, app_config, game_profile_dir, launcher_shortcut_path)
+            self._create_game_ini(ini_path, game_data, app_config, game_profile_dir, launcher_shortcut_path, target_launcher_exe)
             
             # 3b. Download Game.json if enabled
             if app_config.download_game_json:
@@ -261,7 +288,7 @@ class CreationController:
 
             # 7. Create Launcher Shortcut (pointing to Launcher.exe)
             self._create_shortcut(
-                target_path=constants.LAUNCHER_EXECUTABLE,
+                target_path=target_launcher_exe,
                 shortcut_path=launcher_shortcut_path,
                 arguments=f'"{profile_shortcut_path}"',
                 working_dir=game_data.get('directory', ''),
@@ -321,7 +348,7 @@ class CreationController:
         except Exception as e:
             logging.error(f"Failed to download Game.json for {game_data.get('name_override')} (AppID: {steam_id}): {e}")
 
-    def _create_game_ini(self, ini_path, game_data, app_config, game_profile_dir, launcher_shortcut_path):
+    def _create_game_ini(self, ini_path, game_data, app_config, game_profile_dir, launcher_shortcut_path, launcher_executable_path=None):
         """
         Generates and saves the Game.ini file based on game-specific and global settings.
         """
@@ -381,7 +408,7 @@ class CreationController:
         # Additional requested paths
         game_exe_path = os.path.join(game_data.get('directory', ''), game_data.get('name', ''))
         config.set('Paths', 'GameExecutablePath', str(game_exe_path))
-        config.set('Paths', 'LauncherExecutable', str(constants.LAUNCHER_EXECUTABLE))
+        config.set('Paths', 'LauncherExecutable', str(launcher_executable_path if launcher_executable_path else constants.LAUNCHER_EXECUTABLE))
         config.set('Paths', 'LauncherShortcut', str(launcher_shortcut_path))
         config.set('Paths', 'ProfileDirectory', str(game_profile_dir))
 

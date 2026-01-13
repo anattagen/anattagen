@@ -14,7 +14,7 @@ def get_module_path():
 
 
 PATH_KEYS = [
-    "profiles_dir", "launchers_dir",
+    "profiles_dir", "launchers_dir", "launcher_executable",
     "controller_mapper_path", "borderless_gaming_path", "multi_monitor_tool_path",
     "just_after_launch_path", "just_before_exit_path",
     "p1_profile_path", "p2_profile_path", "mediacenter_profile_path",
@@ -26,6 +26,7 @@ PATH_KEYS = [
 PATH_LABELS = {
     "profiles_dir": "Overwrite Profile Folders",
     "launchers_dir": "Overwrite Launcher",
+    "launcher_executable": "Overwrite Launcher Executable",
     "controller_mapper_path": "Overwrite Controller Mapper",
     "borderless_gaming_path": "Overwrite Borderless Windowing",
     "multi_monitor_tool_path": "Overwrite Multi-Monitor Tool",
@@ -120,7 +121,6 @@ class DeploymentTab(QWidget):
         # Index Sources moved to Database Indexing (General Options) section
         index_sources_button = QPushButton("INDEX SOURCES")
         index_sources_button.setStyleSheet("QPushButton { font-weight: bold; }")
-        index_sources_button.clicked.connect(lambda: self.index_sources_requested.emit())
 
         # Create button shows dynamic count of selected items
         self.create_button = QPushButton()
@@ -170,8 +170,7 @@ class DeploymentTab(QWidget):
 
         # --- Connect Signals ---
         self.name_check_checkbox.stateChanged.connect(self.config_changed.emit)
-        self.steam_json_v1_radio.toggled.connect(self.config_changed.emit)
-        self.steam_json_v2_radio.toggled.connect(self.config_changed.emit)
+        self.steam_version_group.buttonClicked.connect(lambda: self.config_changed.emit())
         self.download_game_json_checkbox.stateChanged.connect(self.config_changed.emit)
 
         index_sources_button.clicked.connect(self.index_sources_requested.emit)

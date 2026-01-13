@@ -97,6 +97,7 @@ class SetupTab(QWidget):
         self.main_window = parent
         self.path_rows = {}
         self.repos = self._parse_repos_set()
+        self.last_detected_tools = {}
         self.options_args_map = self._parse_options_arguments_set()
         self.download_thread = None
         self._setup_ui()
@@ -185,7 +186,8 @@ class SetupTab(QWidget):
         self.path_rows["launchers_dir"] = PathConfigRow("launchers_dir", is_directory=True, add_enabled=True, add_cen_lc=True)
         self.path_rows["launchers_dir"].enabled_cb.setToolTip("Create Launcher")
         core_paths_layout.addRow("Launchers Directory:", self.path_rows["launchers_dir"]) # No options/args for dirs
-        self.path_rows["launcher_executable"] = PathConfigRow("launcher_executable", is_directory=False, add_enabled=False, add_cen_lc=False)
+        self.path_rows["launcher_executable"] = PathConfigRow("launcher_executable", is_directory=False, add_enabled=True, add_cen_lc=True)
+        self.path_rows["launcher_executable"].enabled_cb.setToolTip("Create Launcher Executable")
         self.path_rows["launcher_executable"].line_edit.setPlaceholderText(constants.LAUNCHER_EXECUTABLE)
         core_paths_layout.addRow("Launcher Executable:", self.path_rows["launcher_executable"]) # Internal
 
@@ -450,7 +452,7 @@ class SetupTab(QWidget):
             row.downloadRequested.connect(self._on_download_requested)
         
         for key, row in self.path_rows.items():
-            row.line_edit.textChanged.connect(lambda text, k=key: self._on_path_text_changed(k, text))
+            row.line_edit.editingFinished.connect(lambda k=key, r=row: self._on_path_text_changed(k, r.path))
 
         # Sequences
         self.launch_sequence_list.model().layoutChanged.connect(self.config_changed.emit)
@@ -782,6 +784,17 @@ class SetupTab(QWidget):
                 row.enabled = config.defaults.get(f"{attr_name}_enabled", True)
                 row.run_wait = config.run_wait_states.get(f"{attr_name}_run_wait", False)
 
+                # Initialize last detected tool to prevent overwrite on load/sync
+                if row.path:
+                    exe_name = os.path.basename(row.path).lower()
+                    exe_no_ext = os.path.splitext(exe_name)[0]
+                    if exe_name in self.options_args_map:
+                        self.last_detected_tools[attr_name] = exe_name
+                    elif exe_no_ext in self.options_args_map:
+                        self.last_detected_tools[attr_name] = exe_no_ext
+                    else:
+                        self.last_detected_tools[attr_name] = exe_name
+
         self.launch_sequence_list.clear()
         self.launch_sequence_list.addItems(config.launch_sequence if config.launch_sequence else 
             ["Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Pre2", "Pre3", "Borderless"])
@@ -834,6 +847,17 @@ class SetupTab(QWidget):
         elif exe_no_ext in self.options_args_map:
             target = exe_no_ext
             
+        # Determine current tool identifier
+        current_tool_id = target if target else exe_name
+        
+        # Check if tool changed
+        last_tool_id = self.last_detected_tools.get(config_key)
+        if last_tool_id == current_tool_id:
+            return # Tool hasn't changed, preserve customizations
+
+        # Update tracker
+        self.last_detected_tools[config_key] = current_tool_id
+
         if target:
             opts, args = self.options_args_map[target]
                                  

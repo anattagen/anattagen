@@ -28,7 +28,8 @@ def save_index(main_window, directory, data):
                               "pre1", "pre2", "pre3", 
                               "just_after", "just_before", "borderless", 
                               "as_admin", "no_tb",
-                              "kill_list_enabled", "kill_list"]
+                              "kill_list_enabled", "kill_list",
+                              "launcher_executable"]
                     
                     # Get path indicators
                     path_indicators = row.get("path_indicators", {})
@@ -38,7 +39,7 @@ def save_index(main_window, directory, data):
                     # Define path columns using EditorCols constants
                     path_columns = {constants.EditorCols.PLAYER1_PROFILE.value, constants.EditorCols.PLAYER2_PROFILE.value,
                                     constants.EditorCols.MEDIACENTER_PROFILE.value, constants.EditorCols.MM_GAME_PROFILE.value,
-                                    constants.EditorCols.MM_DESKTOP_PROFILE.value}
+                                    constants.EditorCols.MM_DESKTOP_PROFILE.value, constants.EditorCols.LAUNCHER_EXE.value}
                     for i, field in enumerate(fields):
                         if i in path_columns:  # Path fields (using EditorCols mapping)
                             # Use the indicator from path_indicators if available
@@ -137,7 +138,8 @@ def load_index(main_window=None, directory=None, prompt_for_filename=False):
                                   "pre1", "pre2", "pre3", 
                                   "just_after", "just_before", "borderless", 
                                   "as_admin", "no_tb",
-                                  "kill_list_enabled", "kill_list"]
+                                  "kill_list_enabled", "kill_list",
+                                  "launcher_executable"]
                         
                         # Create a dictionary for this row
                         row_dict = {}
@@ -145,7 +147,7 @@ def load_index(main_window=None, directory=None, prompt_for_filename=False):
                         # Define path columns using EditorCols constants
                         path_columns = {constants.EditorCols.PLAYER1_PROFILE.value, constants.EditorCols.PLAYER2_PROFILE.value,
                                         constants.EditorCols.MEDIACENTER_PROFILE.value, constants.EditorCols.MM_GAME_PROFILE.value,
-                                        constants.EditorCols.MM_DESKTOP_PROFILE.value}
+                                        constants.EditorCols.MM_DESKTOP_PROFILE.value, constants.EditorCols.LAUNCHER_EXE.value}
                         
                         # Fill in values from parts
                         for i, field in enumerate(fields):

@@ -65,3 +65,4 @@ class EditorCols(Enum):
     POST3_PATH = 35
     POST3_RUN_WAIT = 36
     KILL_LIST = 37
+    LAUNCHER_EXE = 38

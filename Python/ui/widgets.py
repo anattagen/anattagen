@@ -48,7 +48,7 @@ class PathConfigRow(QWidget):
 
         # Line Edit
         self.line_edit = QLineEdit()
-        self.line_edit.textChanged.connect(self.valueChanged.emit)
+        self.line_edit.editingFinished.connect(self.valueChanged.emit)
         layout.addWidget(self.line_edit)
 
         # Repo Flyout Button
