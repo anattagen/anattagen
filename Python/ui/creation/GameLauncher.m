@@ -11,14 +11,19 @@
  *
  * Compile with:
  * macOS: clang -fobjc-arc -framework Cocoa -framework GameController -o GameLauncher GameLauncher.m
- * Windows (GNUStep): clang `gnustep-config --objc-flags` `gnustep-config --base-libs --gui-libs` -lxinput -o GameLauncher.exe GameLauncher.m
+ * Windows (GNUStep): clang -DGNUSTEP `gnustep-config --objc-flags` `gnustep-config --base-libs --gui-libs` -lxinput -o GameLauncher.exe GameLauncher.m
  */
+
+#if defined(_WIN32) && !defined(GNUSTEP)
+#define GNUSTEP
+#endif
 
 #ifdef GNUSTEP
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import <windows.h>
 #import <xinput.h>
+#include <signal.h>
 // Link with -lgnustep-base -lgnustep-gui -lxinput
 #else
 #import <Cocoa/Cocoa.h>
@@ -37,10 +42,12 @@
 @end
 
 @implementation Logger
+@synthesize logPath, fileHandle;
 + (instancetype)shared {
     static Logger *shared = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{ shared = [[Logger alloc] init]; });
+    if (shared == nil) {
+        shared = [[Logger alloc] init];
+    }
     return shared;
 }
 
@@ -57,7 +64,11 @@
     [self.fileHandle seekToEndOfFile];
     
     // Redirect stderr to this file
+#ifdef GNUSTEP
+    freopen([self.logPath UTF8String], "a+", stderr);
+#else
     freopen([self.logPath fileSystemRepresentation], "a+", stderr);
+#endif
 }
 
 - (void)log:(NSString *)format, ... {
@@ -105,18 +116,18 @@
         
         if ([trimmed hasPrefix:@"["] && [trimmed hasSuffix:@"]"]) {
             currentSection = [trimmed substringWithRange:NSMakeRange(1, [trimmed length] - 2)];
-            if (!config[currentSection]) config[currentSection] = [NSMutableDictionary dictionary];
+            if (![config objectForKey:currentSection]) [config setObject:[NSMutableDictionary dictionary] forKey:currentSection];
             continue;
         }
         
         NSArray *parts = [trimmed componentsSeparatedByString:@"="];
         if ([parts count] >= 2) {
-            NSString *key = [parts[0] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+            NSString *key = [[parts objectAtIndex:0] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
             NSString *val = [[parts subarrayWithRange:NSMakeRange(1, parts.count-1)] componentsJoinedByString:@"="];
             val = [val stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
             
-            if (!config[currentSection]) config[currentSection] = [NSMutableDictionary dictionary];
-            config[currentSection][key] = val;
+            if (![config objectForKey:currentSection]) [config setObject:[NSMutableDictionary dictionary] forKey:currentSection];
+            [[config objectForKey:currentSection] setObject:val forKey:key];
         }
     }
     return config;
@@ -134,7 +145,6 @@
 @end
 
 // --- Main Application Controller ---
-
 @interface AppDelegate : NSObject <NSApplicationDelegate>
 @property (strong) NSDictionary *config;
 @property (strong) NSTask *gameTask;
@@ -149,26 +159,31 @@
 @end
 
 @implementation AppDelegate
+@synthesize config, gameTask, overlayWindow, statusLabel, isMenuVisible, statusItem;
+#ifdef GNUSTEP
+@synthesize inputTimer, lastButtonState;
+#endif
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
     [[Logger shared] setup];
     [[Logger shared] log:@"Launcher started."];
     
-    // Load Config
     NSString *iniPath = @"Game.ini"; // Assumes Game.ini is in CWD
     if (![[NSFileManager defaultManager] fileExistsAtPath:iniPath]) {
-        // Fallback to bundle resource or home dir for testing
         iniPath = [@"~/Documents/Game.ini" stringByExpandingTildeInPath];
     }
     
     self.config = [ConfigParser parseINI:iniPath];
     [[Logger shared] log:@"Config loaded from %@", iniPath];
     
-    // Setup System Tray
-    [self setupSystemTray];
+    if (![self checkAndSetRunningState]) {
+        [NSApp terminate:nil];
+        return;
+    }
     
-    // Setup Controller Monitoring
+    [self setupSystemTray];
     [self setupControllerSupport];
+
     
 #ifndef GNUSTEP
     // Setup Global Hotkey (Cmd+Opt+Esc for demo purposes)
@@ -188,13 +203,24 @@
 - (void)setupSystemTray {
     self.statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
     
+    // Try to load custom icon
+    NSImage *icon = [[NSImage alloc] initWithContentsOfFile:@"tray.png"];
+    if (icon) {
+        [icon setSize:NSMakeSize(18, 18)];
+#ifndef GNUSTEP
+        [icon setTemplate:YES];
+#endif
 #ifdef GNUSTEP
-    [self.statusItem setTitle:@"GL"];
+        [self.statusItem setImage:icon];
     [self.statusItem setHighlightMode:YES];
 #else
-    self.statusItem.button.title = @"GL";
+        self.statusItem.button.image = icon;
 #endif
-
+    } else {
+        // Fallback to text
+        [self.statusItem setTitle:@"GL"];
+    }
+    
     NSMenu *menu = [[NSMenu alloc] initWithTitle:@"GameLauncher"];
     [menu addItemWithTitle:@"Show Menu" action:@selector(toggleMenu) keyEquivalent:@"m"];
     [menu addItem:[NSMenuItem separatorItem]];
@@ -203,19 +229,19 @@
 }
 
 - (void)executeLaunchSequence {
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        // 1. Pre-Launch
-        [self runSequence:@"PreLaunch"];
-        
-        // 2. Launch Game
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self launchGame];
-        });
-    });
+    [self performSelectorInBackground:@selector(runLaunchSequenceBackground) withObject:nil];
+}
+
+- (void)runLaunchSequenceBackground {
+    // 1. Pre-Launch
+    [self runSequence:@"PreLaunch"];
+    
+    // 2. Launch Game
+    [self performSelectorOnMainThread:@selector(launchGame) withObject:nil waitUntilDone:NO];
 }
 
 - (void)runSequence:(NSString *)sectionName {
-    NSDictionary *section = self.config[sectionName];
+    NSDictionary *section = [self.config objectForKey:sectionName];
     if (!section) return;
     
     // Simple implementation: iterates App1, App2, App3 keys
@@ -223,8 +249,8 @@
         NSString *appKey = [NSString stringWithFormat:@"App%d", i];
         NSString *waitKey = [NSString stringWithFormat:@"App%dWait", i];
         
-        NSString *appPath = section[appKey];
-        BOOL wait = [section[waitKey] boolValue];
+        NSString *appPath = [section objectForKey:appKey];
+        BOOL wait = [[section objectForKey:waitKey] boolValue];
         
         if (appPath && [appPath length] > 0) {
             [self runProcess:appPath arguments:@[] wait:wait];
@@ -233,8 +259,8 @@
 }
 
 - (void)launchGame {
-    NSString *gameExe = self.config[@"Game"][@"Executable"];
-    NSString *gameDir = self.config[@"Game"][@"Directory"];
+    NSString *gameExe = [[self.config objectForKey:@"Game"] objectForKey:@"Executable"];
+    NSString *gameDir = [[self.config objectForKey:@"Game"] objectForKey:@"Directory"];
     
     if (!gameExe) {
         [[Logger shared] log:@"Error: No Game Executable defined."];
@@ -248,13 +274,10 @@
     self.gameTask.launchPath = gameExe;
     if (gameDir) self.gameTask.currentDirectoryPath = gameDir;
     
-    self.gameTask.terminationHandler = ^(NSTask *task) {
-        [[Logger shared] log:@"Game terminated. Running PostLaunch..."];
-        [self runSequence:@"PostLaunch"];
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self terminateApp];
-        });
-    };
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(gameTaskDidTerminate:)
+                                                 name:NSTaskDidTerminateNotification
+                                               object:self.gameTask];
     
     @try {
         [self.gameTask launch];
@@ -262,6 +285,16 @@
         [[Logger shared] log:@"Failed to launch game: %@", exception.reason];
         [self terminateApp];
     }
+}
+
+- (void)gameTaskDidTerminate:(NSNotification *)notification {
+    [self performSelectorInBackground:@selector(runPostLaunchAndExit) withObject:nil];
+}
+
+- (void)runPostLaunchAndExit {
+    [[Logger shared] log:@"Game terminated. Running PostLaunch..."];
+    [self runSequence:@"PostLaunch"];
+    [self performSelectorOnMainThread:@selector(terminateApp) withObject:nil waitUntilDone:NO];
 }
 
 - (void)runProcess:(NSString *)path arguments:(NSArray *)args wait:(BOOL)wait {
@@ -283,14 +316,86 @@
 
 - (void)terminateApp {
     [[Logger shared] log:@"Launcher exiting."];
+    [self clearRunningState];
     [[Logger shared] openLogViewer];
     [NSApp terminate:nil];
+}
+
+- (BOOL)checkAndSetRunningState {
+    NSString *iniPath = @"Game.ini";
+    if (![[NSFileManager defaultManager] fileExistsAtPath:iniPath]) return YES;
+
+    NSDictionary *currentConfig = [ConfigParser parseINI:iniPath];
+    NSString *pidStr = [[currentConfig objectForKey:@"State"] objectForKey:@"PID"];
+    
+    if (pidStr && [pidStr intValue] > 0) {
+        int pid = [pidStr intValue];
+        // Check if process is running (kill 0 checks existence without sending signal)
+#ifdef GNUSTEP
+        HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pid);
+        if (hProcess != NULL) {
+            CloseHandle(hProcess);
+            [[Logger shared] log:@"Another instance is running (PID: %d). Exiting.", pid];
+            return NO;
+        }
+#else
+        if (kill(pid, 0) == 0) {
+            [[Logger shared] log:@"Another instance is running (PID: %d). Exiting.", pid];
+            return NO;
+        }
+#endif
+    }
+    
+    // Write current PID
+    [self updateINI:iniPath section:@"State" key:@"PID" value:[NSString stringWithFormat:@"%d", [[NSProcessInfo processInfo] processIdentifier]]];
+    return YES;
+}
+
+- (void)clearRunningState {
+    [self updateINI:@"Game.ini" section:@"State" key:@"PID" value:@"0"];
+}
+
+- (void)updateINI:(NSString *)path section:(NSString *)section key:(NSString *)key value:(NSString *)value {
+    NSError *error = nil;
+    NSString *content = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:&error];
+    if (!content) return;
+
+    NSMutableArray *lines = [[content componentsSeparatedByString:@"\n"] mutableCopy];
+    BOOL sectionFound = NO;
+    BOOL keyUpdated = NO;
+    NSInteger sectionIndex = -1;
+
+    for (int i = 0; i < [lines count]; i++) {
+        NSString *line = [[lines objectAtIndex:i] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if ([line isEqualToString:[NSString stringWithFormat:@"[%@]", section]]) {
+            sectionIndex = i;
+            sectionFound = YES;
+            continue;
+        }
+        if (sectionFound) {
+            if ([line hasPrefix:@"["]) break; // Next section
+            if ([line hasPrefix:[NSString stringWithFormat:@"%@=", key]] || [line hasPrefix:[NSString stringWithFormat:@"%@ =", key]]) {
+                [lines replaceObjectAtIndex:i withObject:[NSString stringWithFormat:@"%@=%@", key, value]];
+                keyUpdated = YES;
+                break;
+            }
+        }
+    }
+
+    if (!sectionFound) {
+        [lines addObject:@""];
+        [lines addObject:[NSString stringWithFormat:@"[%@]", section]];
+        [lines addObject:[NSString stringWithFormat:@"%@=%@", key, value]];
+    } else if (!keyUpdated) {
+        [lines insertObject:[NSString stringWithFormat:@"%@=%@", key, value] atIndex:sectionIndex + 1];
+    }
+
+    [[lines componentsJoinedByString:@"\n"] writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil];
 }
 
 - (void)quitFromMenu:(id)sender {
     [self terminateApp];
 }
-
 // --- Menu / Overlay Logic ---
 
 - (void)toggleMenu {
@@ -315,16 +420,24 @@
     [self.overlayWindow setLevel:NSFloatingWindowLevel];
     [self.overlayWindow setBackgroundColor:[NSColor colorWithCalibratedWhite:0.1 alpha:0.9]];
     
-    NSTextField *label = [NSTextField labelWithString:@"Paused / Menu"];
-    [label setFont:[NSFont systemFontOfSize:24 weight:NSFontWeightBold]];
+    NSTextField *label = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 140, 400, 40)];
+    [label setStringValue:@"Paused / Menu"];
+    [label setBezeled:NO];
+    [label setDrawsBackground:NO];
+    [label setEditable:NO];
+    [label setSelectable:NO];
+    [label setFont:[NSFont boldSystemFontOfSize:24]];
     [label setTextColor:[NSColor whiteColor]];
-    [label setFrame:NSMakeRect(0, 140, 400, 40)];
     [label setAlignment:NSTextAlignmentCenter];
     [[self.overlayWindow contentView] addSubview:label];
     
-    NSTextField *instr = [NSTextField labelWithString:@"Press (A) to Resume\nPress (B) to Kill Game"];
+    NSTextField *instr = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 60, 400, 60)];
+    [instr setStringValue:@"Press (A) to Resume\nPress (B) to Kill Game"];
+    [instr setBezeled:NO];
+    [instr setDrawsBackground:NO];
+    [instr setEditable:NO];
+    [instr setSelectable:NO];
     [instr setTextColor:[NSColor lightGrayColor]];
-    [instr setFrame:NSMakeRect(0, 60, 400, 60)];
     [instr setAlignment:NSTextAlignmentCenter];
     [[self.overlayWindow contentView] addSubview:instr];
     
@@ -450,7 +563,9 @@ int main(int argc, const char * argv[]) {
         NSApplication *app = [NSApplication sharedApplication];
         AppDelegate *delegate = [[AppDelegate alloc] init];
         [app setDelegate:delegate];
+#ifndef GNUSTEP
         [app setActivationPolicy:NSApplicationActivationPolicyRegular];
+#endif
         [app run];
     }
     return 0;
