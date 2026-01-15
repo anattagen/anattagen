@@ -27,16 +27,16 @@ class SequenceExecutor:
             'Controller-Mapper': self.run_controller_mapper,
             'Monitor-Config': self.run_monitor_config_game,
             'No-TB': self.hide_taskbar,
-            'Pre1': lambda: self.run_generic_app('pre_launch_app_1', 'pre_launch_app_1_wait'),
-            'Pre2': lambda: self.run_generic_app('pre_launch_app_2', 'pre_launch_app_2_wait'),
-            'Pre3': lambda: self.run_generic_app('pre_launch_app_3', 'pre_launch_app_3_wait'),
+            'Pre1': lambda: self.run_generic_app('pre_launch_app_1', 'pre_launch_app_1_wait', 'pre_launch_app_1_options', 'pre_launch_app_1_arguments'),
+            'Pre2': lambda: self.run_generic_app('pre_launch_app_2', 'pre_launch_app_2_wait', 'pre_launch_app_2_options', 'pre_launch_app_2_arguments'),
+            'Pre3': lambda: self.run_generic_app('pre_launch_app_3', 'pre_launch_app_3_wait', 'pre_launch_app_3_options', 'pre_launch_app_3_arguments'),
             'Borderless': self.run_borderless,
-            'JustAfterLaunch': lambda: self.run_generic_app('just_after_launch_app', 'just_after_launch_wait'),
-            'Post1': lambda: self.run_generic_app('post_launch_app_1', 'post_launch_app_1_wait'),
-            'Post2': lambda: self.run_generic_app('post_launch_app_2', 'post_launch_app_2_wait'),
-            'Post3': lambda: self.run_generic_app('post_launch_app_3', 'post_launch_app_3_wait'),
+            'JustAfterLaunch': lambda: self.run_generic_app('just_after_launch_app', 'just_after_launch_wait', 'just_after_launch_options', 'just_after_launch_arguments'),
+            'Post1': lambda: self.run_generic_app('post_launch_app_1', 'post_launch_app_1_wait', 'post_launch_app_1_options', 'post_launch_app_1_arguments'),
+            'Post2': lambda: self.run_generic_app('post_launch_app_2', 'post_launch_app_2_wait', 'post_launch_app_2_options', 'post_launch_app_2_arguments'),
+            'Post3': lambda: self.run_generic_app('post_launch_app_3', 'post_launch_app_3_wait', 'post_launch_app_3_options', 'post_launch_app_3_arguments'),
             'Taskbar': self.show_taskbar,
-            'JustBeforeExit': lambda: self.run_generic_app('just_before_exit_app', 'just_before_exit_wait'),
+            'JustBeforeExit': lambda: self.run_generic_app('just_before_exit_app', 'just_before_exit_wait', 'just_before_exit_options', 'just_before_exit_arguments'),
         }
 
         # Define explicit "off" or "restore" actions for the exit sequence
@@ -76,11 +76,19 @@ class SequenceExecutor:
             else:
                 self.launcher.show_message(f"  - Unknown action: {item}")
 
-    def run_generic_app(self, app_attr, wait_attr):
+    def run_generic_app(self, app_attr, wait_attr, options_attr=None, args_attr=None):
         app_path = getattr(self.launcher, app_attr, '')
         wait = getattr(self.launcher, wait_attr, False)
+        options = getattr(self.launcher, options_attr, '') if options_attr else ''
+        args = getattr(self.launcher, args_attr, '') if args_attr else ''
+
         if app_path and os.path.exists(app_path):
-            process = self.launcher.run_process(f'"{app_path}"', wait=wait)
+            cmd = f'"{app_path}"'
+            if options:
+                cmd += f' {options}'
+            if args:
+                cmd += f' {args}'
+            process = self.launcher.run_process(cmd, wait=wait)
             if process and not wait:
                 # Track the process if we don't wait for it to close
                 self.running_processes[app_attr] = process
@@ -89,6 +97,8 @@ class SequenceExecutor:
         app = self.launcher.controller_mapper_app
         p1 = self.launcher.player1_profile
         p2 = self.launcher.player2_profile
+        options = getattr(self.launcher, 'controller_mapper_options', '')
+        args = getattr(self.launcher, 'controller_mapper_arguments', '')
 
         if not (app and os.path.exists(app) and p1 and os.path.exists(p1)):
             self.launcher.show_message("  - Controller Mapper or P1 Profile not configured/found.")
@@ -103,6 +113,13 @@ class SequenceExecutor:
                 cmd += f' --next --profile-controller 2 --profile "{p2}"'
         elif "joyxoff" in mapper_name or "joy2key" in mapper_name or "keysticks" in mapper_name:
             cmd = f'"{app}" -load "{p1}"'
+        else:
+            cmd = f'"{app}"'
+
+        if options:
+            cmd += f' {options}'
+        if args:
+            cmd += f' {args}'
 
         if cmd:
             process = self.launcher.run_process(cmd)
@@ -123,14 +140,28 @@ class SequenceExecutor:
     def run_monitor_config_game(self):
         tool = self.launcher.multimonitor_tool
         config = self.launcher.mm_game_config
+        options = getattr(self.launcher, 'multimonitor_options', '')
+        args = getattr(self.launcher, 'multimonitor_arguments', '')
+
         if tool and config and os.path.exists(tool) and os.path.exists(config):
-            self.launcher.run_process(f'"{tool}" /load "{config}"', wait=True)
+            cmd = f'"{tool}"'
+            if options: cmd += f' {options}'
+            cmd += f' /load "{config}"'
+            if args: cmd += f' {args}'
+            self.launcher.run_process(cmd, wait=True)
 
     def run_monitor_config_desktop(self):
         tool = self.launcher.multimonitor_tool
         config = getattr(self.launcher, 'mm_desktop_config', '')
+        options = getattr(self.launcher, 'multimonitor_options', '')
+        args = getattr(self.launcher, 'multimonitor_arguments', '')
+
         if tool and config and os.path.exists(tool) and os.path.exists(config):
-            self.launcher.run_process(f'"{tool}" /load "{config}"', wait=True)
+            cmd = f'"{tool}"'
+            if options: cmd += f' {options}'
+            cmd += f' /load "{config}"'
+            if args: cmd += f' {args}'
+            self.launcher.run_process(cmd, wait=True)
 
     def hide_taskbar(self):
         if self.launcher.hide_taskbar and self.taskbar_hwnd and platform.system() == 'Windows':

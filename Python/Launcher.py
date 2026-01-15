@@ -170,8 +170,14 @@ class GameLauncher:
         # Load paths
         if 'Paths' in config:
             self.controller_mapper_app = config.get('Paths', 'ControllerMapperApp', fallback='')
+            self.controller_mapper_options = config.get('Paths', 'ControllerMapperOptions', fallback='')
+            self.controller_mapper_arguments = config.get('Paths', 'ControllerMapperArguments', fallback='')
             self.borderless_app = config.get('Paths', 'BorderlessWindowingApp', fallback='')
+            self.borderless_options = config.get('Paths', 'BorderlessWindowingOptions', fallback='')
+            self.borderless_arguments = config.get('Paths', 'BorderlessWindowingArguments', fallback='')
             self.multimonitor_tool = config.get('Paths', 'MultiMonitorTool', fallback='')
+            self.multimonitor_options = config.get('Paths', 'MultiMonitorOptions', fallback='')
+            self.multimonitor_arguments = config.get('Paths', 'MultiMonitorArguments', fallback='')
             self.player1_profile = config.get('Paths', 'Player1Profile', fallback='')
             self.player2_profile = config.get('Paths', 'Player2Profile', fallback='')
             self.mm_game_config = config.get('Paths', 'MultiMonitorGamingConfig', fallback='')
@@ -184,13 +190,20 @@ class GameLauncher:
             self.borderless = config.get('Options', 'Borderless', fallback='0')
             self.use_kill_list = config.getboolean('Options', 'UseKillList', fallback=False)
             self.terminate_borderless_on_exit = config.getboolean('Options', 'TerminateBorderlessOnExit', fallback=False)
-
+            self.kill_list_str = config.get('Options', 'KillList', fallback='')
+            self.kill_list = [x.strip() for x in self.kill_list_str.split(',') if x.strip()]
 
         # Load pre-launch apps
         if 'PreLaunch' in config:
             self.pre_launch_app_1 = config.get('PreLaunch', 'App1', fallback='')
+            self.pre_launch_app_1_options = config.get('PreLaunch', 'App1Options', fallback='')
+            self.pre_launch_app_1_arguments = config.get('PreLaunch', 'App1Arguments', fallback='')
             self.pre_launch_app_2 = config.get('PreLaunch', 'App2', fallback='')
+            self.pre_launch_app_2_options = config.get('PreLaunch', 'App2Options', fallback='')
+            self.pre_launch_app_2_arguments = config.get('PreLaunch', 'App2Arguments', fallback='')
             self.pre_launch_app_3 = config.get('PreLaunch', 'App3', fallback='')
+            self.pre_launch_app_3_options = config.get('PreLaunch', 'App3Options', fallback='')
+            self.pre_launch_app_3_arguments = config.get('PreLaunch', 'App3Arguments', fallback='')
             self.pre_launch_app_1_wait = config.get('PreLaunch', 'App1Wait', fallback='0') == '1'
             self.pre_launch_app_2_wait = config.get('PreLaunch', 'App2Wait', fallback='0') == '1'
             self.pre_launch_app_3_wait = config.get('PreLaunch', 'App3Wait', fallback='0') == '1'
@@ -198,13 +211,23 @@ class GameLauncher:
         # Load post-launch apps
         if 'PostLaunch' in config:
             self.post_launch_app_1 = config.get('PostLaunch', 'App1', fallback='')
+            self.post_launch_app_1_options = config.get('PostLaunch', 'App1Options', fallback='')
+            self.post_launch_app_1_arguments = config.get('PostLaunch', 'App1Arguments', fallback='')
             self.post_launch_app_2 = config.get('PostLaunch', 'App2', fallback='')
+            self.post_launch_app_2_options = config.get('PostLaunch', 'App2Options', fallback='')
+            self.post_launch_app_2_arguments = config.get('PostLaunch', 'App2Arguments', fallback='')
             self.post_launch_app_3 = config.get('PostLaunch', 'App3', fallback='')
+            self.post_launch_app_3_options = config.get('PostLaunch', 'App3Options', fallback='')
+            self.post_launch_app_3_arguments = config.get('PostLaunch', 'App3Arguments', fallback='')
             self.post_launch_app_1_wait = config.get('PostLaunch', 'App1Wait', fallback='0') == '1'
             self.post_launch_app_2_wait = config.get('PostLaunch', 'App2Wait', fallback='0') == '1'
             self.post_launch_app_3_wait = config.get('PostLaunch', 'App3Wait', fallback='0') == '1'
             self.just_after_launch_app = config.get('PostLaunch', 'JustAfterLaunchApp', fallback='')
+            self.just_after_launch_options = config.get('PostLaunch', 'JustAfterLaunchOptions', fallback='')
+            self.just_after_launch_arguments = config.get('PostLaunch', 'JustAfterLaunchArguments', fallback='')
             self.just_before_exit_app = config.get('PostLaunch', 'JustBeforeExitApp', fallback='')
+            self.just_before_exit_options = config.get('PostLaunch', 'JustBeforeExitOptions', fallback='')
+            self.just_before_exit_arguments = config.get('PostLaunch', 'JustBeforeExitArguments', fallback='')
             self.just_after_launch_wait = config.get('PostLaunch', 'JustAfterLaunchWait', fallback='0') == '1'
             self.just_before_exit_wait = config.get('PostLaunch', 'JustBeforeExitWait', fallback='0') == '1'
         
@@ -288,11 +311,21 @@ class GameLauncher:
         
         # Run just after launch app if specified
         if self.just_after_launch_app and os.path.exists(self.just_after_launch_app):
-            self.run_process(self.just_after_launch_app, wait=self.just_after_launch_wait)
+            cmd = f'"{self.just_after_launch_app}"'
+            if self.just_after_launch_options:
+                cmd += f' {self.just_after_launch_options}'
+            if self.just_after_launch_arguments:
+                cmd += f' {self.just_after_launch_arguments}'
+            self.run_process(cmd, wait=self.just_after_launch_wait)
         
         # If borderless windowing is enabled, run it and track it
         if self.borderless in ['E', 'K'] and self.borderless_app and os.path.exists(self.borderless_app):
-            self.borderless_process = self.run_process(f'"{self.borderless_app}"')
+            cmd = f'"{self.borderless_app}"'
+            if self.borderless_options:
+                cmd += f' {self.borderless_options}'
+            if self.borderless_arguments:
+                cmd += f' {self.borderless_arguments}'
+            self.borderless_process = self.run_process(cmd)
         
         # Wait for the game to exit
         if self.game_process:
@@ -453,8 +486,12 @@ class GameLauncher:
     
     def kill_processes_in_list(self):
         """Kill processes in the kill list"""
-        # This would be implemented based on your specific kill list logic
-        pass
+        if not self.use_kill_list or not hasattr(self, 'kill_list'):
+            return
+        
+        for proc_name in self.kill_list:
+            self.show_message(f"Killing process from list: {proc_name}")
+            self.kill_process_by_name(proc_name)
     
     def write_pid_file(self):
         """Write the current PID to the PID file"""
