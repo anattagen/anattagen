@@ -1032,7 +1032,6 @@ class EditorTab(QWidget):
             if path and os.path.exists(path) and os.path.isfile(path) and os.path.getsize(path) > 10 * 1024 * 1024:
                 style = "QLineEdit { font-weight: bold; text-decoration: underline; color: red; }"
         line_edit.setStyleSheet(style)
-        return widget
 
     def _on_checkbox_changed(self, row, col, state):
         self._sync_cell_to_data(row, col)
