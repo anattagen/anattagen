@@ -4,6 +4,7 @@ import configparser
 import requests
 import zipfile
 import shutil
+import subprocess
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QGroupBox, QLabel, QFormLayout, QPushButton,
     QComboBox, QHBoxLayout, QCheckBox, QTabWidget,
@@ -58,10 +59,23 @@ class DownloadThread(QThread):
                 with zipfile.ZipFile(save_path, 'r') as zip_ref:
                     zip_ref.extractall(self.extract_dir)
                 os.remove(save_path) # Clean up zip
-            elif filename.lower().endswith('.7z'):
-                # Basic handling: just leave the 7z if we can't extract it easily without extra libs
-                # Or assume user handles it. For now, we just leave it.
-                pass
+            elif filename.lower().endswith(('.7z', '.rar')):
+                # Use external 7z.exe from bin directory
+                seven_z_exe = os.path.join(constants.APP_ROOT_DIR, "bin", "7z.exe")
+                if os.path.exists(seven_z_exe):
+                    # 7z x archive.7z -o"C:\Output" -y
+                    cmd = [
+                        seven_z_exe, 
+                        "x", 
+                        save_path, 
+                        f"-o{self.extract_dir}", 
+                        "-y"
+                    ]
+                    # Run silently
+                    subprocess.run(cmd, check=True, creationflags=0x08000000) # CREATE_NO_WINDOW
+                    os.remove(save_path) # Clean up archive
+                else:
+                    raise FileNotFoundError(f"7z.exe not found at {seven_z_exe}")
                 
             # Construct result path
             result_path = os.path.join(self.extract_dir, self.exe_name)

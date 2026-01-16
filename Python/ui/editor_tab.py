@@ -1,13 +1,49 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem, QLabel,
     QPushButton, QHeaderView, QAbstractItemView, QMenu, QCheckBox, QLineEdit,
-    QApplication, QFileDialog, QInputDialog, QMessageBox, QSpinBox
+    QApplication, QFileDialog, QInputDialog, QMessageBox, QSpinBox, QDialog,
+    QDialogButtonBox, QComboBox
 )
 import os
 import json 
 import copy
+import collections
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QColor
 from Python import constants
+
+class AppendKillListDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Append to Kill List")
+        self.setModal(True)
+        self.resize(400, 150)
+        layout = QVBoxLayout(self)
+        
+        layout.addWidget(QLabel("Enter executable name (e.g. notepad.exe) or variable:"))
+        
+        input_layout = QHBoxLayout()
+        self.input_edit = QLineEdit()
+        browse_btn = QPushButton("...")
+        browse_btn.setMaximumWidth(40)
+        browse_btn.clicked.connect(self.browse_file)
+        
+        input_layout.addWidget(self.input_edit)
+        input_layout.addWidget(browse_btn)
+        layout.addLayout(input_layout)
+        
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def browse_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Executable", "", "Executables (*.exe);;All Files (*)")
+        if file_path:
+            self.input_edit.setText(os.path.basename(file_path))
+
+    def get_value(self):
+        return self.input_edit.text().strip()
 
 class EditorTab(QWidget):
     """Encapsulates the UI and logic for the Editor tab."""
@@ -26,6 +62,7 @@ class EditorTab(QWidget):
         self.filtered_data = []
         self.current_page = 0
         self.page_size = self.main_window.config.editor_page_size
+        self.undo_stack = []
         self.populate_ui()
 
     def populate_ui(self):
@@ -40,16 +77,49 @@ class EditorTab(QWidget):
         search_layout.addWidget(QLabel("Search:"))
         search_layout.addWidget(self.search_bar)
         
-        # Toggle Create Button
-        self.toggle_create_button = QPushButton("Toggle Create")
-        self.toggle_create_button.clicked.connect(self.toggle_create_column)
-        search_layout.addWidget(self.toggle_create_button)
-
         # Add Game Button
         self.add_game_button = QPushButton("Add Game")
         self.add_game_button.clicked.connect(self.add_game_manually)
         search_layout.addWidget(self.add_game_button)
         main_layout.addLayout(search_layout)
+
+        # --- Tools Row (Above Table) ---
+        tools_layout = QHBoxLayout()
+        
+        # Toggle Create
+        self.toggle_create_button = QPushButton("Toggle Create")
+        self.toggle_create_button.clicked.connect(self.toggle_create_column)
+        tools_layout.addWidget(self.toggle_create_button)
+
+        # Remove Unchecked
+        self.remove_unchecked_btn = QPushButton("Remove Unchecked")
+        self.remove_unchecked_btn.clicked.connect(self.remove_unchecked_items)
+        tools_layout.addWidget(self.remove_unchecked_btn)
+
+        # Select Flyout
+        self.select_flyout_btn = QPushButton("Select By... ▼")
+        self.select_flyout_menu = QMenu(self)
+        self.select_flyout_menu.addAction("Empty Steam ID", lambda: self.select_by_criteria("empty_steamid"))
+        self.select_flyout_menu.addAction("Empty Kill List", lambda: self.select_by_criteria("empty_killlist"))
+        self.select_flyout_menu.addAction("Invalid/Absent Paths", lambda: self.select_by_criteria("invalid_paths"))
+        self.select_flyout_menu.addAction("Large File LC (>10MB)", lambda: self.select_by_criteria("large_lc"))
+        self.select_flyout_btn.setMenu(self.select_flyout_menu)
+        tools_layout.addWidget(self.select_flyout_btn)
+
+        # Change Flyout
+        self.change_flyout_btn = QPushButton("Change Selected... ▼")
+        self.change_flyout_menu = QMenu(self)
+        self.change_flyout_menu.addAction("Swap LC/CEN Type", self.swap_lc_cen_selected)
+        self.change_flyout_btn.setMenu(self.change_flyout_menu)
+        tools_layout.addWidget(self.change_flyout_btn)
+
+        # Undo Button
+        self.undo_button = QPushButton("Undo")
+        self.undo_button.setEnabled(False)
+        self.undo_button.clicked.connect(self.undo)
+        tools_layout.addWidget(self.undo_button)
+        
+        main_layout.addLayout(tools_layout)
 
         # --- Table ---
         self.table = QTableWidget()
@@ -74,7 +144,8 @@ class EditorTab(QWidget):
             "Pre3", "Wait",
             "Post3", "Wait",
             "Kill List",
-            "Launcher Exe"
+            "Launcher Exe",
+            "Exec Order", "Term Order"
         ]
         self.table.setHorizontalHeaderLabels(headers)
 
@@ -96,7 +167,9 @@ class EditorTab(QWidget):
             "Pre-launch script 3", "Wait for Pre3?",
             "Post-launch script 3", "Wait for Post3?",
             "Comma-separated list of processes to kill (Checked = Enabled)",
-            "Custom Launcher Executable to use/copy"
+            "Custom Launcher Executable to use/copy",
+            "Execution Sequence Order",
+            "Termination Sequence Order"
         ]
         for i, tooltip in enumerate(tooltips):
             item = self.table.horizontalHeaderItem(i)
@@ -166,6 +239,16 @@ class EditorTab(QWidget):
         buttons_layout.addWidget(self.load_button)
         buttons_layout.addWidget(self.delete_button)
         buttons_layout.addWidget(self.clear_button)
+        
+        # Bulk Edit and Validate
+        self.bulk_edit_button = QPushButton("Bulk Edit")
+        self.bulk_edit_button.clicked.connect(self.open_bulk_edit_dialog)
+        buttons_layout.addWidget(self.bulk_edit_button)
+
+        self.validate_btn = QPushButton("Validate Paths")
+        self.validate_btn.clicked.connect(self.validate_paths)
+        buttons_layout.addWidget(self.validate_btn)
+        
         main_layout.addLayout(buttons_layout)
 
         # --- Connect Signals ---
@@ -177,6 +260,74 @@ class EditorTab(QWidget):
         self.table.customContextMenuRequested.connect(self.on_context_menu)
         self.table.cellClicked.connect(self.on_cell_clicked)
         self.table.itemChanged.connect(self.on_item_changed)
+
+    def push_undo(self):
+        """Save current state to undo stack."""
+        if len(self.undo_stack) >= 10:
+            self.undo_stack.pop(0)
+        self.undo_stack.append(copy.deepcopy(self.original_data))
+        self.undo_button.setEnabled(True)
+
+    def undo(self):
+        """Restore last state."""
+        if not self.undo_stack: return
+        self.original_data = self.undo_stack.pop()
+        self.filter_table(self.search_bar.text())
+        self.undo_button.setEnabled(len(self.undo_stack) > 0)
+        self.main_window._on_editor_table_edited(None)
+
+    def remove_unchecked_items(self):
+        """Remove items where 'create' is False."""
+        self.push_undo()
+        self.original_data = [g for g in self.original_data if g.get('create', False)]
+        self.filter_table(self.search_bar.text())
+        self.main_window._on_editor_table_edited(None)
+
+    def select_by_criteria(self, criteria):
+        """Select rows matching specific criteria."""
+        self.table.clearSelection()
+        rows_to_select = []
+        
+        path_cols = [
+            constants.EditorCols.CM_PATH, constants.EditorCols.BW_PATH, constants.EditorCols.MM_PATH,
+            constants.EditorCols.MM_GAME_PROFILE, constants.EditorCols.MM_DESKTOP_PROFILE,
+            constants.EditorCols.PLAYER1_PROFILE, constants.EditorCols.PLAYER2_PROFILE, constants.EditorCols.MEDIACENTER_PROFILE,
+            constants.EditorCols.JA_PATH, constants.EditorCols.JB_PATH,
+            constants.EditorCols.PRE1_PATH, constants.EditorCols.POST1_PATH,
+            constants.EditorCols.PRE2_PATH, constants.EditorCols.POST2_PATH,
+            constants.EditorCols.PRE3_PATH, constants.EditorCols.POST3_PATH,
+            constants.EditorCols.LAUNCHER_EXE
+        ]
+
+        for row in range(self.table.rowCount()):
+            real_index = (self.current_page * self.page_size) + row
+            if real_index >= len(self.filtered_data): continue
+            game = self.filtered_data[real_index]
+            
+            match = False
+            if criteria == "empty_steamid":
+                sid = str(game.get('steam_id', ''))
+                if not sid or sid == 'NOT_FOUND_IN_DATA': match = True
+            elif criteria == "empty_killlist":
+                if not game.get('kill_list', '').strip(): match = True
+            elif criteria == "invalid_paths":
+                # Check logic similar to validate_paths
+                for col_enum in path_cols:
+                    widget = self.table.cellWidget(row, col_enum.value)
+                    if widget:
+                        le = widget.findChild(QLineEdit)
+                        path = le.text().strip() if le else ""
+                        clean_path = path[2:] if path.startswith("> ") or path.startswith("< ") else path
+                        if clean_path and not os.path.exists(clean_path):
+                            match = True; break
+            elif criteria == "large_lc":
+                for col_enum in path_cols:
+                    widget = self.table.cellWidget(row, col_enum.value)
+                    if widget and self._check_widget_large_lc(widget):
+                        match = True; break
+            
+            if match:
+                self.table.selectRow(row)
 
     def update_from_config(self):
         """Update settings from main window config."""
@@ -208,13 +359,18 @@ class EditorTab(QWidget):
         self.table.blockSignals(True)
         self.table.setRowCount(0)
         
+        # Calculate duplicates for styling
+        all_names = [g.get('name_override', '').strip() for g in self.original_data if g.get('name_override', '').strip() and g.get('create', False)]
+        counts = collections.Counter(all_names)
+        duplicates = {name for name, count in counts.items() if count > 1}
+        
         start_index = self.current_page * self.page_size
         end_index = min(start_index + self.page_size, len(self.filtered_data))
         
         for i in range(start_index, end_index):
             row_num = self.table.rowCount()
             self.table.insertRow(row_num)
-            self._populate_row(row_num, self.filtered_data[i])
+            self._populate_row(row_num, self.filtered_data[i], duplicates)
             
         self.table.blockSignals(False)
         
@@ -244,6 +400,7 @@ class EditorTab(QWidget):
 
     def toggle_create_column(self):
         """Toggle all checkboxes in the Create column based on visibility."""
+        self.push_undo()
         # Check if all visible items are checked
         all_checked = True
         for row in range(self.table.rowCount()):
@@ -261,10 +418,13 @@ class EditorTab(QWidget):
                 self.filtered_data[real_index]['create'] = target_state
                 # Update widget visually
                 self._update_widget_state(row, constants.EditorCols.INCLUDE.value, target_state)
+                # Re-apply styling for the row
+                self._apply_styling(row, self.filtered_data[real_index], set()) # Duplicates not strictly needed for this update
         self.data_changed.emit()
 
     def add_game_manually(self):
         """Open file dialog to add a game manually."""
+        self.push_undo()
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Select Game Executable", "", "Executables (*.exe);;All Files (*)"
         )
@@ -409,6 +569,12 @@ class EditorTab(QWidget):
         if col == constants.EditorCols.KILL_LIST.value:
             self._add_kill_list_menu(menu, row)
 
+        # Append to Kill List Action (for selection)
+        selected_rows = self.table.selectionModel().selectedRows()
+        if len(selected_rows) > 0:
+             append_kill_action = menu.addAction(f"Append to Kill List ({len(selected_rows)} items)")
+             append_kill_action.triggered.connect(self.open_append_kill_list_dialog)
+
         menu.addSeparator()
 
         reset_row_action = menu.addAction("Reset Row")
@@ -424,8 +590,169 @@ class EditorTab(QWidget):
         if not menu.isEmpty():
             menu.exec(self.table.viewport().mapToGlobal(position))
 
+    def open_append_kill_list_dialog(self):
+        self.push_undo()
+        dialog = AppendKillListDialog(self)
+        if dialog.exec():
+            value = dialog.get_value()
+            if value:
+                self.append_to_kill_list_selection(value)
+
+    def append_to_kill_list_selection(self, value):
+        selected_rows = set()
+        for range_ in self.table.selectedRanges():
+            for r in range(range_.topRow(), range_.bottomRow() + 1):
+                selected_rows.add(r)
+        
+        if not selected_rows:
+            return
+
+        for row in selected_rows:
+            real_index = (self.current_page * self.page_size) + row
+            if real_index < len(self.filtered_data):
+                game = self.filtered_data[real_index]
+                current_list = game.get('kill_list', '')
+                items = [x.strip() for x in current_list.split(',') if x.strip()]
+                if value not in items:
+                    items.append(value)
+                    game['kill_list'] = ",".join(items)
+                    # Update UI
+                    item = self.table.item(row, constants.EditorCols.KILL_LIST.value)
+                    if not item:
+                        item = QTableWidgetItem()
+                        self.table.setItem(row, constants.EditorCols.KILL_LIST.value, item)
+                    item.setText(game['kill_list'])
+        
+        self.main_window._on_editor_table_edited(None)
+
+    def open_bulk_edit_dialog(self):
+        """Open a dialog to edit a specific field for all selected rows."""
+        self.push_undo()
+        selected_rows = set()
+        for range_ in self.table.selectedRanges():
+            for r in range(range_.topRow(), range_.bottomRow() + 1):
+                selected_rows.add(r)
+        
+        if not selected_rows:
+            QMessageBox.information(self, "Bulk Edit", "Please select rows to edit.")
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Bulk Edit ({len(selected_rows)} items)")
+        layout = QVBoxLayout(dialog)
+        
+        # Field selection
+        layout.addWidget(QLabel("Select Field to Edit:"))
+        field_combo = QComboBox()
+        
+        # Define editable fields and their types
+        fields = [
+            ("Run As Admin", constants.EditorCols.RUN_AS_ADMIN, "bool"),
+            ("Hide Taskbar", constants.EditorCols.HIDE_TASKBAR, "bool"),
+            ("Kill List Enabled", constants.EditorCols.KILL_LIST, "bool_special"),
+            ("Controller Mapper Enabled", constants.EditorCols.CM_PATH, "bool_merged"),
+            ("Borderless Windowing Enabled", constants.EditorCols.BW_PATH, "bool_merged"),
+            ("Multi-Monitor Enabled", constants.EditorCols.MM_PATH, "bool_merged"),
+            ("Just After Launch Enabled", constants.EditorCols.JA_PATH, "bool_merged"),
+            ("Just Before Exit Enabled", constants.EditorCols.JB_PATH, "bool_merged"),
+            ("Wait for Mapper", constants.EditorCols.CM_RUN_WAIT, "bool"),
+            ("Wait for Borderless", constants.EditorCols.BW_RUN_WAIT, "bool"),
+            ("Wait for Multi-Monitor", constants.EditorCols.MM_RUN_WAIT, "bool"),
+            ("Terminate Borderless on Exit", constants.EditorCols.WIN_EXIT, "bool"),
+        ]
+        
+        for name, col, type_ in fields:
+            field_combo.addItem(name, (col, type_))
+            
+        layout.addWidget(field_combo)
+        
+        # Value input
+        layout.addWidget(QLabel("New Value:"))
+        value_check = QCheckBox("Enable / True")
+        layout.addWidget(value_check)
+        
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        
+        if dialog.exec():
+            col_enum, type_ = field_combo.currentData()
+            new_value = value_check.isChecked()
+            
+            for row in selected_rows:
+                # Update the cell widget/item
+                if type_ == "bool":
+                    widget = self.table.cellWidget(row, col_enum.value)
+                    if widget:
+                        cbs = widget.findChildren(QCheckBox)
+                        if cbs: cbs[0].setChecked(new_value)
+                elif type_ == "bool_merged":
+                    # Need to update the enabled checkbox of the merged widget
+                    widget = self.table.cellWidget(row, col_enum.value)
+                    if widget:
+                        cbs = widget.findChildren(QCheckBox)
+                        if cbs: cbs[0].setChecked(new_value)
+                elif type_ == "bool_special":
+                    # Kill list enabled state
+                    item = self.table.item(row, col_enum.value)
+                    if item:
+                        item.setCheckState(Qt.CheckState.Checked if new_value else Qt.CheckState.Unchecked)
+                
+                # Sync to data model
+                self._sync_cell_to_data(row, col_enum.value)
+            
+            self.main_window._on_editor_table_edited(None)
+
+    def validate_paths(self):
+        """Check if paths in the table exist on disk and highlight invalid ones in green."""
+        path_cols = [
+            constants.EditorCols.DIRECTORY,
+            constants.EditorCols.CM_PATH, constants.EditorCols.BW_PATH, constants.EditorCols.MM_PATH,
+            constants.EditorCols.JA_PATH, constants.EditorCols.JB_PATH,
+            constants.EditorCols.PRE1_PATH, constants.EditorCols.PRE2_PATH, constants.EditorCols.PRE3_PATH,
+            constants.EditorCols.POST1_PATH, constants.EditorCols.POST2_PATH, constants.EditorCols.POST3_PATH,
+            constants.EditorCols.LAUNCHER_EXE,
+            constants.EditorCols.MM_GAME_PROFILE, constants.EditorCols.MM_DESKTOP_PROFILE,
+            constants.EditorCols.PLAYER1_PROFILE, constants.EditorCols.PLAYER2_PROFILE, constants.EditorCols.MEDIACENTER_PROFILE
+        ]
+        
+        invalid_color = QColor(144, 238, 144) # Light Green
+        
+        for row in range(self.table.rowCount()):
+            for col_enum in path_cols:
+                col = col_enum.value
+                path = ""
+                
+                # Get path from widget or item
+                widget = self.table.cellWidget(row, col)
+                if widget:
+                    le = widget.findChild(QLineEdit)
+                    if le: path = le.text()
+                else:
+                    item = self.table.item(row, col)
+                    if item: path = item.text()
+                
+                # Clean path (remove propagation symbols)
+                clean_path = path
+                if path.startswith("< ") or path.startswith("> "):
+                    clean_path = path[2:]
+                
+                if clean_path and not os.path.exists(clean_path):
+                    # Highlight
+                    if widget:
+                        widget.setStyleSheet(f"background-color: {invalid_color.name()}; color: black;")
+                    else:
+                        item = self.table.item(row, col)
+                        if not item:
+                            item = QTableWidgetItem()
+                            self.table.setItem(row, col, item)
+                        item.setBackground(invalid_color)
+                        item.setForeground(QColor("black"))
+
     def clone_game(self, row):
         """Clone the game at the specified row."""
+        self.push_undo()
         real_index = (self.current_page * self.page_size) + row
         if real_index < len(self.filtered_data):
             game_to_clone = self.filtered_data[real_index]
@@ -485,6 +812,7 @@ class EditorTab(QWidget):
 
     def toggle_create_for_selection(self):
         """Toggle the 'create' status for all selected rows."""
+        self.push_undo()
         selected_rows = set()
         for range_ in self.table.selectedRanges():
             for r in range(range_.topRow(), range_.bottomRow() + 1):
@@ -507,6 +835,7 @@ class EditorTab(QWidget):
             if real_index < len(self.filtered_data):
                 self.filtered_data[real_index]['create'] = target_state
                 self._update_widget_state(row, constants.EditorCols.INCLUDE.value, target_state)
+                self._apply_styling(row, self.filtered_data[real_index], set())
         
         self.data_changed.emit()
 
@@ -516,6 +845,7 @@ class EditorTab(QWidget):
             self.table.editItem(item)
 
     def copy_cell(self, row, col):
+        # No undo needed for copy
         state = self._get_cell_state(row, col)
         if state:
             try:
@@ -524,6 +854,7 @@ class EditorTab(QWidget):
                 pass
 
     def paste_cell(self, row, col):
+        self.push_undo()
         text = QApplication.clipboard().text()
         if not text: return
         
@@ -545,6 +876,7 @@ class EditorTab(QWidget):
 
     def search_steam_id(self, row):
         """Manually search for a Steam AppID."""
+        self.push_undo()
         name_item = self.table.item(row, constants.EditorCols.NAME_OVERRIDE.value)
         if not name_item or not name_item.text():
             name_item = self.table.item(row, constants.EditorCols.NAME.value)
@@ -600,6 +932,7 @@ class EditorTab(QWidget):
 
     def append_kill_proc(self, row, proc):
         """Append a process to the kill list."""
+        self.push_undo()
         item = self.table.item(row, constants.EditorCols.KILL_LIST.value)
         current_text = item.text() if item else ""
         
@@ -616,6 +949,7 @@ class EditorTab(QWidget):
 
     def reset_row(self, row):
         """Reset the row to its original state."""
+        self.push_undo()
         if 0 <= row < len(self.original_data):
             reply = QMessageBox.question(
                 self, "Confirm Reset",
@@ -627,7 +961,12 @@ class EditorTab(QWidget):
                 return
 
             game_data = self.original_data[row]
-            self._populate_row(row, copy.deepcopy(game_data))
+            # Recalculate duplicates for this single row update
+            all_names = [g.get('name_override', '').strip() for g in self.original_data if g.get('name_override', '').strip() and g.get('create', False)]
+            counts = collections.Counter(all_names)
+            duplicates = {name for name, count in counts.items() if count > 1}
+            
+            self._populate_row(row, copy.deepcopy(game_data), duplicates)
             self.main_window._on_editor_table_edited(None)
 
     def on_cell_clicked(self, row, column):
@@ -668,6 +1007,7 @@ class EditorTab(QWidget):
         line_edit = QLineEdit(path_text)
         line_edit.setToolTip(path_text)
         line_edit.textChanged.connect(lambda text: self._on_merged_widget_changed(row, col))
+        line_edit.textChanged.connect(lambda: self._apply_merged_widget_styling(line_edit))
         
         cb_overwrite = QCheckBox()
         cb_overwrite.setChecked(overwrite)
@@ -677,7 +1017,21 @@ class EditorTab(QWidget):
         layout.addWidget(cb_enabled)
         layout.addWidget(line_edit, 1)
         layout.addWidget(cb_overwrite)
+
+        # Initial styling check
+        self._apply_merged_widget_styling(line_edit)
         
+        return widget
+
+    def _apply_merged_widget_styling(self, line_edit):
+        """Apply Bold/Underline/Red if LC (> prefix) and file > 10MB."""
+        text = line_edit.text()
+        style = ""
+        if text.startswith("> "):
+            path = text[2:]
+            if path and os.path.exists(path) and os.path.isfile(path) and os.path.getsize(path) > 10 * 1024 * 1024:
+                style = "QLineEdit { font-weight: bold; text-decoration: underline; color: red; }"
+        line_edit.setStyleSheet(style)
         return widget
 
     def _on_checkbox_changed(self, row, col, state):
@@ -836,6 +1190,34 @@ class EditorTab(QWidget):
             game['launcher_executable'] = path
             game['launcher_executable_overwrite'] = ov
 
+    def swap_lc_cen_selected(self):
+        """Swap between LC (>) and CEN (<) for selected path cells."""
+        self.push_undo()
+        path_cols = [
+            constants.EditorCols.CM_PATH, constants.EditorCols.BW_PATH, constants.EditorCols.MM_PATH,
+            constants.EditorCols.MM_GAME_PROFILE, constants.EditorCols.MM_DESKTOP_PROFILE,
+            constants.EditorCols.PLAYER1_PROFILE, constants.EditorCols.PLAYER2_PROFILE, constants.EditorCols.MEDIACENTER_PROFILE,
+            constants.EditorCols.JA_PATH, constants.EditorCols.JB_PATH,
+            constants.EditorCols.PRE1_PATH, constants.EditorCols.POST1_PATH,
+            constants.EditorCols.PRE2_PATH, constants.EditorCols.POST2_PATH,
+            constants.EditorCols.PRE3_PATH, constants.EditorCols.POST3_PATH,
+            constants.EditorCols.LAUNCHER_EXE
+        ]
+        
+        for row in range(self.table.rowCount()):
+            for col_enum in path_cols:
+                if self.table.item(row, col_enum.value) and self.table.item(row, col_enum.value).isSelected():
+                    # Item based selection not applicable for widgets, check cell widget focus or selection model
+                    pass
+        
+        # Better approach: Iterate selected ranges
+        for range_ in self.table.selectedRanges():
+            for r in range(range_.topRow(), range_.bottomRow() + 1):
+                for c in range(range_.leftColumn(), range_.rightColumn() + 1):
+                    if any(c == pc.value for pc in path_cols):
+                        self._swap_lc_cen_cell(r, c)
+        self.main_window._on_editor_table_edited(None)
+
     def _update_widget_state(self, row, col, value):
         """Update a widget's visual state without triggering data sync."""
         self.table.blockSignals(True)
@@ -867,6 +1249,27 @@ class EditorTab(QWidget):
             return enabled, path, overwrite
         return False, "", False
 
+    def _swap_lc_cen_cell(self, row, col):
+        widget = self.table.cellWidget(row, col)
+        if widget:
+            le = widget.findChild(QLineEdit)
+            if le:
+                text = le.text()
+                if text.startswith("> "):
+                    le.setText("< " + text[2:])
+                elif text.startswith("< "):
+                    le.setText("> " + text[2:])
+                self._sync_cell_to_data(row, col)
+
+    def _check_widget_large_lc(self, widget):
+        le = widget.findChild(QLineEdit)
+        if le:
+            text = le.text()
+            if text.startswith("> "):
+                path = text[2:]
+                return path and os.path.exists(path) and os.path.isfile(path) and os.path.getsize(path) > 10 * 1024 * 1024
+        return False
+
     def _get_propagation_symbol_and_run_wait(self, config_key):
         """Get propagation status symbol (< or >) and default run_wait state from config"""
         config = self.main_window.config
@@ -890,7 +1293,7 @@ class EditorTab(QWidget):
         self.current_page = 0
         self.refresh_view()
 
-    def _populate_row(self, row_num, game):
+    def _populate_row(self, row_num, game, duplicates):
         """Populate a single row with game data."""
         self.table.blockSignals(True) # Block signals during population
         
@@ -908,6 +1311,22 @@ class EditorTab(QWidget):
         # Name (uneditable) - col NAME
         name_item = QTableWidgetItem(game.get('name', ''))
         name_item.setFlags(name_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        
+        # Tooltip for file size
+        try:
+            full_path = os.path.join(game.get('directory', ''), game.get('name', ''))
+            if os.path.exists(full_path):
+                size = os.path.getsize(full_path)
+                for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+                    if size < 1024:
+                        break
+                    size /= 1024
+                name_item.setToolTip(f"File Size: {size:.2f} {unit}")
+            else:
+                name_item.setToolTip("File not found")
+        except Exception:
+            pass
+            
         self.table.setItem(row_num, constants.EditorCols.NAME.value, name_item)
 
         # Directory (uneditable) - col DIRECTORY
@@ -1028,7 +1447,80 @@ class EditorTab(QWidget):
         le_path = f"{le_symbol} {game.get('launcher_executable', '').lstrip('<> ')}"
         self.table.setCellWidget(row_num, constants.EditorCols.LAUNCHER_EXE.value, self._create_merged_path_widget(game.get('launcher_executable_enabled', True), le_path, game.get('launcher_executable_overwrite', True), row_num, constants.EditorCols.LAUNCHER_EXE.value))
 
+        # Execution Order
+        self.table.setItem(row_num, constants.EditorCols.EXEC_ORDER.value, QTableWidgetItem(", ".join(self.main_window.config.launch_sequence)))
+
+        # Termination Order
+        self.table.setItem(row_num, constants.EditorCols.TERM_ORDER.value, QTableWidgetItem(", ".join(self.main_window.config.exit_sequence)))
+
+        # Apply styling
+        self._apply_styling(row_num, game, duplicates)
+
         self.table.blockSignals(False) # Unblock signals
+
+    def _apply_styling(self, row, game_data, duplicates):
+        """Apply background colors based on game state."""
+        # Helper to set background
+        def set_bg(r, c, color):
+            item = self.table.item(r, c)
+            if item:
+                if color:
+                    item.setBackground(color)
+                    item.setForeground(QColor("black")) # Ensure readability against colored bg
+                else:
+                    item.setData(Qt.ItemDataRole.BackgroundRole, None)
+                    item.setData(Qt.ItemDataRole.ForegroundRole, None)
+            
+            widget = self.table.cellWidget(r, c)
+            if widget:
+                if color:
+                    # Set text color to black to ensure readability
+                    widget.setStyleSheet(f"background-color: {color.name()}; color: black;")
+                else:
+                    widget.setStyleSheet("")
+
+        # 1. Check Create status (Grey Row) - Prioritized
+        is_created = game_data.get('create', False)
+        if not is_created:
+            row_color = QColor(211, 211, 211) # Light Grey
+            for col in range(self.table.columnCount()):
+                set_bg(row, col, row_color)
+            return # Prioritize this, ignore others
+
+        # Clear row color if created
+        for col in range(self.table.columnCount()):
+            set_bg(row, col, None)
+
+        # 2. Empty Steam ID (Yellow)
+        steam_id = str(game_data.get('steam_id', ''))
+        if not steam_id or steam_id == 'NOT_FOUND_IN_DATA':
+            set_bg(row, constants.EditorCols.STEAMID.value, QColor(255, 255, 224)) # Light Yellow
+
+        # 3. LC Propagation (Purple)
+        # Check all path columns for ">" symbol
+        path_cols = [
+            constants.EditorCols.CM_PATH, constants.EditorCols.BW_PATH, constants.EditorCols.MM_PATH,
+            constants.EditorCols.MM_GAME_PROFILE, constants.EditorCols.MM_DESKTOP_PROFILE,
+            constants.EditorCols.PLAYER1_PROFILE, constants.EditorCols.PLAYER2_PROFILE, constants.EditorCols.MEDIACENTER_PROFILE,
+            constants.EditorCols.JA_PATH, constants.EditorCols.JB_PATH,
+            constants.EditorCols.PRE1_PATH, constants.EditorCols.POST1_PATH,
+            constants.EditorCols.PRE2_PATH, constants.EditorCols.POST2_PATH,
+            constants.EditorCols.PRE3_PATH, constants.EditorCols.POST3_PATH,
+            constants.EditorCols.LAUNCHER_EXE
+        ]
+        
+        for col_enum in path_cols:
+            col = col_enum.value
+            widget = self.table.cellWidget(row, col)
+            if widget:
+                le = widget.findChild(QLineEdit)
+                if le and le.text().strip().startswith(">"):
+                    set_bg(row, col, QColor(230, 230, 250)) # Lavender
+
+        # 4. Duplicate Name Override (Red)
+        name_override = game_data.get('name_override', '').strip()
+        if name_override and name_override in duplicates:
+             set_bg(row, constants.EditorCols.NAME_OVERRIDE.value, QColor(255, 220, 220)) # Light Red
 
     def get_all_game_data(self):
         """Extract all game data from the table."""
@@ -1052,6 +1544,7 @@ class EditorTab(QWidget):
 
     def apply_cell_value_to_selection(self, src_row, col):
         state = self._get_cell_state(src_row, col)
+        self.push_undo()
         if state is None:
             return
 

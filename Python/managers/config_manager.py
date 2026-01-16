@@ -85,8 +85,8 @@ class ConfigManager(QObject):
         self._detect_borderless_gaming(config)
 
         # Set default sequences
-        config.launch_sequence = ["Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Pre2", "Pre3", "Borderless"]
-        config.exit_sequence = ["Post1", "Post2", "Post3", "Monitor-Config", "Taskbar", "Controller-Mapper"]
+        config.launch_sequence = ["Kill-Game", "Kill-List", "Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Borderless", "Pre2", "Pre3", "JustAfterLaunch"]
+        config.exit_sequence = ["JustBeforeExit", "Kill-Game", "Kill-List", "Monitor-Config", "Taskbar", "Post1", "Controller-Mapper", "Post2", "Borderless", "Post3"]
 
         # Set default enabled states
         config.defaults = {

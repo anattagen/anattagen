@@ -66,3 +66,5 @@ class EditorCols(Enum):
     POST3_RUN_WAIT = 36
     KILL_LIST = 37
     LAUNCHER_EXE = 38
+    EXEC_ORDER = 39
+    TERM_ORDER = 40

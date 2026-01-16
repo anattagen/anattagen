@@ -2,6 +2,7 @@ from PyQt6.QtWidgets import (QListWidget, QAbstractItemView, QWidget, QHBoxLayou
                              QCheckBox, QLineEdit, QPushButton, QRadioButton,
                              QButtonGroup, QFileDialog, QToolButton, QMenu)
 from PyQt6.QtCore import Qt, pyqtSignal
+import os
 
 class DragDropListWidget(QListWidget):
     """A list widget that supports drag and drop for reordering items"""
@@ -49,6 +50,7 @@ class PathConfigRow(QWidget):
         # Line Edit
         self.line_edit = QLineEdit()
         self.line_edit.editingFinished.connect(self.valueChanged.emit)
+        self.line_edit.textChanged.connect(self._check_styling)
         layout.addWidget(self.line_edit)
 
         # Repo Flyout Button
@@ -82,6 +84,7 @@ class PathConfigRow(QWidget):
             self.mode_group.addButton(self.cen_radio)
             self.mode_group.addButton(self.lc_radio)
             self.mode_group.buttonClicked.connect(self.valueChanged.emit)
+            self.mode_group.buttonClicked.connect(self._check_styling)
             layout.addWidget(self.cen_radio)
             layout.addWidget(self.lc_radio)
         else:
@@ -94,6 +97,21 @@ class PathConfigRow(QWidget):
             layout.addWidget(self.run_wait_cb)
         else:
             self.run_wait_cb = None
+            
+        # Initial check
+        self._check_styling()
+
+    def _check_styling(self):
+        """Apply styling if LC is enabled and file > 10MB."""
+        path = self.line_edit.text()
+        style = ""
+        if self.mode == "LC" and path and os.path.exists(path):
+            try:
+                if os.path.isfile(path) and os.path.getsize(path) > 10 * 1024 * 1024:
+                    style = "QLineEdit { font-weight: bold; text-decoration: underline; color: red; }"
+            except Exception:
+                pass
+        self.line_edit.setStyleSheet(style)
 
     def _on_browse(self):
         current_path = self.line_edit.text()
@@ -127,6 +145,7 @@ class PathConfigRow(QWidget):
                 self.lc_radio.setChecked(True)
             else:
                 self.cen_radio.setChecked(True)
+        self._check_styling()
 
     @property
     def enabled(self):

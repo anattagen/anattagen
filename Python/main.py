@@ -1,6 +1,7 @@
 import sys
 import os
 import logging
+import argparse
 from PyQt6.QtWidgets import QApplication
 
 # Add the parent directory (anattagen) to the Python path
@@ -30,6 +31,11 @@ def setup_logging():
 
 def main():
     """Main function to run the application."""
+    # Handle CLI arguments
+    parser = argparse.ArgumentParser(description="Game Environment Manager - Main Application")
+    # Qt arguments are handled by QApplication, so we use parse_known_args
+    parser.parse_known_args()
+
     setup_logging()
     app = QApplication(sys.argv)
     window = MainWindow()

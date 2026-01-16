@@ -25,14 +25,157 @@ import win32api
 import shlex
 from typing import Dict, List, Optional, Tuple, Union
 import platform
+import argparse
+import glob
 
 # Import the new sequence executor
-from Python.launcher.sequence_executor import SequenceExecutor
+try:
+    from Python.sequence_executor import SequenceExecutor
+except ImportError:
+    from sequence_executor import SequenceExecutor
+
+class DynamicSplash:
+    """Handles a dynamic splash screen using Pygame and Win32GUI for transparency."""
+    def __init__(self, base_dir):
+        self.base_dir = base_dir
+        self.image_path = None
+        self.mode = None  # 'fullscreen' or 'notification'
+        self.hwnd = None
+        self.running = False
+        self._find_image()
+
+    def _find_image(self):
+        if not self.base_dir or not os.path.exists(self.base_dir):
+            return
+
+        extensions = ['jpg', 'jpeg', 'png', 'gif']
+        fs_names = ['Backdrop', 'background', 'fanart', 'wallpaper']
+        notif_names = ['box-art', 'boxart', 'coverart', 'cover-art']
+
+        # Helper to search case-insensitive
+        def search(names):
+            for name in names:
+                for ext in extensions:
+                    pattern = os.path.join(self.base_dir, f"{name}.{ext}")
+                    matches = glob.glob(pattern) # glob is case-insensitive on Windows usually
+                    if not matches:
+                        # Try explicit case variations if glob didn't catch it
+                        matches = glob.glob(os.path.join(self.base_dir, f"{name.lower()}.{ext}"))
+                    if matches:
+                        return matches[0]
+            return None
+
+        # Check Fullscreen first
+        self.image_path = search(fs_names)
+        if self.image_path:
+            self.mode = 'fullscreen'
+            return
+
+        # Check Notification area
+        self.image_path = search(notif_names)
+        if self.image_path:
+            self.mode = 'notification'
+
+    def show(self):
+        if not self.image_path:
+            return
+
+        try:
+            import pygame
+            pygame.init()
+            
+            # Load image
+            img = pygame.image.load(self.image_path)
+            info = pygame.display.Info()
+            screen_w, screen_h = info.current_w, info.current_h
+
+            if self.mode == 'fullscreen':
+                # Scale to fill screen
+                img = pygame.transform.scale(img, (screen_w, screen_h))
+                self.screen = pygame.display.set_mode((screen_w, screen_h), pygame.NOFRAME)
+            else:
+                # Notification mode: Scale to 0.6 screen height, maintain aspect
+                target_h = int(screen_h * 0.6)
+                rect = img.get_rect()
+                aspect = rect.width / rect.height
+                target_w = int(target_h * aspect)
+                img = pygame.transform.smoothscale(img, (target_w, target_h))
+                
+                # Position bottom right
+                x = screen_w - target_w - 20
+                y = screen_h - target_h - 40
+                os.environ['SDL_VIDEO_WINDOW_POS'] = f"{x},{y}"
+                self.screen = pygame.display.set_mode((target_w, target_h), pygame.NOFRAME)
+
+            # Get HWND for transparency
+            self.hwnd = pygame.display.get_wm_info()["window"]
+            
+            # Set layered window attributes for alpha blending the whole window
+            if platform.system() == 'Windows':
+                ex_style = win32gui.GetWindowLong(self.hwnd, win32con.GWL_EXSTYLE)
+                win32gui.SetWindowLong(self.hwnd, win32con.GWL_EXSTYLE, ex_style | win32con.WS_EX_LAYERED)
+                # Start fully transparent
+                win32gui.SetLayeredWindowAttributes(self.hwnd, 0, 0, win32con.LWA_ALPHA)
+            
+            self.screen.blit(img, (0, 0))
+            pygame.display.flip()
+            self.running = True
+            
+            # Fade In
+            self._fade(0, 255)
+            
+        except Exception as e:
+            logging.error(f"Failed to show dynamic splash: {e}")
+            self.running = False
+
+    def close(self):
+        if self.running:
+            # Fade Out
+            self._fade(255, 0)
+            try:
+                import pygame
+                pygame.quit()
+            except:
+                pass
+            self.running = False
+
+    def _fade(self, start, end):
+        if platform.system() == 'Windows' and self.hwnd:
+            step = 5 if start < end else -5
+            for alpha in range(start, end + step, step):
+                # Clamp alpha
+                alpha = max(0, min(255, alpha))
+                win32gui.SetLayeredWindowAttributes(self.hwnd, 0, alpha, win32con.LWA_ALPHA)
+                # Pump events to keep window responsive
+                try:
+                    import pygame
+                    pygame.event.pump()
+                    pygame.time.delay(5)
+                except:
+                    break
 
 class GameLauncher:
     def __init__(self):
         # Initialize variables
-        self.home = os.path.dirname(os.path.abspath(__file__))
+        if getattr(sys, 'frozen', False):
+            self.home = os.path.dirname(sys.executable)
+            # Attach to parent console to allow --help to print to stdout
+            if platform.system() == 'Windows':
+                try:
+                    if ctypes.windll.kernel32.AttachConsole(-1):
+                        sys.stdout = open("CONOUT$", "w")
+                        sys.stderr = open("CONOUT$", "w")
+                except Exception:
+                    pass
+        else:
+            self.home = os.path.dirname(os.path.abspath(__file__))
+            
+        # Ensure stdout/stderr exist to prevent argparse crashes (e.g. pythonw or noconsole)
+        if sys.stdout is None:
+            sys.stdout = open(os.devnull, 'w')
+        if sys.stderr is None:
+            sys.stderr = open(os.devnull, 'w')
+            
         self.source = os.path.join(self.home, "Python")
         self.binhome = os.path.join(self.home, "bin")
         self.curpidf = os.path.join(self.home, "rjpids.ini")
@@ -51,41 +194,70 @@ class GameLauncher:
         
         self.game_process = None
         self.borderless_process = None
+        self.dynamic_splash = None
+
+        # Set up message display (logging) early
+        self.setup_message_display()
+
+        self.update_splash_progress(10, "Initializing...")
 
         # Get command line arguments
+        self.update_splash_progress(20, "Parsing arguments...")
         self.parse_arguments()
         
         # Check if we're running as admin
+        self.update_splash_progress(30, "Checking permissions...")
         self.is_admin = self.check_admin()
         
-        # Set up message display
-        self.setup_message_display()
-        
         # Check for other instances
+        self.update_splash_progress(40, "Checking instances...")
         if not self.check_instances():
             sys.exit(0)
         
         # Load configuration
+        self.update_splash_progress(50, "Loading configuration...")
         self.load_config()
         
         # Initialize joystick detection
+        self.update_splash_progress(70, "Detecting input devices...")
         self.detect_joysticks()
         
         # Initialize the sequence executor
+        self.update_splash_progress(90, "Preparing execution sequences...")
         self.executor = SequenceExecutor(self)
+        
+        # Close splash screen after initialization is done
+        self.update_splash_progress(100, "Ready to launch!")
+        self.close_splash()
+        
+        # Start dynamic splash (after static splash closes)
+        self.dynamic_splash = DynamicSplash(self.scpath if self.scpath else self.home)
+        self.dynamic_splash.show()
 
     def parse_arguments(self):
         """Parse command line arguments"""
-        if len(sys.argv) > 1:
-            self.plink = sys.argv[1]
+        parser = argparse.ArgumentParser(description="Game Launcher - A portable environment manager for games.")
+        parser.add_argument("target", nargs="?", help="Target shortcut or executable")
+        parser.add_argument("--home", help="Override home directory for asset redirection")
+        
+        # Use parse_known_args to allow for other potential flags
+        args, unknown = parser.parse_known_args()
+        
+        if args.home:
+            self.home = os.path.abspath(args.home)
+            self.source = os.path.join(self.home, "Python")
+            self.binhome = os.path.join(self.home, "bin")
+            self.curpidf = os.path.join(self.home, "rjpids.ini")
             
+        if args.target:
+            self.plink = args.target
             # Get file extension
             _, self.scpath, self.scextn, self.game_name = self.split_path(self.plink)
-            
             # Display message
             self.show_message(f"Launching: {self.plink}")
         else:
             self.show_message("No Item Detected")
+            self.close_splash()
             time.sleep(3)
             sys.exit(0)
     
@@ -101,14 +273,49 @@ class GameLauncher:
     
     def setup_message_display(self):
         """Set up message display (tooltip or console)"""
-        # For now, just use print. In a full implementation, 
-        # this could be a small GUI window or system notification
-        pass
+        # Configure logging to file
+        log_file = os.path.join(self.home, "launcher.log")
+        logging.basicConfig(
+            filename=log_file,
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            filemode='w'
+        )
+
+        # Redirect stderr to capture crashes
+        def handle_exception(exc_type, exc_value, exc_traceback):
+            if issubclass(exc_type, KeyboardInterrupt):
+                sys.__excepthook__(exc_type, exc_value, exc_traceback)
+                return
+            logging.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+        
+        sys.excepthook = handle_exception
+        logging.info(f"Launcher started. Home directory: {self.home}")
     
     def show_message(self, message):
         """Show a message to the user"""
         print(message)
+        logging.info(message)
+        try:
+            import pyi_splash
+            if pyi_splash.is_alive():
+                pyi_splash.update_text(message)
+        except ImportError:
+            pass
         # In a full implementation, this could update a GUI or show a notification
+
+    def update_splash_progress(self, percent, message):
+        """Update splash screen with text-based progress bar"""
+        try:
+            import pyi_splash
+            if pyi_splash.is_alive():
+                bar_len = 25
+                filled = int(bar_len * percent / 100)
+                bar = "█" * filled + "-" * (bar_len - filled)
+                pyi_splash.update_text(f"{message}\n[{bar}] {percent}%")
+        except ImportError:
+            pass
+        logging.info(f"Progress {percent}%: {message}")
     
     def check_instances(self):
         """Check for other instances of the launcher"""
@@ -180,6 +387,7 @@ class GameLauncher:
             self.multimonitor_arguments = config.get('Paths', 'MultiMonitorArguments', fallback='')
             self.player1_profile = config.get('Paths', 'Player1Profile', fallback='')
             self.player2_profile = config.get('Paths', 'Player2Profile', fallback='')
+            self.mediacenter_profile = config.get('Paths', 'MediaCenterProfile', fallback='')
             self.mm_game_config = config.get('Paths', 'MultiMonitorGamingConfig', fallback='')
             self.mm_desktop_config = config.get('Paths', 'MultiMonitorDesktopConfig', fallback='')
         
@@ -242,7 +450,7 @@ class GameLauncher:
                 self.launch_sequence = [
                     "Controller-Mapper", 
                     "Monitor-Config", 
-                    "No-TB", 
+                    "No-TB",
                     "Pre1", 
                     "Pre2", 
                     "Pre3", 
@@ -301,6 +509,10 @@ class GameLauncher:
         if not self.game_dir:
             self.game_dir = os.path.dirname(self.game_path)
         
+        # Close dynamic splash before launching the game
+        if self.dynamic_splash:
+            self.dynamic_splash.close()
+
         # Run the game
         if self.run_as_admin and platform.system() == 'Windows' and not self.is_admin:
             # Use PowerShell to run as admin
@@ -308,24 +520,6 @@ class GameLauncher:
             self.game_process = self.run_process(cmd, cwd=self.game_dir)
         else:
             self.game_process = self.run_process(f'"{self.game_path}"', cwd=self.game_dir)
-        
-        # Run just after launch app if specified
-        if self.just_after_launch_app and os.path.exists(self.just_after_launch_app):
-            cmd = f'"{self.just_after_launch_app}"'
-            if self.just_after_launch_options:
-                cmd += f' {self.just_after_launch_options}'
-            if self.just_after_launch_arguments:
-                cmd += f' {self.just_after_launch_arguments}'
-            self.run_process(cmd, wait=self.just_after_launch_wait)
-        
-        # If borderless windowing is enabled, run it and track it
-        if self.borderless in ['E', 'K'] and self.borderless_app and os.path.exists(self.borderless_app):
-            cmd = f'"{self.borderless_app}"'
-            if self.borderless_options:
-                cmd += f' {self.borderless_options}'
-            if self.borderless_arguments:
-                cmd += f' {self.borderless_arguments}'
-            self.borderless_process = self.run_process(cmd)
         
         # Wait for the game to exit
         if self.game_process:
@@ -512,6 +706,15 @@ class GameLauncher:
         # Write to file
         with open(self.curpidf, 'w') as f:
             config.write(f)
+
+    def close_splash(self):
+        """Close the PyInstaller splash screen if it exists"""
+        try:
+            import pyi_splash
+            if pyi_splash.is_alive():
+                pyi_splash.close()
+        except ImportError:
+            pass
 
 # Entry point
 if __name__ == "__main__":
