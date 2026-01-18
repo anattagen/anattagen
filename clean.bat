@@ -1,4 +1,8 @@
 for /f "delims=" %%a in ('dir /b/ad/s "*__pycache__"') do rmdir /s/q "%%~a"
 rmdir /s/q "Launchers"
 rmdir /s/q "Profiles"
-
+rmdir /s/q "build"
+del /q "Launcher.spec"
+del /q "*.log"
+del /q "rjpids.ini"
+del /q "steam.json"

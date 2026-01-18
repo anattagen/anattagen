@@ -61,6 +61,8 @@ class AppConfig:
         self.post2_path_arguments = ""
         self.post3_path_options = ""
         self.post3_path_arguments = ""
+        self.launcher_executable_options = ""
+        self.launcher_executable_arguments = ""
 
         # Setup Tab: Propagation Status (CEN/LC modes)
         self.deployment_path_modes = {}

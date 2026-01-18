@@ -27,9 +27,16 @@ def save_index(main_window, directory, data):
                               "post1", "post2", "post3", 
                               "pre1", "pre2", "pre3", 
                               "just_after", "just_before", "borderless", 
-                              "as_admin", "no_tb",
+                              "as_admin", "no_tb", "mapper", "multimonitor",
+                              "mapper_opts", "mapper_args", "borderless_opts", "borderless_args",
+                              "multimonitor_opts", "multimonitor_args", "ja_opts", "ja_args",
+                              "jb_opts", "jb_args", "pre1_opts", "pre1_args", "post1_opts", "post1_args",
+                              "pre2_opts", "pre2_args", "post2_opts", "post2_args",
+                              "pre3_opts", "pre3_args", "post3_opts", "post3_args",
                               "kill_list_enabled", "kill_list",
-                              "launcher_executable"]
+                              "launcher_executable",
+                              "launcher_executable_opts", "launcher_executable_args",
+                              "iso_path"]
                     
                     # Get path indicators
                     path_indicators = row.get("path_indicators", {})
@@ -137,9 +144,16 @@ def load_index(main_window=None, directory=None, prompt_for_filename=False):
                                   "post1", "post2", "post3", 
                                   "pre1", "pre2", "pre3", 
                                   "just_after", "just_before", "borderless", 
-                                  "as_admin", "no_tb",
+                                  "as_admin", "no_tb", "mapper", "multimonitor",
+                                  "mapper_opts", "mapper_args", "borderless_opts", "borderless_args",
+                                  "multimonitor_opts", "multimonitor_args", "ja_opts", "ja_args",
+                                  "jb_opts", "jb_args", "pre1_opts", "pre1_args", "post1_opts", "post1_args",
+                                  "pre2_opts", "pre2_args", "post2_opts", "post2_args",
+                                  "pre3_opts", "pre3_args", "post3_opts", "post3_args",
                                   "kill_list_enabled", "kill_list",
-                                  "launcher_executable"]
+                                  "launcher_executable",
+                                  "launcher_executable_opts", "launcher_executable_args",
+                                  "iso_path"]
                         
                         # Create a dictionary for this row
                         row_dict = {}

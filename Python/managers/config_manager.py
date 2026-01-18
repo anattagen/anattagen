@@ -1,5 +1,6 @@
 import os
 import json
+import shutil
 import logging
 import string
 from pathlib import Path
@@ -85,8 +86,8 @@ class ConfigManager(QObject):
         self._detect_borderless_gaming(config)
 
         # Set default sequences
-        config.launch_sequence = ["Kill-Game", "Kill-List", "Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Borderless", "Pre2", "Pre3", "JustAfterLaunch"]
-        config.exit_sequence = ["JustBeforeExit", "Kill-Game", "Kill-List", "Monitor-Config", "Taskbar", "Post1", "Controller-Mapper", "Post2", "Borderless", "Post3"]
+        config.launch_sequence = ["Kill-Game", "Kill-List", "Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Borderless", "Pre2", "Pre3"]
+        config.exit_sequence = ["Kill-Game", "Kill-List", "Monitor-Config", "Taskbar", "Post1", "Controller-Mapper", "Post2", "Borderless", "Post3"]
 
         # Set default enabled states
         config.defaults = {
@@ -110,14 +111,14 @@ class ConfigManager(QObject):
 
         # Set default run-wait states
         config.run_wait_states = {
-            'controller_mapper_path_run_wait': True,
-            'borderless_gaming_path_run_wait': True,
-            'multi_monitor_tool_path_run_wait': True,
+            'controller_mapper_path_run_wait': False,
+            'borderless_gaming_path_run_wait': False,
+            'multi_monitor_tool_path_run_wait': False,
             'just_after_launch_path_run_wait': False,
-            'just_before_exit_path_run_wait': True,
-            'pre1_path_run_wait': True, 'post1_path_run_wait': True,
-            'pre2_path_run_wait': True, 'post2_path_run_wait': True,
-            'pre3_path_run_wait': True, 'post3_path_run_wait': True,
+            'just_before_exit_path_run_wait': False,
+            'pre1_path_run_wait': False, 'post1_path_run_wait': False,
+            'pre2_path_run_wait': False, 'post2_path_run_wait': False,
+            'pre3_path_run_wait': False, 'post3_path_run_wait': False,
         }
 
         # Set default overwrite states (Deployment Tab -> Creation)
@@ -225,6 +226,23 @@ class ConfigManager(QObject):
     def reset_to_defaults(self, main_window):
         """Resets the configuration to defaults and re-syncs the UI."""
         logging.info("Resetting configuration to defaults.")
+        
+        # Delete Profiles directory
+        if os.path.exists(main_window.config.profiles_dir):
+            try:
+                shutil.rmtree(main_window.config.profiles_dir)
+                logging.info(f"Deleted profiles directory: {main_window.config.profiles_dir}")
+            except Exception as e:
+                logging.error(f"Failed to delete profiles directory: {e}")
+
+        # Delete Launchers directory
+        if os.path.exists(main_window.config.launchers_dir):
+            try:
+                shutil.rmtree(main_window.config.launchers_dir)
+                logging.info(f"Deleted launchers directory: {main_window.config.launchers_dir}")
+            except Exception as e:
+                logging.error(f"Failed to delete launchers directory: {e}")
+
         # Create a new default config
         default_config = self._first_run_setup()
         # Save it

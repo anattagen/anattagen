@@ -42,6 +42,7 @@ class PathConfigRow(QWidget):
         if self.add_enabled:
             self.enabled_cb = QCheckBox()
             self.enabled_cb.setChecked(True)
+            self.enabled_cb.setToolTip("Enable/Disable this application")
             self.enabled_cb.stateChanged.connect(self.valueChanged.emit)
             layout.addWidget(self.enabled_cb)
         else:
@@ -54,6 +55,7 @@ class PathConfigRow(QWidget):
         layout.addWidget(self.line_edit)
 
         # Repo Flyout Button
+        self.tool_btn = None
         if repo_items:
             self.tool_btn = QToolButton()
             self.tool_btn.setText("▼")
@@ -100,6 +102,11 @@ class PathConfigRow(QWidget):
             
         # Initial check
         self._check_styling()
+        
+        # Connect enabled checkbox to UI update
+        if self.enabled_cb:
+            self.enabled_cb.stateChanged.connect(self._update_ui_state)
+            self._update_ui_state()
 
     def _check_styling(self):
         """Apply styling if LC is enabled and file > 10MB."""
@@ -112,6 +119,27 @@ class PathConfigRow(QWidget):
             except Exception:
                 pass
         self.line_edit.setStyleSheet(style)
+
+    def _update_ui_state(self):
+        """Enable or disable widgets based on the enabled checkbox."""
+        if not self.enabled_cb:
+            return
+            
+        is_enabled = self.enabled_cb.isChecked()
+        
+        self.line_edit.setEnabled(is_enabled)
+        self.browse_btn.setEnabled(is_enabled)
+        
+        if self.tool_btn:
+            self.tool_btn.setEnabled(is_enabled)
+            
+        if self.cen_radio:
+            self.cen_radio.setEnabled(is_enabled)
+        if self.lc_radio:
+            self.lc_radio.setEnabled(is_enabled)
+            
+        if self.run_wait_cb:
+            self.run_wait_cb.setEnabled(is_enabled)
 
     def _on_browse(self):
         current_path = self.line_edit.text()

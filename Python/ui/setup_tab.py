@@ -8,7 +8,7 @@ import subprocess
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QGroupBox, QLabel, QFormLayout, QPushButton,
     QComboBox, QHBoxLayout, QCheckBox, QTabWidget,
-    QFileDialog, QApplication, QSpinBox, QMessageBox,
+    QFileDialog, QApplication, QSpinBox, QMessageBox, QMenu,
     QDialog, QDialogButtonBox, QLineEdit, QProgressDialog, QGridLayout
 )
 from PyQt6.QtGui import QFontDatabase, QFont, QPalette, QColor
@@ -28,6 +28,22 @@ class DownloadThread(QThread):
         self.url = url
         self.extract_dir = extract_dir
         self.exe_name = exe_name
+
+    def _extract_with_7z(self, archive_path):
+        """Fallback extraction using 7z.exe."""
+        seven_z_exe = os.path.join(constants.APP_ROOT_DIR, "bin", "7z.exe")
+        if os.path.exists(seven_z_exe):
+            cmd = [
+                seven_z_exe, 
+                "x", 
+                archive_path, 
+                f"-o{self.extract_dir}", 
+                "-y"
+            ]
+            subprocess.run(cmd, check=True, creationflags=0x08000000) # CREATE_NO_WINDOW
+            os.remove(archive_path)
+        else:
+            raise FileNotFoundError(f"7z.exe not found at {seven_z_exe} and py7zr module not installed.")
 
     def run(self):
         try:
@@ -54,28 +70,31 @@ class DownloadThread(QThread):
                         f.write(data)
                         self.progress.emit(int(100 * dl / total_length))
             
+            # Validate file size (prevent processing of 404 pages or small error files)
+            file_size = os.path.getsize(save_path)
+            if file_size < 1024:
+                with open(save_path, 'r', errors='ignore') as f:
+                    preview = f.read(100).strip()
+                os.remove(save_path)
+                raise Exception(f"Downloaded file is too small ({file_size} bytes). Likely an error page: {preview}")
+            
             # Extract if it's a zip
             if filename.lower().endswith('.zip'):
                 with zipfile.ZipFile(save_path, 'r') as zip_ref:
                     zip_ref.extractall(self.extract_dir)
                 os.remove(save_path) # Clean up zip
-            elif filename.lower().endswith(('.7z', '.rar')):
-                # Use external 7z.exe from bin directory
-                seven_z_exe = os.path.join(constants.APP_ROOT_DIR, "bin", "7z.exe")
-                if os.path.exists(seven_z_exe):
-                    # 7z x archive.7z -o"C:\Output" -y
-                    cmd = [
-                        seven_z_exe, 
-                        "x", 
-                        save_path, 
-                        f"-o{self.extract_dir}", 
-                        "-y"
-                    ]
-                    # Run silently
-                    subprocess.run(cmd, check=True, creationflags=0x08000000) # CREATE_NO_WINDOW
-                    os.remove(save_path) # Clean up archive
-                else:
-                    raise FileNotFoundError(f"7z.exe not found at {seven_z_exe}")
+            elif filename.lower().endswith('.7z'):
+                # Try py7zr first (Pure Python)
+                try:
+                    import py7zr
+                    with py7zr.SevenZipFile(save_path, mode='r') as z:
+                        z.extractall(path=self.extract_dir)
+                    os.remove(save_path)
+                except (ImportError, Exception):
+                    # Fallback to 7z.exe
+                    self._extract_with_7z(save_path)
+            elif filename.lower().endswith('.rar'):
+                self._extract_with_7z(save_path)
                 
             # Construct result path
             result_path = os.path.join(self.extract_dir, self.exe_name)
@@ -105,6 +124,25 @@ class SetupTab(QWidget):
         "just_after_launch_path", "just_before_exit_path",
         "post1_path", "post2_path", "post3_path"
     ]
+
+    SEQUENCE_TOOLTIPS = {
+        "Kill-Game": "Terminates the game process if it's running.",
+        "Kill-List": "Terminates processes specified in the Kill List.",
+        "Mount-Iso": "Mounts the game ISO if configured.",
+        "Unmount-Iso": "Unmounts the game ISO.",
+        "Controller-Mapper": "Starts/Stops the controller mapper (e.g. AntimicroX).",
+        "Monitor-Config": "Applies monitor configuration (Game/Desktop).",
+        "No-TB": "Hides the Windows Taskbar.",
+        "Taskbar": "Restores the Windows Taskbar.",
+        "Pre1": "Runs Pre-Launch Script 1.",
+        "Pre2": "Runs Pre-Launch Script 2.",
+        "Pre3": "Runs Pre-Launch Script 3.",
+        "Post1": "Runs Post-Launch Script 1.",
+        "Post2": "Runs Post-Launch Script 2.",
+        "Post3": "Runs Post-Launch Script 3.",
+        "Borderless": "Starts/Stops Borderless Gaming.",
+        "Cloud-Sync": "Runs the Cloud Sync application.",
+    }
 
     def __init__(self, parent=None): # parent is main_window
         super().__init__(parent)
@@ -193,17 +231,25 @@ class SetupTab(QWidget):
                 all_tools.update(items)
 
         core_paths_widget = QWidget()
-        core_paths_layout = QFormLayout(core_paths_widget)
+        core_paths_layout = QVBoxLayout(core_paths_widget)
+        
+        # Directories Group
+        directories_group = QGroupBox("Directories")
+        directories_layout = QFormLayout(directories_group)
         self.path_rows["profiles_dir"] = PathConfigRow("profiles_dir", is_directory=True, add_enabled=True, add_cen_lc=True)
         self.path_rows["profiles_dir"].enabled_cb.setToolTip("Create Profile Folders")
-        core_paths_layout.addRow("Profiles Directory:", self.path_rows["profiles_dir"]) # No options/args for dirs
+        directories_layout.addRow("Profiles Directory:", self.path_rows["profiles_dir"]) # No options/args for dirs
         self.path_rows["launchers_dir"] = PathConfigRow("launchers_dir", is_directory=True, add_enabled=True, add_cen_lc=True)
         self.path_rows["launchers_dir"].enabled_cb.setToolTip("Create Launcher")
-        core_paths_layout.addRow("Launchers Directory:", self.path_rows["launchers_dir"]) # No options/args for dirs
-        self.path_rows["launcher_executable"] = PathConfigRow("launcher_executable", is_directory=False, add_enabled=True, add_cen_lc=True)
-        self.path_rows["launcher_executable"].enabled_cb.setToolTip("Create Launcher Executable")
+        directories_layout.addRow("Launchers Directory:", self.path_rows["launchers_dir"]) # No options/args for dirs
+        core_paths_layout.addWidget(directories_group)
+
+        # Launcher Configuration Group
+        launcher_group = QGroupBox("Launcher Configuration")
+        launcher_layout = QFormLayout(launcher_group)
+        self.path_rows["launcher_executable"] = PathConfigRow("launcher_executable", is_directory=False, add_enabled=False, add_cen_lc=True)
         self.path_rows["launcher_executable"].line_edit.setPlaceholderText(constants.LAUNCHER_EXECUTABLE)
-        core_paths_layout.addRow("Launcher Executable:", self.path_rows["launcher_executable"]) # Internal
+        self._add_path_row(launcher_layout, "Launcher Executable:", "launcher_executable", self.path_rows["launcher_executable"])
 
         # Moved checkboxes from Deployment Tab
         self.run_as_admin_checkbox = QCheckBox("Run As Admin")
@@ -218,7 +264,10 @@ class SetupTab(QWidget):
         cb_layout.addWidget(self.use_kill_list_checkbox, 0, 1)
         cb_layout.addWidget(self.hide_taskbar_checkbox, 1, 0)
         cb_layout.addWidget(self.terminate_bw_on_exit_checkbox, 1, 1)
-        core_paths_layout.addRow(cb_container)
+        launcher_layout.addRow(cb_container)
+        
+        core_paths_layout.addWidget(launcher_group)
+        core_paths_layout.addStretch()
 
         paths_tabs.addTab(core_paths_widget, "   CORE   ")
 
@@ -282,6 +331,8 @@ class SetupTab(QWidget):
         launch_sequence_group = QGroupBox("LAUNCH ORDER")
         launch_sequence_layout = QVBoxLayout(launch_sequence_group)
         self.launch_sequence_list = DragDropListWidget()
+        self.launch_sequence_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.launch_sequence_list.customContextMenuRequested.connect(lambda pos: self._on_sequence_context_menu(pos, self.launch_sequence_list, "launch"))
         self.reset_launch_btn = QPushButton("Reset")
         launch_sequence_layout.addWidget(self.launch_sequence_list)
         launch_sequence_layout.addWidget(self.reset_launch_btn)
@@ -291,6 +342,8 @@ class SetupTab(QWidget):
         exit_sequence_group = QGroupBox("EXIT ORDER")
         exit_sequence_layout = QVBoxLayout(exit_sequence_group)
         self.exit_sequence_list = DragDropListWidget()
+        self.exit_sequence_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.exit_sequence_list.customContextMenuRequested.connect(lambda pos: self._on_sequence_context_menu(pos, self.exit_sequence_list, "exit"))
         self.reset_exit_btn = QPushButton("Reset")
         exit_sequence_layout.addWidget(self.exit_sequence_list)
         exit_sequence_layout.addWidget(self.reset_exit_btn)
@@ -513,8 +566,13 @@ class SetupTab(QWidget):
                 
                 parts = val.split('|')
                 if len(parts) >= 3:
+                    url = parts[0]
+                    # Fix common GitHub URL malformation where refs/heads/ is included in raw link
+                    if "github.com" in url and "/raw/refs/heads/" in url:
+                        url = url.replace("/raw/refs/heads/", "/raw/")
+
                     repos[section.upper()][key] = {
-                        'url': parts[0],
+                        'url': url,
                         'extract_dir': parts[1],
                         'exe_name': parts[2]
                     }
@@ -643,17 +701,132 @@ class SetupTab(QWidget):
 
     def _reset_launch_sequence(self):
         self.launch_sequence_list.clear()
-        self.launch_sequence_list.addItems(["Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Pre2", "Pre3", "Borderless"])
+        self.launch_sequence_list.addItems(["Kill-Game", "Kill-List", "Mount-Iso", "Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Borderless", "Pre2", "Pre3"])
         self.config_changed.emit()
+        self._update_list_tooltips(self.launch_sequence_list)
 
     def _reset_exit_sequence(self):
         self.exit_sequence_list.clear()
-        self.exit_sequence_list.addItems(["Post1", "Post2", "Post3", "Monitor-Config", "Taskbar", "Controller-Mapper"])
+        self.exit_sequence_list.addItems(["Kill-Game", "Kill-List", "Unmount-Iso", "Monitor-Config", "Taskbar", "Post1", "Controller-Mapper", "Post2", "Borderless", "Post3"])
         self.config_changed.emit()
+        self._update_list_tooltips(self.exit_sequence_list)
 
     def _on_appearance_changed(self):
         self.config_changed.emit()
         self._apply_visual_settings()
+
+    def _on_sequence_context_menu(self, pos, list_widget, sequence_type):
+        item = list_widget.itemAt(pos)
+
+        menu = QMenu(self)
+        
+        # Define full sets
+        if sequence_type == "launch":
+            full_set = ["Kill-Game", "Kill-List", "Mount-Iso", "Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Pre2", "Pre3", "Borderless", "Cloud-Sync"]
+        else:
+            full_set = ["Kill-Game", "Kill-List", "Unmount-Iso", "Monitor-Config", "Taskbar", "Post1", "Post2", "Post3", "Controller-Mapper", "Borderless", "Cloud-Sync"]
+            
+        current_items = [list_widget.item(i).text() for i in range(list_widget.count())]
+        removed_items = [x for x in full_set if x not in current_items]
+        
+        if item:
+            # Remove
+            remove_action = menu.addAction("Remove")
+            remove_action.triggered.connect(lambda: self._remove_sequence_item(list_widget, item))
+            
+            # Swap
+            swap_menu = menu.addMenu("Swap with")
+            current_row = list_widget.row(item)
+            for i in range(list_widget.count()):
+                if i == current_row:
+                    continue
+                other_item = list_widget.item(i)
+                action = swap_menu.addAction(other_item.text())
+                action.triggered.connect(lambda checked, r1=current_row, r2=i: self._swap_sequence_items(list_widget, r1, r2))
+            
+            menu.addSeparator()
+            
+            move_up = menu.addAction("Move Up")
+            move_up.triggered.connect(lambda: self._move_sequence_item(list_widget, item, -1))
+            
+            move_down = menu.addAction("Move Down")
+            move_down.triggered.connect(lambda: self._move_sequence_item(list_widget, item, 1))
+            
+            if current_row == 0:
+                move_up.setEnabled(False)
+            if current_row == list_widget.count() - 1:
+                move_down.setEnabled(False)
+
+            # Replace (with removed items)
+            replace_menu = menu.addMenu("Replace with")
+            
+            if not removed_items:
+                replace_menu.setDisabled(True)
+            else:
+                for removed in removed_items:
+                    action = replace_menu.addAction(removed)
+                    action.triggered.connect(lambda checked, it=item, txt=removed: self._replace_sequence_item(list_widget, it, txt))
+            
+            menu.addSeparator()
+
+        # Add (append from removed items)
+        add_menu = menu.addMenu("Add")
+        if not removed_items:
+            add_menu.setDisabled(True)
+        else:
+            for removed in removed_items:
+                action = add_menu.addAction(removed)
+                action.triggered.connect(lambda checked, txt=removed: self._add_sequence_item(list_widget, txt))
+
+        if not menu.isEmpty():
+            menu.exec(list_widget.mapToGlobal(pos))
+
+    def _remove_sequence_item(self, list_widget, item):
+        list_widget.takeItem(list_widget.row(item))
+        self.config_changed.emit()
+
+    def _add_sequence_item(self, list_widget, text):
+        list_widget.addItem(text)
+        # Set tooltip for the new item
+        item = list_widget.item(list_widget.count() - 1)
+        self._update_item_tooltip(item)
+        self.config_changed.emit()
+
+    def _swap_sequence_items(self, list_widget, row1, row2):
+        item1 = list_widget.item(row1)
+        item2 = list_widget.item(row2)
+        text1 = item1.text()
+        text2 = item2.text()
+        item1.setText(text2)
+        item2.setText(text1)
+        self._update_item_tooltip(item1)
+        self._update_item_tooltip(item2)
+        self.config_changed.emit()
+
+    def _replace_sequence_item(self, list_widget, item, new_text):
+        item.setText(new_text)
+        self._update_item_tooltip(item)
+        self.config_changed.emit()
+
+    def _move_sequence_item(self, list_widget, item, direction):
+        row = list_widget.row(item)
+        new_row = row + direction
+        if 0 <= new_row < list_widget.count():
+            current_item = list_widget.takeItem(row)
+            list_widget.insertItem(new_row, current_item)
+            list_widget.setCurrentItem(current_item)
+            self.config_changed.emit()
+
+    def _update_item_tooltip(self, item):
+        text = item.text()
+        if text in self.SEQUENCE_TOOLTIPS:
+            item.setToolTip(self.SEQUENCE_TOOLTIPS[text])
+        else:
+            item.setToolTip("")
+
+    def _update_list_tooltips(self, list_widget):
+        for i in range(list_widget.count()):
+            self._update_item_tooltip(list_widget.item(i))
 
     def _create_dark_palette(self):
         """Creates a QPalette for a dark theme."""
@@ -812,9 +985,12 @@ class SetupTab(QWidget):
         self.launch_sequence_list.clear()
         self.launch_sequence_list.addItems(config.launch_sequence if config.launch_sequence else 
             ["Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Pre2", "Pre3", "Borderless"])
+        self._update_list_tooltips(self.launch_sequence_list)
+        
         self.exit_sequence_list.clear()
         self.exit_sequence_list.addItems(config.exit_sequence if config.exit_sequence else
             ["Post1", "Post2", "Post3", "Monitor-Config", "Taskbar", "Controller-Mapper"])
+        self._update_list_tooltips(self.exit_sequence_list)
 
         self.blockSignals(False)
 

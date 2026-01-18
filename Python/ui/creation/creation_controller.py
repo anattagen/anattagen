@@ -287,10 +287,15 @@ class CreationController:
             )
 
             # 7. Create Launcher Shortcut (pointing to Launcher.exe)
+            launcher_args = f'"{profile_shortcut_path}"'
+            extra_args = game_data.get('launcher_executable_arguments', app_config.launcher_executable_arguments)
+            if extra_args:
+                launcher_args += f" {extra_args}"
+
             self._create_shortcut(
                 target_path=target_launcher_exe,
                 shortcut_path=launcher_shortcut_path,
-                arguments=f'"{profile_shortcut_path}"',
+                arguments=launcher_args,
                 working_dir=game_data.get('directory', ''),
                 icon_path=game_exe_path,
                 description=f"Launch {game_name_override}"
@@ -359,6 +364,7 @@ class CreationController:
         config.set('Game', 'Executable', game_data.get('name', ''))
         config.set('Game', 'Directory', game_data.get('directory', ''))
         config.set('Game', 'Name', game_data.get('name_override', ''))
+        config.set('Game', 'IsoPath', game_data.get('iso_path', ''))
 
         # --- [Paths] Section ---
         config.add_section('Paths')
@@ -367,12 +373,12 @@ class CreationController:
         config.set('Paths', 'MultiMonitorTool', self._get_app_path_for_ini('multi_monitor_app_path', game_data, game_profile_dir))
         
         # Add Options/Arguments for Paths
-        config.set('Paths', 'ControllerMapperOptions', app_config.controller_mapper_path_options)
-        config.set('Paths', 'ControllerMapperArguments', app_config.controller_mapper_path_arguments)
-        config.set('Paths', 'BorderlessWindowingOptions', app_config.borderless_gaming_path_options)
-        config.set('Paths', 'BorderlessWindowingArguments', app_config.borderless_gaming_path_arguments)
-        config.set('Paths', 'MultiMonitorOptions', app_config.multi_monitor_tool_path_options)
-        config.set('Paths', 'MultiMonitorArguments', app_config.multi_monitor_tool_path_arguments)
+        config.set('Paths', 'ControllerMapperOptions', game_data.get('controller_mapper_options', app_config.controller_mapper_path_options))
+        config.set('Paths', 'ControllerMapperArguments', game_data.get('controller_mapper_arguments', app_config.controller_mapper_path_arguments))
+        config.set('Paths', 'BorderlessWindowingOptions', game_data.get('borderless_windowing_options', app_config.borderless_gaming_path_options))
+        config.set('Paths', 'BorderlessWindowingArguments', game_data.get('borderless_windowing_arguments', app_config.borderless_gaming_path_arguments))
+        config.set('Paths', 'MultiMonitorOptions', game_data.get('multi_monitor_app_options', app_config.multi_monitor_tool_path_options))
+        config.set('Paths', 'MultiMonitorArguments', game_data.get('multi_monitor_app_arguments', app_config.multi_monitor_tool_path_arguments))
         
         # Handle profile paths with CEN/LC logic
         if game_data.get('player1_profile_enabled', True):
@@ -423,44 +429,44 @@ class CreationController:
         # --- [PreLaunch] & [PostLaunch] Sections ---
         config.add_section('PreLaunch')
         config.set('PreLaunch', 'App1', self._get_app_path_for_ini('pre1_path', game_data, game_profile_dir))
-        config.set('PreLaunch', 'App1Options', app_config.pre1_path_options)
-        config.set('PreLaunch', 'App1Arguments', app_config.pre1_path_arguments)
+        config.set('PreLaunch', 'App1Options', game_data.get('pre1_options', app_config.pre1_path_options))
+        config.set('PreLaunch', 'App1Arguments', game_data.get('pre1_arguments', app_config.pre1_path_arguments))
         config.set('PreLaunch', 'App1Wait', str(game_data.get('pre_1_run_wait', False)))
         
         config.set('PreLaunch', 'App2', self._get_app_path_for_ini('pre2_path', game_data, game_profile_dir))
-        config.set('PreLaunch', 'App2Options', app_config.pre2_path_options)
-        config.set('PreLaunch', 'App2Arguments', app_config.pre2_path_arguments)
+        config.set('PreLaunch', 'App2Options', game_data.get('pre2_options', app_config.pre2_path_options))
+        config.set('PreLaunch', 'App2Arguments', game_data.get('pre2_arguments', app_config.pre2_path_arguments))
         config.set('PreLaunch', 'App2Wait', str(game_data.get('pre_2_run_wait', False)))
         
         config.set('PreLaunch', 'App3', self._get_app_path_for_ini('pre3_path', game_data, game_profile_dir))
-        config.set('PreLaunch', 'App3Options', app_config.pre3_path_options)
-        config.set('PreLaunch', 'App3Arguments', app_config.pre3_path_arguments)
+        config.set('PreLaunch', 'App3Options', game_data.get('pre3_options', app_config.pre3_path_options))
+        config.set('PreLaunch', 'App3Arguments', game_data.get('pre3_arguments', app_config.pre3_path_arguments))
         config.set('PreLaunch', 'App3Wait', str(game_data.get('pre_3_run_wait', False)))
 
         config.add_section('PostLaunch')
         config.set('PostLaunch', 'App1', self._get_app_path_for_ini('post1_path', game_data, game_profile_dir))
-        config.set('PostLaunch', 'App1Options', app_config.post1_path_options)
-        config.set('PostLaunch', 'App1Arguments', app_config.post1_path_arguments)
+        config.set('PostLaunch', 'App1Options', game_data.get('post1_options', app_config.post1_path_options))
+        config.set('PostLaunch', 'App1Arguments', game_data.get('post1_arguments', app_config.post1_path_arguments))
         config.set('PostLaunch', 'App1Wait', str(game_data.get('post_1_run_wait', False)))
         
         config.set('PostLaunch', 'App2', self._get_app_path_for_ini('post2_path', game_data, game_profile_dir))
-        config.set('PostLaunch', 'App2Options', app_config.post2_path_options)
-        config.set('PostLaunch', 'App2Arguments', app_config.post2_path_arguments)
+        config.set('PostLaunch', 'App2Options', game_data.get('post2_options', app_config.post2_path_options))
+        config.set('PostLaunch', 'App2Arguments', game_data.get('post2_arguments', app_config.post2_path_arguments))
         config.set('PostLaunch', 'App2Wait', str(game_data.get('post_2_run_wait', False)))
         
         config.set('PostLaunch', 'App3', self._get_app_path_for_ini('post3_path', game_data, game_profile_dir))
-        config.set('PostLaunch', 'App3Options', app_config.post3_path_options)
-        config.set('PostLaunch', 'App3Arguments', app_config.post3_path_arguments)
+        config.set('PostLaunch', 'App3Options', game_data.get('post3_options', app_config.post3_path_options))
+        config.set('PostLaunch', 'App3Arguments', game_data.get('post3_arguments', app_config.post3_path_arguments))
         config.set('PostLaunch', 'App3Wait', str(game_data.get('post_3_run_wait', False)))
         
         config.set('PostLaunch', 'JustAfterLaunchApp', self._get_app_path_for_ini('just_after_launch_path', game_data, game_profile_dir))
-        config.set('PostLaunch', 'JustAfterLaunchOptions', app_config.just_after_launch_path_options)
-        config.set('PostLaunch', 'JustAfterLaunchArguments', app_config.just_after_launch_path_arguments)
+        config.set('PostLaunch', 'JustAfterLaunchOptions', game_data.get('just_after_launch_options', app_config.just_after_launch_path_options))
+        config.set('PostLaunch', 'JustAfterLaunchArguments', game_data.get('just_after_launch_arguments', app_config.just_after_launch_path_arguments))
         config.set('PostLaunch', 'JustAfterLaunchWait', str(game_data.get('just_after_launch_run_wait', False)))
         
         config.set('PostLaunch', 'JustBeforeExitApp', self._get_app_path_for_ini('just_before_exit_path', game_data, game_profile_dir))
-        config.set('PostLaunch', 'JustBeforeExitOptions', app_config.just_before_exit_path_options)
-        config.set('PostLaunch', 'JustBeforeExitArguments', app_config.just_before_exit_path_arguments)
+        config.set('PostLaunch', 'JustBeforeExitOptions', game_data.get('just_before_exit_options', app_config.just_before_exit_path_options))
+        config.set('PostLaunch', 'JustBeforeExitArguments', game_data.get('just_before_exit_arguments', app_config.just_before_exit_path_arguments))
         config.set('PostLaunch', 'JustBeforeExitWait', str(game_data.get('just_before_exit_run_wait', False)))
 
         # --- [Sequences] Section ---

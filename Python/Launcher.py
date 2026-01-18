@@ -12,6 +12,7 @@ import configparser
 import time
 import ctypes
 import shutil
+import datetime
 import tempfile
 import signal
 import psutil
@@ -168,7 +169,12 @@ class GameLauncher:
                 except Exception:
                     pass
         else:
-            self.home = os.path.dirname(os.path.abspath(__file__))
+            # If running from source (Python dir), set home to project root
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            if os.path.basename(current_dir).lower() == 'python':
+                self.home = os.path.dirname(current_dir)
+            else:
+                self.home = current_dir
             
         # Ensure stdout/stderr exist to prevent argparse crashes (e.g. pythonw or noconsole)
         if sys.stdout is None:
@@ -187,6 +193,7 @@ class GameLauncher:
         self.plink = ""
         self.scpath = ""
         self.scextn = ""
+        self.ini_path = ""
         self.exe_list = ""
         self.joymessage = "No joysticks detected"
         self.joycount = 0
@@ -195,6 +202,8 @@ class GameLauncher:
         self.game_process = None
         self.borderless_process = None
         self.dynamic_splash = None
+        self.args = None
+        self.iso_path = ""
 
         # Set up message display (logging) early
         self.setup_message_display()
@@ -218,6 +227,11 @@ class GameLauncher:
         self.update_splash_progress(50, "Loading configuration...")
         self.load_config()
         
+        # Modify config if requested via CLI
+        if self.args and (self.args.set or self.args.clear):
+            self.modify_config()
+            self.load_config() # Reload to apply changes
+
         # Initialize joystick detection
         self.update_splash_progress(70, "Detecting input devices...")
         self.detect_joysticks()
@@ -239,10 +253,12 @@ class GameLauncher:
         parser = argparse.ArgumentParser(description="Game Launcher - A portable environment manager for games.")
         parser.add_argument("target", nargs="?", help="Target shortcut or executable")
         parser.add_argument("--home", help="Override home directory for asset redirection")
+        parser.add_argument("--set", action="append", help="Set config value: Section.Key=Value")
+        parser.add_argument("--clear", action="append", help="Clear config value: Section.Key")
         
         # Use parse_known_args to allow for other potential flags
-        args, unknown = parser.parse_known_args()
-        
+        self.args, unknown = parser.parse_known_args()
+        args = self.args
         if args.home:
             self.home = os.path.abspath(args.home)
             self.source = os.path.join(self.home, "Python")
@@ -364,6 +380,7 @@ class GameLauncher:
         if not os.path.exists(game_ini):
             self.show_message("No configuration file found")
             return
+        self.ini_path = game_ini
         
         config = configparser.ConfigParser()
         config.read(game_ini)
@@ -373,6 +390,7 @@ class GameLauncher:
             self.game_path = config.get('Game', 'Executable', fallback='')
             self.game_dir = config.get('Game', 'Directory', fallback='')
             self.game_name = config.get('Game', 'Name', fallback=self.game_name)
+            self.iso_path = config.get('Game', 'IsoPath', fallback='')
         
         # Load paths
         if 'Paths' in config:
@@ -390,6 +408,9 @@ class GameLauncher:
             self.mediacenter_profile = config.get('Paths', 'MediaCenterProfile', fallback='')
             self.mm_game_config = config.get('Paths', 'MultiMonitorGamingConfig', fallback='')
             self.mm_desktop_config = config.get('Paths', 'MultiMonitorDesktopConfig', fallback='')
+            self.cloud_app = config.get('Paths', 'CloudApp', fallback='')
+            self.cloud_app_options = config.get('Paths', 'CloudAppOptions', fallback='')
+            self.cloud_app_arguments = config.get('Paths', 'CloudAppArguments', fallback='')
         
         # Load options
         if 'Options' in config:
@@ -400,6 +421,8 @@ class GameLauncher:
             self.terminate_borderless_on_exit = config.getboolean('Options', 'TerminateBorderlessOnExit', fallback=False)
             self.kill_list_str = config.get('Options', 'KillList', fallback='')
             self.kill_list = [x.strip() for x in self.kill_list_str.split(',') if x.strip()]
+            self.backup_saves = config.getboolean('Options', 'BackupSaves', fallback=False)
+            self.max_backups = config.getint('Options', 'MaxBackups', fallback=5)
 
         # Load pre-launch apps
         if 'PreLaunch' in config:
@@ -471,6 +494,67 @@ class GameLauncher:
                     "Taskbar",
                     "Controller-Mapper"
                 ]
+
+    def modify_config(self):
+        """Modify the configuration file based on CLI arguments."""
+        if not self.ini_path or not os.path.exists(self.ini_path):
+            self.show_message("Config file not found, cannot modify.")
+            return
+
+        config = configparser.ConfigParser()
+        config.optionxform = str # Preserve case
+        config.read(self.ini_path)
+        
+        changed = False
+        
+        if self.args.set:
+            for item in self.args.set:
+                if '=' in item:
+                    key_part, value = item.split('=', 1)
+                    if '.' in key_part:
+                        section, key = key_part.split('.', 1)
+                        if not config.has_section(section):
+                            config.add_section(section)
+                        config.set(section, key, value)
+                        changed = True
+                        self.show_message(f"Set {section}.{key} = {value}")
+
+        if self.args.clear:
+            for item in self.args.clear:
+                if '.' in item:
+                    section, key = item.split('.', 1)
+                    if config.has_section(section) and config.has_option(section, key):
+                        config.remove_option(section, key)
+                        changed = True
+                        self.show_message(f"Cleared {section}.{key}")
+
+        if changed:
+            with open(self.ini_path, 'w') as f:
+                config.write(f)
+            self.show_message("Configuration updated.")
+
+    def resolve_path(self, path):
+        """Substitute variables in path."""
+        if not path or not isinstance(path, str):
+            return path
+            
+        # Define variables
+        vars_map = {
+            '$MAPPER': self.controller_mapper_app,
+            '$BORDERLESS': self.borderless_app,
+            '$MMONAPP': self.multimonitor_tool,
+            '$CLOUDAPP': getattr(self, 'cloud_app', ''),
+            '$GAMEDIR': self.game_dir,
+            '$GAMEEXE': self.game_path,
+            '$GAMENAME': self.game_name,
+            '$HOME': self.home
+        }
+        
+        # Simple replacement
+        for var, value in vars_map.items():
+            if var in path:
+                path = path.replace(var, value)
+        return path
     
     def detect_joysticks(self):
         """Detect connected joysticks"""
@@ -497,6 +581,68 @@ class GameLauncher:
         except Exception as e:
             self.joymessage = f"Error detecting joysticks: {e}"
     
+    def backup_save_files(self):
+        """Backs up the saves directory if configured."""
+        if not getattr(self, 'backup_saves', False):
+            return
+
+        # Determine save directory (default to Saves in profile dir)
+        save_dir = os.path.join(self.home, "Saves")
+        
+        if not os.path.exists(save_dir):
+            self.show_message("Save directory not found, skipping backup.")
+            return
+
+        backup_root = os.path.join(self.home, "Backups")
+        if not os.path.exists(backup_root):
+            os.makedirs(backup_root)
+
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        backup_name = f"SaveBackup_{timestamp}"
+        backup_path = os.path.join(backup_root, backup_name)
+
+        try:
+            shutil.make_archive(backup_path, 'zip', save_dir)
+            self.show_message(f"Backed up saves to {backup_name}.zip")
+            
+            # Rotate backups
+            backups = sorted([f for f in os.listdir(backup_root) if f.startswith("SaveBackup_") and f.endswith(".zip")])
+            while len(backups) > self.max_backups:
+                oldest = backups.pop(0)
+                os.remove(os.path.join(backup_root, oldest))
+                self.show_message(f"Removed old backup: {oldest}")
+        except Exception as e:
+            self.show_message(f"Backup failed: {e}")
+
+    def mount_iso(self):
+        """Mounts the configured ISO file."""
+        iso_resolved = self.resolve_path(self.iso_path)
+        if iso_resolved and os.path.exists(iso_resolved):
+            self.show_message(f"Mounting ISO: {iso_resolved}")
+            if platform.system() == 'Windows':
+                cmd = f'powershell -Command "Mount-DiskImage -ImagePath \'{iso_resolved}\'"'
+                self.run_process(cmd, wait=True)
+            elif platform.system() == 'Darwin':
+                self.run_process(f'hdiutil mount "{iso_resolved}"', wait=True)
+            elif platform.system() == 'Linux':
+                self.run_process(f'udisksctl loop-setup -f "{iso_resolved}"', wait=True)
+                
+            time.sleep(2) # Allow time for the drive to mount
+
+    def unmount_iso(self):
+        """Unmounts the configured ISO file."""
+        iso_resolved = self.resolve_path(self.iso_path)
+        if iso_resolved:
+            self.show_message(f"Unmounting ISO: {iso_resolved}")
+            if platform.system() == 'Windows':
+                cmd = f'powershell -Command "Dismount-DiskImage -ImagePath \'{iso_resolved}\'"'
+                self.run_process(cmd, wait=True)
+            elif platform.system() == 'Darwin':
+                # Attempt to detach; note that hdiutil usually requires the device node or mount point
+                pass 
+            elif platform.system() == 'Linux':
+                pass
+
     def run_game(self):
         """Run the main game executable"""
         self.show_message(f"Launching game: {self.game_name}")
@@ -513,13 +659,14 @@ class GameLauncher:
         if self.dynamic_splash:
             self.dynamic_splash.close()
 
+        game_path_resolved = self.resolve_path(self.game_path)
         # Run the game
         if self.run_as_admin and platform.system() == 'Windows' and not self.is_admin:
             # Use PowerShell to run as admin
-            cmd = f'powershell -Command "Start-Process \'{self.game_path}\' -Verb RunAs"'
+            cmd = f'powershell -Command "Start-Process \'{game_path_resolved}\' -Verb RunAs"'
             self.game_process = self.run_process(cmd, cwd=self.game_dir)
         else:
-            self.game_process = self.run_process(f'"{self.game_path}"', cwd=self.game_dir)
+            self.game_process = self.run_process(f'"{game_path_resolved}"', cwd=self.game_dir)
         
         # Wait for the game to exit
         if self.game_process:
@@ -531,6 +678,12 @@ class GameLauncher:
             # Write current PID to the PID file
             self.write_pid_file()
             
+            # Backup saves if enabled
+            self.backup_save_files()
+
+            # Mount ISO if configured
+            self.mount_iso()
+
             # Execute launch sequence
             self.executor.execute('launch_sequence')
             
@@ -545,6 +698,7 @@ class GameLauncher:
         finally:
             # Final cleanup to ensure system state is restored
             self.executor.ensure_cleanup()
+            self.unmount_iso()
             if self.use_kill_list:
                 self.kill_processes_in_list()
             self.show_message("Exiting launcher")

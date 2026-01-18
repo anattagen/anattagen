@@ -39,6 +39,8 @@ class SequenceExecutor:
             'Post2': lambda: self.run_generic_app('post_launch_app_2', 'post_launch_app_2_wait', 'post_launch_app_2_options', 'post_launch_app_2_arguments'),
             'Post3': lambda: self.run_generic_app('post_launch_app_3', 'post_launch_app_3_wait', 'post_launch_app_3_options', 'post_launch_app_3_arguments'),
             'Taskbar': self.show_taskbar,
+            'Cloud-Sync': self.run_cloud_sync,
+            'Mount-Iso': self.launcher.mount_iso,
         }
 
         # Define explicit "off" or "restore" actions for the exit sequence
@@ -48,6 +50,8 @@ class SequenceExecutor:
             'Controller-Mapper': self.run_controller_mapper_exit,
             'Monitor-Config': self.run_monitor_config_desktop,
             'Borderless': self.kill_borderless,
+            'Cloud-Sync': self.run_cloud_sync,
+            'Unmount-Iso': self.launcher.unmount_iso,
         }
 
     def execute(self, sequence_name):
@@ -84,7 +88,7 @@ class SequenceExecutor:
                 logging.warning(f"Unknown action in sequence: {item}")
 
     def run_generic_app(self, app_attr, wait_attr, options_attr=None, args_attr=None):
-        app_path = getattr(self.launcher, app_attr, '')
+        app_path = self.launcher.resolve_path(getattr(self.launcher, app_attr, ''))
         wait = getattr(self.launcher, wait_attr, False)
         options = getattr(self.launcher, options_attr, '') if options_attr else ''
         args = getattr(self.launcher, args_attr, '') if args_attr else ''
@@ -108,7 +112,7 @@ class SequenceExecutor:
         self._run_controller_mapper(is_exit=True)
 
     def _run_controller_mapper(self, is_exit=False):
-        app = getattr(self.launcher, 'controller_mapper_app', '')
+        app = self.launcher.resolve_path(getattr(self.launcher, 'controller_mapper_app', ''))
         options = getattr(self.launcher, 'controller_mapper_options', '')
         args = getattr(self.launcher, 'controller_mapper_arguments', '')
 
@@ -163,7 +167,7 @@ class SequenceExecutor:
             self.launcher.terminate_process_tree(process)
         # Fallback for safety if the process wasn't tracked
         else:
-            app = getattr(self.launcher, 'controller_mapper_app', '')
+            app = self.launcher.resolve_path(getattr(self.launcher, 'controller_mapper_app', ''))
             if app and platform.system() == 'Windows':
                 self.launcher.kill_process_by_name(os.path.basename(app))
 
@@ -173,7 +177,7 @@ class SequenceExecutor:
         options = getattr(self.launcher, 'multimonitor_options', '')
         args = getattr(self.launcher, 'multimonitor_arguments', '')
 
-        if tool and config and os.path.exists(tool) and os.path.exists(config):
+        if tool and config and os.path.exists(self.launcher.resolve_path(tool)) and os.path.exists(config):
             logging.info(f"Applying Game Monitor Config: {config}")
             cmd = f'"{tool}"'
             if options: cmd += f' {options}'
@@ -187,7 +191,7 @@ class SequenceExecutor:
         options = getattr(self.launcher, 'multimonitor_options', '')
         args = getattr(self.launcher, 'multimonitor_arguments', '')
 
-        if tool and config and os.path.exists(tool) and os.path.exists(config):
+        if tool and config and os.path.exists(self.launcher.resolve_path(tool)) and os.path.exists(config):
             logging.info(f"Applying Desktop Monitor Config: {config}")
             cmd = f'"{tool}"'
             if options: cmd += f' {options}'
@@ -218,7 +222,7 @@ class SequenceExecutor:
 
     def run_borderless(self):
         borderless = getattr(self.launcher, 'borderless', '0')
-        app = getattr(self.launcher, 'borderless_app', '')
+        app = self.launcher.resolve_path(getattr(self.launcher, 'borderless_app', ''))
         options = getattr(self.launcher, 'borderless_options', '')
         args = getattr(self.launcher, 'borderless_arguments', '')
 
@@ -241,9 +245,21 @@ class SequenceExecutor:
                 self.launcher.borderless_process = None
             # Fallback to killing by name if it wasn't tracked
             else:
-                app = getattr(self.launcher, 'borderless_app', '')
+                app = self.launcher.resolve_path(getattr(self.launcher, 'borderless_app', ''))
                 if app and platform.system() == 'Windows':
                     self.launcher.kill_process_by_name(os.path.basename(app))
+
+    def run_cloud_sync(self):
+        app = self.launcher.resolve_path(getattr(self.launcher, 'cloud_app', ''))
+        options = getattr(self.launcher, 'cloud_app_options', '')
+        args = getattr(self.launcher, 'cloud_app_arguments', '')
+
+        if app and os.path.exists(app):
+            logging.info("Running Cloud Sync...")
+            cmd = f'"{app}"'
+            if options: cmd += f' {options}'
+            if args: cmd += f' {args}'
+            self.launcher.run_process(cmd, wait=True)
 
     def kill_game_process(self):
         """Kills the game executable process."""

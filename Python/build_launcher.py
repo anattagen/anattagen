@@ -26,6 +26,7 @@ def build():
         '--onefile',                # Create a single executable file
         '--name=Launcher',          # Name of the executable
         f'--distpath={dist_dir}',   # Output directory
+        f'--specpath={project_root}', # Generate spec file in project root
         f'--workpath={build_dir}',  # Temporary build directory
         '--clean',                  # Clean cache before building
         '--hidden-import=pygame',   # Pygame is imported inside a function
