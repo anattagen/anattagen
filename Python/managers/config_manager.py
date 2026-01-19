@@ -134,6 +134,7 @@ class ConfigManager(QObject):
 
         # Set default deployment tab options
         config.download_game_json = False
+        config.download_artwork = False
         config.hide_taskbar = False
         config.run_as_admin = True
         config.enable_name_matching = True

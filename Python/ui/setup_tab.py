@@ -159,6 +159,7 @@ class SetupTab(QWidget):
         formatted_text = f"{label_text}"
         label = QLabel(formatted_text)
         label.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        label.setToolTip("Right-click to configure Options & Arguments")
         label.customContextMenuRequested.connect(lambda pos: self._show_options_args_dialog(pos, config_key, label_text))
         layout.addRow(label, row_widget)
 
@@ -169,38 +170,56 @@ class SetupTab(QWidget):
 
         # --- Section 1: Sources & Indexing ---
         source_config_widget = QWidget()
-        source_config_layout = QFormLayout(source_config_widget)
+        source_config_layout = QGridLayout(source_config_widget)
         source_config_layout.setSpacing(10)
 
         # Sources
         self.source_dirs_list = DragDropListWidget()
         self.source_dirs_list.setMaximumHeight(100)
+        
+        source_label = QLabel("Source Directories:")
         add_source_button = QPushButton("Add...")
+        add_source_button.setToolTip("Add a directory to scan for games.")
         remove_source_button = QPushButton("Remove")
-        source_buttons_layout = QVBoxLayout()
-        source_buttons_layout.addWidget(add_source_button)
-        source_buttons_layout.addWidget(remove_source_button)
-        source_buttons_layout.addStretch()
-        source_dirs_layout = QHBoxLayout()
-        source_dirs_layout.addWidget(self.source_dirs_list, 1)
-        source_dirs_layout.addLayout(source_buttons_layout)
-        source_config_layout.addRow("Source Directories:", source_dirs_layout)
+        remove_source_button.setToolTip("Remove the selected directory from scanning.")
+        
+        # Left side: Label + Buttons
+        source_left_container = QWidget()
+        source_left_layout = QVBoxLayout(source_left_container)
+        source_left_layout.setContentsMargins(0, 0, 0, 0)
+        source_left_layout.addWidget(source_label)
+        source_left_layout.addWidget(add_source_button)
+        source_left_layout.addWidget(remove_source_button)
+        source_left_layout.addStretch()
+        
+        source_config_layout.addWidget(source_left_container, 0, 0)
+        source_config_layout.addWidget(self.source_dirs_list, 0, 1)
+        
         self.add_source_dir_button = add_source_button
         self.remove_source_dir_button = remove_source_button
 
         # Excluded Items
         self.excluded_dirs_list = DragDropListWidget()
-        self.excluded_dirs_list.setMaximumHeight(100)
+        self.excluded_dirs_list.setMaximumHeight(25)
+        
+        excluded_label = QLabel("Excluded Directories:")
         add_excluded_button = QPushButton("Add...")
+        add_excluded_button.setToolTip("Add a directory to exclude from scanning.")
         remove_excluded_button = QPushButton("Remove")
-        excluded_buttons_layout = QVBoxLayout()
-        excluded_buttons_layout.addWidget(add_excluded_button)
-        excluded_buttons_layout.addWidget(remove_excluded_button)
-        excluded_buttons_layout.addStretch()
-        excluded_layout = QHBoxLayout()
-        excluded_layout.addWidget(self.excluded_dirs_list, 1)
-        excluded_layout.addLayout(excluded_buttons_layout)
-        source_config_layout.addRow("Excluded Directories:", excluded_layout)
+        remove_excluded_button.setToolTip("Remove the selected directory from exclusion.")
+        
+        # Right side: Label + Buttons
+        excluded_right_container = QWidget()
+        excluded_right_layout = QVBoxLayout(excluded_right_container)
+        excluded_right_layout.setContentsMargins(0, 0, 0, 0)
+        excluded_right_layout.addWidget(excluded_label)
+        excluded_right_layout.addWidget(add_excluded_button)
+        excluded_right_layout.addWidget(remove_excluded_button)
+        excluded_right_layout.addStretch()
+        
+        source_config_layout.addWidget(self.excluded_dirs_list, 1, 0)
+        source_config_layout.addWidget(excluded_right_container, 1, 1)
+        
         self.add_excluded_dir_button = add_excluded_button
         self.remove_excluded_dir_button = remove_excluded_button
 
@@ -212,7 +231,13 @@ class SetupTab(QWidget):
         game_managers_layout.addWidget(self.other_managers_combo)
         game_managers_layout.addWidget(self.exclude_manager_checkbox)
         game_managers_layout.addStretch(1)
-        source_config_layout.addRow("Game Managers Present", game_managers_layout)
+        
+        source_config_layout.addWidget(QLabel("Game Managers Present"), 2, 0)
+        source_config_layout.addLayout(game_managers_layout, 2, 1)
+        
+        # Set column stretch to allow lists to expand
+        source_config_layout.setColumnStretch(0, 1)
+        source_config_layout.setColumnStretch(1, 1)
 
         source_config_section = AccordionSection("SOURCES AND INDEXING", source_config_widget)
 
@@ -519,7 +544,7 @@ class SetupTab(QWidget):
             row.downloadRequested.connect(self._on_download_requested)
         
         for key, row in self.path_rows.items():
-            row.line_edit.editingFinished.connect(lambda k=key, r=row: self._on_path_text_changed(k, r.path))
+            row.line_edit.textChanged.connect(lambda text, k=key: self._on_path_text_changed(k, text))
 
         # Sequences
         self.launch_sequence_list.model().layoutChanged.connect(self.config_changed.emit)

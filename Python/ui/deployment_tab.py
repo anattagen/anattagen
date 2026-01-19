@@ -117,6 +117,9 @@ class DeploymentTab(QWidget):
         
         self.download_game_json_checkbox = QCheckBox("Download Steam's Game.json")
         self.download_game_json_checkbox.setToolTip("If checked, attempts to download game metadata from Steam using the Steam ID during creation.")
+        
+        self.download_artwork_checkbox = QCheckBox("Download Artwork")
+        self.download_artwork_checkbox.setToolTip("Downloads header and background images to the profile folder.")
 
         # Index Sources moved to Database Indexing (General Options) section
         index_sources_button = QPushButton("INDEX SOURCES")
@@ -150,6 +153,7 @@ class DeploymentTab(QWidget):
         # Bottom controls
         bottom_controls = QHBoxLayout()
         bottom_controls.addWidget(self.download_game_json_checkbox)
+        bottom_controls.addWidget(self.download_artwork_checkbox)
         bottom_controls.addStretch(1)
         bottom_controls.addWidget(self.create_button)
         
@@ -172,6 +176,7 @@ class DeploymentTab(QWidget):
         self.name_check_checkbox.stateChanged.connect(self.config_changed.emit)
         self.steam_version_group.buttonClicked.connect(lambda: self.config_changed.emit())
         self.download_game_json_checkbox.stateChanged.connect(self.config_changed.emit)
+        self.download_artwork_checkbox.stateChanged.connect(self.config_changed.emit)
 
         index_sources_button.clicked.connect(self.index_sources_requested.emit)
         self.create_button.clicked.connect(self.create_selected_requested.emit)
@@ -222,6 +227,7 @@ class DeploymentTab(QWidget):
             self.steam_json_v2_radio.setChecked(True)
 
         self.download_game_json_checkbox.setChecked(config.download_game_json)
+        self.download_artwork_checkbox.setChecked(config.download_artwork)
         
         # Sync overwrite checkboxes
         for key, cb in self.overwrite_checkboxes.items():
@@ -235,6 +241,7 @@ class DeploymentTab(QWidget):
         config.steam_json_version = 1 if self.steam_json_v1_radio.isChecked() else 2
 
         config.download_game_json = self.download_game_json_checkbox.isChecked()
+        config.download_artwork = self.download_artwork_checkbox.isChecked()
         
         # Sync overwrite states
         for key, cb in self.overwrite_checkboxes.items():

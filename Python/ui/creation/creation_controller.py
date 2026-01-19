@@ -271,6 +271,10 @@ class CreationController:
             if app_config.download_game_json:
                 self._download_game_json(game_data, game_profile_dir)
 
+            # 3c. Download Artwork if enabled
+            if app_config.download_artwork:
+                self.download_artwork(game_data, game_profile_dir)
+
             # 5. Handle CEN/LC file propagation (copying profiles)
             self._propagate_files(game_data, game_profile_dir)
             self._propagate_apps(game_data, game_profile_dir)
@@ -352,6 +356,55 @@ class CreationController:
             logging.info(f"Downloaded Game.json for {game_data.get('name_override')} (AppID: {steam_id})")
         except Exception as e:
             logging.error(f"Failed to download Game.json for {game_data.get('name_override')} (AppID: {steam_id}): {e}")
+
+    def download_artwork(self, game_data, profile_dir):
+        """Downloads artwork for the game."""
+        steam_id = game_data.get('steam_id')
+        if not steam_id or steam_id == 'NOT_FOUND_IN_DATA' or steam_id == 'ITEM_IS_NONE':
+            return
+
+        try:
+            # Check if Game.json exists to avoid re-downloading
+            json_path = Path(profile_dir) / "Game.json"
+            data = None
+            
+            if json_path.exists():
+                try:
+                    with open(json_path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                except:
+                    pass
+            
+            if not data:
+                url = f"https://store.steampowered.com/api/appdetails?appids={steam_id}"
+                response = requests.get(url, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+
+            if str(steam_id) in data and data[str(steam_id)]['success']:
+                game_info = data[str(steam_id)]['data']
+                header_url = game_info.get('header_image')
+                background_url = game_info.get('background')
+
+                if header_url:
+                    self._download_image(header_url, Path(profile_dir) / "Folder.jpg")
+                
+                if background_url:
+                    self._download_image(background_url, Path(profile_dir) / "Backdrop.jpg")
+                    
+        except Exception as e:
+            logging.error(f"Failed to download artwork for {game_data.get('name_override')}: {e}")
+
+    def _download_image(self, url, target_path):
+        try:
+            response = requests.get(url, stream=True, timeout=10)
+            response.raise_for_status()
+            with open(target_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            logging.info(f"Downloaded artwork: {target_path}")
+        except Exception as e:
+            logging.error(f"Failed to download image {url}: {e}")
 
     def _create_game_ini(self, ini_path, game_data, app_config, game_profile_dir, launcher_shortcut_path, launcher_executable_path=None):
         """

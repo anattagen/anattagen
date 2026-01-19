@@ -2,16 +2,18 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem, QLabel,
     QPushButton, QHeaderView, QAbstractItemView, QMenu, QCheckBox, QLineEdit,
     QApplication, QFileDialog, QInputDialog, QMessageBox, QSpinBox, QDialog,
-    QDialogButtonBox, QComboBox
+    QDialogButtonBox, QComboBox, QProgressDialog
 )
 import os
 import json 
+import configparser
 import copy
 import collections
 import re
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor
 from Python import constants
+from Python.managers.index_manager import backup_index
 
 class AppendKillListDialog(QDialog):
     def __init__(self, parent=None):
@@ -265,10 +267,12 @@ class EditorTab(QWidget):
         buttons_layout = QHBoxLayout()
         self.save_button = QPushButton("Save Index")
         self.load_button = QPushButton("Load Index")
+        self.import_profiles_button = QPushButton("Import Profiles")
         self.delete_button = QPushButton("Delete Indexes")
         self.clear_button = QPushButton("Clear View")
         buttons_layout.addWidget(self.save_button)
         buttons_layout.addWidget(self.load_button)
+        buttons_layout.addWidget(self.import_profiles_button)
         buttons_layout.addWidget(self.delete_button)
         buttons_layout.addWidget(self.clear_button)
         
@@ -286,6 +290,7 @@ class EditorTab(QWidget):
         # --- Connect Signals ---
         self.save_button.clicked.connect(self.save_index_requested.emit)
         self.load_button.clicked.connect(self.load_index_requested.emit)
+        self.import_profiles_button.clicked.connect(self.import_profiles)
         self.delete_button.clicked.connect(self.delete_indexes_requested.emit)
         self.clear_button.clicked.connect(self.clear_view_requested.emit)
 
@@ -664,7 +669,7 @@ class EditorTab(QWidget):
             'mm_desktop_profile': config.multimonitor_media_path, 'mm_desktop_profile_enabled': config.defaults.get('multimonitor_media_path_enabled', True), 'mm_desktop_profile_overwrite': config.overwrite_states.get('multimonitor_media_path', True),
 
             # Launcher Executable
-            'launcher_executable': config.launcher_executable, 'launcher_executable_enabled': config.defaults.get('launcher_executable_enabled', True), 'launcher_executable_overwrite': config.overwrite_states.get('launcher_executable', True),
+            'launcher_executable': config.launcher_executable if config.launcher_executable else constants.LAUNCHER_EXECUTABLE, 'launcher_executable_enabled': config.defaults.get('launcher_executable_enabled', True), 'launcher_executable_overwrite': config.overwrite_states.get('launcher_executable', True),
             'launcher_executable_options': config.launcher_executable_options, 'launcher_executable_arguments': config.launcher_executable_arguments,
         }
         
@@ -718,6 +723,10 @@ class EditorTab(QWidget):
         # Open Profile Folder Action
         open_profile_action = menu.addAction("Open Profile Folder")
         open_profile_action.triggered.connect(lambda: self.open_profile_folder(row))
+
+        # Download Artwork Action
+        download_artwork_action = menu.addAction("Download Artwork")
+        download_artwork_action.triggered.connect(lambda: self.download_artwork_selected(row))
 
         menu.addSeparator()
 
@@ -1104,6 +1113,85 @@ class EditorTab(QWidget):
                 os.startfile(profile_path)
             else:
                 QMessageBox.warning(self, "Folder Not Found", f"Profile folder not found at:\n{profile_path}\n\nHas the game been created yet?")
+
+    def download_artwork_selected(self, row):
+        """Download artwork for selected games."""
+        selected_rows = set()
+        for range_ in self.table.selectedRanges():
+            for r in range(range_.topRow(), range_.bottomRow() + 1):
+                selected_rows.add(r)
+        
+        if row is not None and row >= 0 and row not in selected_rows:
+            selected_rows.add(row)
+            
+        if not selected_rows:
+            return
+
+        # Confirmation for multiple items
+        if len(selected_rows) > 1:
+            reply = QMessageBox.question(
+                self, "Confirm Download",
+                f"Are you sure you want to download artwork for {len(selected_rows)} games?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+        # Progress Dialog setup
+        progress = None
+        if len(selected_rows) > 1:
+            progress = QProgressDialog("Downloading artwork...", "Cancel", 0, len(selected_rows), self)
+            progress.setWindowModality(Qt.WindowModality.WindowModal)
+            progress.setMinimumDuration(0)
+            progress.setValue(0)
+
+        count = 0
+        canceled = False
+        rows_list = list(selected_rows)
+
+        for i, r in enumerate(rows_list):
+            if progress:
+                if progress.wasCanceled():
+                    canceled = True
+                    break
+                progress.setValue(i)
+
+            real_index = (self.current_page * self.page_size) + r
+            if real_index < len(self.filtered_data):
+                game_data = self.filtered_data[real_index]
+                
+                if progress:
+                    game_name = game_data.get('name_override') or game_data.get('name') or "Unknown"
+                    progress.setLabelText(f"Downloading artwork for: {game_name}")
+                    QApplication.processEvents()
+                
+                # Determine profile directory
+                from Python.ui.name_utils import make_safe_filename
+                safe_name = make_safe_filename(game_data.get('name_override', ''))
+                if not safe_name:
+                     safe_name = make_safe_filename(game_data.get('name', ''))
+                
+                profiles_dir = self.main_window.config.profiles_dir
+                profile_path = os.path.join(profiles_dir, safe_name)
+                
+                if not os.path.exists(profile_path):
+                    try:
+                        os.makedirs(profile_path)
+                    except Exception as e:
+                        print(f"Could not create profile dir: {e}")
+                        continue
+
+                self.main_window.creation_controller.download_artwork(game_data, profile_path)
+                count += 1
+        
+        if progress:
+            progress.setValue(len(selected_rows))
+
+        if canceled:
+            QMessageBox.information(self, "Artwork Download", f"Download cancelled. Processed {count} games.")
+        else:
+            QMessageBox.information(self, "Artwork Download", f"Attempted to download artwork for {count} games.")
 
     def toggle_create_for_selection(self):
         """Toggle the 'create' status for all selected rows."""
@@ -2237,3 +2325,139 @@ class EditorTab(QWidget):
         self.filtered_data = []
         self.current_page = 0
         self.data_changed.emit()
+
+    def import_profiles(self):
+        """Import games from a profile directory."""
+        directory = QFileDialog.getExistingDirectory(self, "Select Profiles Directory")
+        if not directory:
+            return
+        
+        # Backup index
+        try:
+            backup_index(constants.APP_ROOT_DIR)
+        except Exception as e:
+            print(f"Failed to backup index: {e}")
+
+        self.push_undo()
+        imported_count = 0
+        
+        for entry in os.scandir(directory):
+            if entry.is_dir():
+                ini_path = os.path.join(entry.path, "Game.ini")
+                if os.path.exists(ini_path):
+                    try:
+                        game_data = self._parse_game_ini(ini_path, entry.path)
+                        self.original_data.append(game_data)
+                        imported_count += 1
+                    except Exception as e:
+                        print(f"Failed to import {entry.name}: {e}")
+        
+        if imported_count > 0:
+            self.filter_table(self.search_bar.text())
+            self.main_window._on_editor_table_edited(None)
+            QMessageBox.information(self, "Import Complete", f"Imported {imported_count} profiles.")
+        else:
+            QMessageBox.information(self, "Import", "No valid profiles found.")
+
+    def _parse_game_ini(self, ini_path, profile_path):
+        """Parse a Game.ini file and return a game data dictionary."""
+        config = configparser.ConfigParser()
+        config.read(ini_path)
+        
+        game_data = {}
+        
+        # [Game]
+        game_data['create'] = True
+        game_data['name'] = config.get('Game', 'Executable', fallback='')
+        game_data['directory'] = config.get('Game', 'Directory', fallback='')
+        game_data['name_override'] = config.get('Game', 'Name', fallback=os.path.basename(profile_path))
+        game_data['iso_path'] = config.get('Game', 'IsoPath', fallback='')
+        
+        # Try to find Steam ID from Game.json
+        json_path = os.path.join(profile_path, "Game.json")
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, 'r') as f:
+                    data = json.load(f)
+                    if data:
+                        key = next(iter(data))
+                        game_data['steam_id'] = key
+            except:
+                pass
+        
+        # [Options]
+        game_data['run_as_admin'] = config.getboolean('Options', 'RunAsAdmin', fallback=False)
+        game_data['hide_taskbar'] = config.getboolean('Options', 'HideTaskbar', fallback=False)
+        game_data['options'] = config.get('Options', 'Borderless', fallback='0')
+        game_data['kill_list_enabled'] = config.getboolean('Options', 'UseKillList', fallback=False)
+        game_data['terminate_borderless_on_exit'] = config.getboolean('Options', 'TerminateBorderlessOnExit', fallback=False)
+        game_data['kill_list'] = config.get('Options', 'KillList', fallback='')
+        
+        # Helper for paths
+        def get_path(section, key, source_key=None):
+            if source_key and config.has_option('SourcePaths', source_key):
+                return "> " + config.get('SourcePaths', source_key)
+            val = config.get(section, key, fallback='')
+            return val
+
+        # [Paths]
+        game_data['controller_mapper_path'] = get_path('Paths', 'ControllerMapperApp', 'ControllerMapperApp')
+        game_data['controller_mapper_options'] = config.get('Paths', 'ControllerMapperOptions', fallback='')
+        game_data['controller_mapper_arguments'] = config.get('Paths', 'ControllerMapperArguments', fallback='')
+        game_data['controller_mapper_enabled'] = bool(game_data['controller_mapper_path'])
+        
+        game_data['borderless_windowing_path'] = get_path('Paths', 'BorderlessWindowingApp', 'BorderlessWindowingApp')
+        game_data['borderless_windowing_options'] = config.get('Paths', 'BorderlessWindowingOptions', fallback='')
+        game_data['borderless_windowing_arguments'] = config.get('Paths', 'BorderlessWindowingArguments', fallback='')
+        game_data['borderless_windowing_enabled'] = bool(game_data['borderless_windowing_path'])
+        
+        game_data['multi_monitor_app_path'] = get_path('Paths', 'MultiMonitorTool', 'MultiMonitorTool')
+        game_data['multi_monitor_app_options'] = config.get('Paths', 'MultiMonitorOptions', fallback='')
+        game_data['multi_monitor_app_arguments'] = config.get('Paths', 'MultiMonitorArguments', fallback='')
+        game_data['multi_monitor_app_enabled'] = bool(game_data['multi_monitor_app_path'])
+        
+        game_data['player1_profile'] = get_path('Paths', 'Player1Profile', 'Player1Profile')
+        game_data['player1_profile_enabled'] = bool(game_data['player1_profile'])
+        game_data['player2_profile'] = get_path('Paths', 'Player2Profile', 'Player2Profile')
+        game_data['player2_profile_enabled'] = bool(game_data['player2_profile'])
+        game_data['mm_game_profile'] = get_path('Paths', 'MultiMonitorGamingConfig', 'MultiMonitorGamingConfig')
+        game_data['mm_game_profile_enabled'] = bool(game_data['mm_game_profile'])
+        game_data['mm_desktop_profile'] = get_path('Paths', 'MultiMonitorDesktopConfig', 'MultiMonitorDesktopConfig')
+        game_data['mm_desktop_profile_enabled'] = bool(game_data['mm_desktop_profile'])
+        game_data['mediacenter_profile'] = get_path('Paths', 'MediaCenterProfile', 'MediaCenterProfile')
+        game_data['mediacenter_profile_enabled'] = bool(game_data['mediacenter_profile'])
+        
+        game_data['launcher_executable'] = config.get('Paths', 'LauncherExecutable', fallback='')
+        game_data['launcher_executable_enabled'] = bool(game_data['launcher_executable'])
+        
+        # [PreLaunch]
+        for i in range(1, 4):
+            app_key = f'App{i}'
+            game_data[f'pre{i}_path'] = get_path('PreLaunch', app_key, f'PreLaunchApp{i}')
+            game_data[f'pre{i}_options'] = config.get('PreLaunch', f'{app_key}Options', fallback='')
+            game_data[f'pre{i}_arguments'] = config.get('PreLaunch', f'{app_key}Arguments', fallback='')
+            game_data[f'pre_{i}_run_wait'] = config.getboolean('PreLaunch', f'{app_key}Wait', fallback=False)
+            game_data[f'pre_{i}_enabled'] = bool(game_data[f'pre{i}_path'])
+
+        # [PostLaunch]
+        for i in range(1, 4):
+            app_key = f'App{i}'
+            game_data[f'post{i}_path'] = get_path('PostLaunch', app_key, f'PostLaunchApp{i}')
+            game_data[f'post{i}_options'] = config.get('PostLaunch', f'{app_key}Options', fallback='')
+            game_data[f'post{i}_arguments'] = config.get('PostLaunch', f'{app_key}Arguments', fallback='')
+            game_data[f'post_{i}_run_wait'] = config.getboolean('PostLaunch', f'{app_key}Wait', fallback=False)
+            game_data[f'post_{i}_enabled'] = bool(game_data[f'post{i}_path'])
+            
+        game_data['just_after_launch_path'] = get_path('PostLaunch', 'JustAfterLaunchApp', 'JustAfterLaunchApp')
+        game_data['just_after_launch_options'] = config.get('PostLaunch', 'JustAfterLaunchOptions', fallback='')
+        game_data['just_after_launch_arguments'] = config.get('PostLaunch', 'JustAfterLaunchArguments', fallback='')
+        game_data['just_after_launch_run_wait'] = config.getboolean('PostLaunch', 'JustAfterLaunchWait', fallback=False)
+        game_data['just_after_launch_enabled'] = bool(game_data['just_after_launch_path'])
+        
+        game_data['just_before_exit_path'] = get_path('PostLaunch', 'JustBeforeExitApp', 'JustBeforeExitApp')
+        game_data['just_before_exit_options'] = config.get('PostLaunch', 'JustBeforeExitOptions', fallback='')
+        game_data['just_before_exit_arguments'] = config.get('PostLaunch', 'JustBeforeExitArguments', fallback='')
+        game_data['just_before_exit_run_wait'] = config.getboolean('PostLaunch', 'JustBeforeExitWait', fallback=False)
+        game_data['just_before_exit_enabled'] = bool(game_data['just_before_exit_path'])
+
+        return game_data

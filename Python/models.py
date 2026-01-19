@@ -86,6 +86,7 @@ class AppConfig:
 
         # Deployment Tab: General Options
         self.download_game_json = False
+        self.download_artwork = False
         self.hide_taskbar = False
         self.run_as_admin = False
         self.enable_name_matching = False
