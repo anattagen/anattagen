@@ -19,48 +19,54 @@
 import json
 import os
 
-# IMPORT SETTINGS
-# ///////////////////////////////////////////////////////////////
-from Python.ui.theme.gui.core.json_settings import Settings
-
 # APP THEMES
 # ///////////////////////////////////////////////////////////////
 class JsonThemes(object):
-    # LOAD SETTINGS
-    # ///////////////////////////////////////////////////////////////
-    setup_settings = Settings()
-    _settings = setup_settings.items
-
-    # APP PATH
-    # ///////////////////////////////////////////////////////////////
-    json_file = f"Python/ui/theme/gui/themes/{_settings['theme_name']}.json"
-    app_path = os.path.abspath(os.getcwd())
-    settings_path = os.path.normpath(os.path.join(app_path, json_file))
-    if not os.path.isfile(settings_path):
-        print(f"WARNING: \"{_settings['theme_name']}.json\" not found! check in the folder {settings_path}")
-
     # INIT SETTINGS
     # ///////////////////////////////////////////////////////////////
     def __init__(self):
         super(JsonThemes, self).__init__()
-
         # DICTIONARY WITH SETTINGS
         self.items = {}
 
-        # DESERIALIZE
-        self.deserialize()
+    def load_theme(self, theme_file):
+        if os.path.isfile(theme_file):
+            try:
+                with open(theme_file, "r", encoding='utf-8') as reader:
+                    self.items = json.loads(reader.read())
+            except Exception as e:
+                print(f"Error loading theme {theme_file}: {e}")
 
-    # SERIALIZE JSON
-    # ///////////////////////////////////////////////////////////////
-    def serialize(self):
-        # WRITE JSON FILE
-        with open(self.settings_path, "w", encoding='utf-8') as write:
-            json.dump(self.items, write, indent=4)
+    def load_json_theme(self, theme_file):
+        self.load_theme(theme_file)
 
-    # DESERIALIZE JSON
-    # ///////////////////////////////////////////////////////////////
-    def deserialize(self):
-        # READ JSON FILE
-        with open(self.settings_path, "r", encoding='utf-8') as reader:
-            settings = json.loads(reader.read())
-            self.items = settings
+    @property
+    def stylesheet(self):
+        # Attempt to locate style.qss in ../styles/style.qss relative to this file
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        gui_dir = os.path.dirname(current_dir)
+        style_path = os.path.join(gui_dir, "styles", "style.qss")
+
+        if not os.path.exists(style_path):
+            return ""
+
+        with open(style_path, "r", encoding='utf-8') as f:
+            style_content = f.read()
+
+        # Default fallback values to prevent parse errors if keys are missing
+        defaults = {
+            "bg_one": "#2c313c",
+            "bg_two": "#343b47",
+            "bg_three": "#3a414d",
+            "text_color": "#ffffff",
+            "accent_color": "#00aaff"
+        }
+        theme_items = defaults.copy()
+        theme_items.update(self.items)
+
+        # Replace placeholders in QSS with values from the loaded JSON items
+        for key, value in theme_items.items():
+            if isinstance(value, str):
+                style_content = style_content.replace(f"@{key}", value)
+
+        return style_content

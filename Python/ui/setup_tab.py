@@ -18,6 +18,13 @@ from Python.ui.widgets import DragDropListWidget, PathConfigRow
 from Python.ui.accordion import AccordionSection
 from Python import constants
 from .theme.gui.core import json_settings, json_themes
+
+# Register icons (compile .qrc file or load directly)
+try:
+    from .theme.gui.images import icons_rc  # noqa: F401
+except ImportError:
+    print("Warning: icons_rc.py not found; icons will not display.")
+
 class DownloadThread(QThread):
     """Thread for downloading and extracting tools."""
     progress = pyqtSignal(int)
@@ -117,11 +124,10 @@ class SetupTab(QWidget):
     setting_changed = pyqtSignal(str)
     
     PATH_ATTRIBUTES = [
-        "profiles_dir", "launchers_dir", "launcher_executable", "controller_mapper_path", 
-        "borderless_gaming_path", "multi_monitor_tool_path",
-        "p1_profile_path", "p2_profile_path", "mediacenter_profile_path",
-        "multimonitor_gaming_path", "multimonitor_media_path",
-        "pre1_path", "pre2_path", "pre3_path",
+        "profiles_dir", "launchers_dir", "launcher_executable", "controller_mapper_path",
+        "borderless_gaming_path", "multi_monitor_tool_path", "p1_profile_path",
+        "p2_profile_path", "mediacenter_profile_path", "multimonitor_gaming_path",
+        "multimonitor_media_path", "pre1_path", "pre2_path", "pre3_path",
         "just_after_launch_path", "just_before_exit_path",
         "post1_path", "post2_path", "post3_path"
     ]
@@ -169,16 +175,19 @@ class SetupTab(QWidget):
             theme_engine.set_theme(theme_file)
         elif hasattr(theme_engine, "load"):
             theme_engine.load(theme_file)
+        elif hasattr(theme_engine, "load_json_theme"):
+            theme_engine.load_json_theme(theme_file)
         else:
-            raise RuntimeError("Unsupported JsonThemes API in your framework.")
+            print("Unsupported JsonThemes API in your framework.")
+            return
 
         # Apply the generated stylesheet to the QApplication
         app = QApplication.instance()
-        if app is not None:
+        if app is not None and hasattr(theme_engine, "stylesheet"):
             app.setStyleSheet(theme_engine.stylesheet)
         else:
             print("No QApplication instance found; cannot apply theme")
-    def __init__(self, parent=None): # parent is main_window
+    def __init__(self, parent=None):
         super().__init__(parent)
         self.main_window = parent
         self.path_rows = {}
@@ -186,21 +195,23 @@ class SetupTab(QWidget):
         self.last_detected_tools = {}
         self.options_args_map = self._parse_options_arguments_set()
         self.download_thread = None
+        self.available_themes = []
         self._setup_ui()
 
     def _add_path_row(self, layout, label_text, config_key, row_widget):
-        """Helper to add a row with a context-menu-capable label."""
         formatted_text = f"{label_text}"
         label = QLabel(formatted_text)
         label.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         label.setToolTip("Right-click to configure Options & Arguments")
-        label.customContextMenuRequested.connect(lambda pos: self._show_options_args_dialog(pos, config_key, label_text))
+        label.customContextMenuRequested.connect(
+            lambda pos: self._show_options_args_dialog(pos, config_key, label_text)
+        )
         layout.addRow(label, row_widget)
 
     def _setup_ui(self):
         """Create and arrange all widgets for the Setup tab."""
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(5, 5, 5, 5)
+        main_layout.setContentsMargins(5, 5, 0, 5)
 
         # --- Section 1: Sources & Indexing ---
         source_config_widget = QWidget()
@@ -430,29 +441,28 @@ class SetupTab(QWidget):
         font_layout.addWidget(self.font_size_spin)
         appearance_layout.addRow("Font:", font_layout)
         # Theme
-        self.theme_combo = QComboBox()
-        self.theme_combo.addItems(["System", "Dark", "Light", "Auto", "Midnight", "Ocean"])
+        self.theme_combo = QComboBox(self)
         themes_dir = os.path.join(os.path.dirname(__file__), "theme", "gui", "themes")
-        available_themes = [
+        self.available_themes = [
             f.replace(".json", "") for f in os.listdir(themes_dir) if f.endswith(".json")
-        ] 
-        self.theme_combo.addItems(sorted(available_themes))
-        appearance_layout.addRow("Theme:", self.theme_combo)
+        ]
+        self.available_themes.sort()
+        self.theme_combo.addItems(self.available_themes)
+
+        # Load current theme from settings
         try:
             settings = json_settings.Settings()
             current_theme = getattr(settings, "theme_name", "default")
         except Exception:
             current_theme = "default"
 
-    # Set combo box to current theme
         if current_theme in self.available_themes:
             index = self.available_themes.index(current_theme)
             self.theme_combo.setCurrentIndex(index)
 
-    # Connect signal to apply theme on selection
         self.theme_combo.currentTextChanged.connect(self.apply_selected_theme)
-    # --- end theme combo setup ---
-        
+
+        appearance_layout.addRow("Theme Selection:", self.theme_combo)
         # Editor Page Size
         self.page_size_spin = QSpinBox()
         self.page_size_spin.setRange(75, 2000)
@@ -991,6 +1001,11 @@ class SetupTab(QWidget):
         elif theme == "Ocean":
             app.setStyle("Fusion")
             app.setPalette(self._create_ocean_palette())
+            return
+
+        # Check if it is a JSON theme
+        if theme in self.available_themes:
+            self.apply_selected_theme(theme)
             return
 
         try:
