@@ -10,6 +10,7 @@ import configparser
 import copy
 import collections
 import re
+import difflib
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor
 from Python import constants
@@ -728,6 +729,14 @@ class EditorTab(QWidget):
         download_artwork_action = menu.addAction("Download Artwork")
         download_artwork_action.triggered.connect(lambda: self.download_artwork_selected(row))
 
+        # Auto-Match Steam ID Action
+        auto_match_action = menu.addAction("Auto-Match Steam ID")
+        auto_match_action.triggered.connect(lambda: self.auto_match_steam_id_selected(row))
+
+        # Regenerate Names Action
+        regenerate_names_action = menu.addAction("Regenerate Names")
+        regenerate_names_action.triggered.connect(lambda: self.regenerate_names_selected(row))
+
         menu.addSeparator()
 
         # Browse Action
@@ -1113,6 +1122,190 @@ class EditorTab(QWidget):
                 os.startfile(profile_path)
             else:
                 QMessageBox.warning(self, "Folder Not Found", f"Profile folder not found at:\n{profile_path}\n\nHas the game been created yet?")
+
+    def regenerate_names_selected(self, row):
+        """Regenerate names for selected rows using NameProcessor."""
+        selected_rows = set()
+        for range_ in self.table.selectedRanges():
+            for r in range(range_.topRow(), range_.bottomRow() + 1):
+                selected_rows.add(r)
+        
+        if row is not None and row >= 0 and row not in selected_rows:
+            selected_rows.add(row)
+            
+        if not selected_rows:
+            return
+
+        self.push_undo()
+        
+        # Ensure dependencies are loaded
+        if not self.main_window.steam_cache_manager.normalized_steam_index:
+            self.main_window.steam_cache_manager.load_normalized_steam_index()
+            
+        from Python.ui.name_processor import NameProcessor
+        from Python.ui.game_indexer import get_filtered_directory_name, _get_steam_match
+        
+        release_groups = getattr(self.main_window, 'release_groups_set', set())
+        exclude_exe = getattr(self.main_window, 'exclude_exe_set', set())
+        folder_exclude = getattr(self.main_window, 'folder_exclude_set', set())
+        
+        name_processor = NameProcessor(release_groups, exclude_exe)
+        
+        count = 0
+        for r in selected_rows:
+            real_index = (self.current_page * self.page_size) + r
+            if real_index < len(self.filtered_data):
+                game = self.filtered_data[real_index]
+                
+                # Get paths
+                directory = game.get('directory', '')
+                filename = game.get('name', '')
+                full_path = os.path.join(directory, filename)
+                
+                # Recalculate name override based on directory structure
+                dir_name = get_filtered_directory_name(full_path, folder_exclude)
+                name_override = name_processor.get_display_name(dir_name)
+                
+                # Re-run Steam matching
+                steam_name, steam_id, name_override = _get_steam_match(
+                    name_override, 
+                    self.main_window.config, 
+                    self.main_window.steam_cache_manager.normalized_steam_index, 
+                    name_processor
+                )
+                
+                # Update data
+                game['name_override'] = name_override
+                game['steam_id'] = steam_id
+                count += 1
+        
+        self.main_window._on_editor_table_edited(None)
+        self.main_window.statusBar().showMessage(f"Regenerated names for {count} items", 3000)
+
+    def _on_fuzzy_combo_changed(self, combo, row):
+        steam_id = combo.currentData()
+        text = combo.currentText()
+        
+        # Update Steam ID if valid ID selected
+        if steam_id:
+            item_id = self.table.item(row, constants.EditorCols.STEAMID.value)
+            if not item_id:
+                item_id = QTableWidgetItem()
+                self.table.setItem(row, constants.EditorCols.STEAMID.value, item_id)
+            item_id.setText(str(steam_id))
+            
+            # Clear background if it was highlighted as empty
+            item_id.setData(Qt.ItemDataRole.BackgroundRole, None)
+            item_id.setData(Qt.ItemDataRole.ForegroundRole, None)
+            self._sync_cell_to_data(row, constants.EditorCols.STEAMID.value)
+
+        # Update Name Override underlying item
+        item_name = self.table.item(row, constants.EditorCols.NAME_OVERRIDE.value)
+        if not item_name:
+            item_name = QTableWidgetItem()
+            self.table.setItem(row, constants.EditorCols.NAME_OVERRIDE.value, item_name)
+        
+        item_name.setText(text)
+        self._sync_cell_to_data(row, constants.EditorCols.NAME_OVERRIDE.value)
+        
+        self.main_window._on_editor_table_edited(None)
+
+    def auto_match_steam_id_selected(self, row):
+        """Attempt to auto-match Steam ID for selected rows using the cache."""
+        selected_rows = set()
+        for range_ in self.table.selectedRanges():
+            for r in range(range_.topRow(), range_.bottomRow() + 1):
+                selected_rows.add(r)
+        
+        if row is not None and row >= 0 and row not in selected_rows:
+            selected_rows.add(row)
+            
+        if not selected_rows:
+            return
+
+        self.push_undo()
+        
+        # Ensure cache is loaded
+        if not self.main_window.steam_cache_manager.normalized_steam_index:
+            self.main_window.steam_cache_manager.load_normalized_steam_index()
+            
+        if not self.main_window.steam_cache_manager.normalized_steam_index:
+            QMessageBox.warning(self, "Cache Empty", "Steam index cache is empty or not loaded.")
+            return
+
+        from Python.ui.name_processor import NameProcessor
+        release_groups = getattr(self.main_window, 'release_groups_set', set())
+        exclude_exe = getattr(self.main_window, 'exclude_exe_set', set())
+        name_processor = NameProcessor(release_groups, exclude_exe)
+        
+        matched_count = 0
+        fuzzy_count = 0
+        
+        all_keys = []
+        if self.main_window.steam_cache_manager.normalized_steam_index:
+             all_keys = list(self.main_window.steam_cache_manager.normalized_steam_index.keys())
+        
+        for r in selected_rows:
+            real_index = (self.current_page * self.page_size) + r
+            if real_index < len(self.filtered_data):
+                game = self.filtered_data[real_index]
+                
+                # Determine name to use
+                name_to_use = game.get('name_override', '')
+                if not name_to_use:
+                    # Fallback to filename without extension
+                    filename = game.get('name', '')
+                    name_to_use = os.path.splitext(filename)[0]
+                
+                # Normalize
+                clean_name = name_processor.get_display_name(name_to_use)
+                match_name = name_processor.get_match_name(clean_name)
+                
+                match_data = self.main_window.steam_cache_manager.normalized_steam_index.get(match_name)
+                
+                if match_data:
+                    steam_id = match_data.get("id")
+                    if steam_id:
+                        game['steam_id'] = steam_id
+                        # Update UI
+                        item = self.table.item(r, constants.EditorCols.STEAMID.value)
+                        if not item:
+                            item = QTableWidgetItem()
+                            self.table.setItem(r, constants.EditorCols.STEAMID.value, item)
+                        item.setText(str(steam_id))
+                        
+                        # Clear background if it was highlighted as empty
+                        item.setData(Qt.ItemDataRole.BackgroundRole, None)
+                        item.setData(Qt.ItemDataRole.ForegroundRole, None)
+                        
+                        matched_count += 1
+                elif all_keys:
+                    # Fuzzy match
+                    matches = difflib.get_close_matches(match_name, all_keys, n=5, cutoff=0.6)
+                    if matches:
+                        combo = QComboBox()
+                        combo.setEditable(True)
+                        combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+                        # Add original as first item
+                        combo.addItem(name_to_use, None)
+                        
+                        for m in matches:
+                            data = self.main_window.steam_cache_manager.normalized_steam_index[m]
+                            combo.addItem(f"{data['name']}", data['id'])
+                        
+                        combo.currentIndexChanged.connect(lambda idx, c=combo, r_idx=r: self._on_fuzzy_combo_changed(c, r_idx))
+                        combo.editTextChanged.connect(lambda text, c=combo, r_idx=r: self._on_fuzzy_combo_changed(c, r_idx))
+                        self.table.setCellWidget(r, constants.EditorCols.NAME_OVERRIDE.value, combo)
+                        fuzzy_count += 1
+        
+        if matched_count > 0 or fuzzy_count > 0:
+            self.main_window._on_editor_table_edited(None)
+            msg = f"Auto-matched {matched_count} Steam IDs"
+            if fuzzy_count > 0:
+                msg += f" and found {fuzzy_count} fuzzy matches"
+            self.main_window.statusBar().showMessage(msg, 3000)
+        else:
+            QMessageBox.information(self, "Auto-Match", "No matches found in cache for selected items.")
 
     def download_artwork_selected(self, row):
         """Download artwork for selected games."""

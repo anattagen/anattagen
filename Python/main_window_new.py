@@ -31,6 +31,7 @@ class MainWindow(QMainWindow):
         self.config_manager = ConfigManager()
         self.config = self.config_manager.load_config()
 
+        self.indexing_cancelled = False
         self.data_manager = DataManager(self.config, self)
         self.steam_cache_manager = SteamCacheManager(self)
         self.steam_manager = SteamManager(self.steam_cache_manager)
@@ -107,9 +108,11 @@ class MainWindow(QMainWindow):
         # --- Manager Signals ---
         self.config_manager.status_updated.connect(self.statusBar().showMessage)
         self.data_manager.status_updated.connect(self.statusBar().showMessage)
+        self.data_manager.status_updated.connect(self.deployment_tab.append_log_message)
         self.data_manager.index_data_loaded.connect(self.editor_tab.populate_from_data)
 
         self.steam_manager.status_updated.connect(self.statusBar().showMessage)
+        self.steam_manager.status_updated.connect(self.deployment_tab.append_log_message)
         self.steam_manager.download_started.connect(self._disable_ui_for_long_process)
         self.steam_manager.download_finished.connect(self._enable_ui_after_long_process)
         self.steam_manager.processing_prompt_requested.connect(self._on_processing_prompt_requested)
@@ -120,9 +123,12 @@ class MainWindow(QMainWindow):
         # --- UI Signals ---
         self.setup_tab.config_changed.connect(self._sync_config_from_ui_and_save)
         self.setup_tab.config_changed.connect(self.editor_tab.update_from_config)
+        # Update deployment tab overwrite boxes when setup config changes
+        self.setup_tab.config_changed.connect(lambda: self.deployment_tab.update_overwrite_checkboxes(self.config))
         
         self.deployment_tab.config_changed.connect(self._sync_config_from_ui_and_save)
-        self.deployment_tab.index_sources_requested.connect(self.data_manager.index_sources)
+        self.deployment_tab.index_sources_requested.connect(self._on_index_sources_requested)
+        self.deployment_tab.cancel_indexing_requested.connect(self._on_cancel_indexing_requested)
         self.deployment_tab.create_selected_requested.connect(self.on_create_button_clicked)
         self.deployment_tab.download_steam_json_requested.connect(self._on_download_steam_json_requested)
         self.deployment_tab.delete_steam_json_requested.connect(self._on_delete_steam_json_requested)
@@ -134,6 +140,22 @@ class MainWindow(QMainWindow):
         self.editor_tab.load_index_requested.connect(self._on_load_index_requested)
         self.editor_tab.delete_indexes_requested.connect(self._on_delete_indexes_requested)
         self.editor_tab.clear_view_requested.connect(self._on_clear_listview)
+
+    @pyqtSlot()
+    def _on_index_sources_requested(self):
+        """Handle request to index sources."""
+        self.deployment_tab.set_indexing_state(True)
+        # Reset cancellation flag
+        self.indexing_cancelled = False
+        # Call data manager (assuming it runs synchronously or emits finished signal)
+        self.data_manager.index_sources()
+        self.deployment_tab.set_indexing_state(False)
+
+    @pyqtSlot()
+    def _on_cancel_indexing_requested(self):
+        """Handle request to cancel indexing."""
+        self.indexing_cancelled = True
+        self.statusBar().showMessage("Cancelling indexing...", 3000)
 
     @pyqtSlot(int)
     def _on_download_steam_json_requested(self, version: int):
@@ -407,6 +429,7 @@ class MainWindow(QMainWindow):
         def update_progress(current, _, game_name):
             if progress.wasCanceled():
                 return False
+            self.deployment_tab.append_log_message(f"Creating launcher for: {game_name}")
             progress.setValue(current)
             progress.setLabelText(f"Creating launcher for: {game_name}")
             QApplication.processEvents()
@@ -424,8 +447,10 @@ class MainWindow(QMainWindow):
         
         if progress.wasCanceled():
             self.statusBar().showMessage(f"Creation cancelled. Processed: {result['processed_count']}", 5000)
+            self.deployment_tab.append_log_message(f"Creation cancelled. Processed: {result['processed_count']}")
         else:
             self.statusBar().showMessage(f"Creation process finished. Processed: {result['processed_count']}, Failed: {result['failed_count']}", 5000)
+            self.deployment_tab.append_log_message(f"Creation process finished. Processed: {result['processed_count']}, Failed: {result['failed_count']}")
 
     def _backup_steam_cache_files(self):
         """Backup Steam cache files before processing"""

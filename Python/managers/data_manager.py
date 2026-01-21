@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import QProgressDialog, QApplication
 
 from .. import constants
 from ..models import AppConfig
-from ..ui.game_indexer import index_games
+from ..managers.game_indexer import GameIndexer
 
 
 class DataManager(QObject):
@@ -43,22 +43,24 @@ class DataManager(QObject):
         self.status_updated.emit("Indexing game sources...", 0)
         logging.info("Starting to index game sources.")
         
+        # Ensure Steam cache is loaded for matching
+        if not self.main_window.steam_cache_manager.normalized_steam_index:
+            self.main_window.steam_cache_manager.load_normalized_steam_index()
+
         # Reset the cancellation flag
         self.main_window.indexing_cancelled = False
         
         # Initialize a set to track processed paths for this session
         self.main_window.processed_paths = set()
 
-        # Create and manage the progress dialog
-        progress = QProgressDialog("Indexing games...", "Cancel", 0, 0, self.main_window)
-        progress.setWindowTitle("Indexing Games")
-        progress.setWindowModality(Qt.WindowModality.WindowModal)
-        progress.canceled.connect(lambda: setattr(self.main_window, 'indexing_cancelled', True))
-        progress.show()
-
         def update_progress(path):
-            progress.setLabelText(f"Scanning: {path}")
+            if self.config.logging_verbosity == "Debug":
+                self.status_updated.emit(f"[t] scanning: {path}", 0)
             QApplication.processEvents()
+
+        def item_found(game_data):
+            path = os.path.join(game_data.get('directory', ''), game_data.get('name', ''))
+            self.status_updated.emit(f"[t] added: {path}", 0)
 
         try:
             # Load necessary data sets for the indexer
@@ -69,7 +71,8 @@ class DataManager(QObject):
             self.main_window.release_groups_set = self._load_set_file("release_groups.set")
 
             # Call the refactored, UI-agnostic indexer
-            found_games = index_games(self.main_window, progress_callback=update_progress)
+            indexer = GameIndexer(self.config, self.main_window)
+            found_games = indexer.index_sources(progress_callback=update_progress, item_found_callback=item_found)
 
             if self.main_window.indexing_cancelled:
                 logging.info("Indexing was cancelled by the user.")
@@ -86,15 +89,64 @@ class DataManager(QObject):
                     index_file_path = os.path.join(constants.APP_ROOT_DIR, "current.index")
                     self.save_editor_table_to_index(found_games, index_file_path)
 
+                # --- Generate and Log Summary ---
+                # 1. Identical Name Overrides
+                name_counts = {}
+                for g in found_games:
+                    name = g.get('name_override', '')
+                    name_counts[name] = name_counts.get(name, 0) + 1
+                
+                duplicate_files_count = sum(count for name, count in name_counts.items() if count > 1)
+                
+                # 2. Missing Steam IDs
+                missing_steam_id_count = sum(1 for g in found_games if not g.get('steam_id') or g.get('steam_id') == 'NOT_FOUND_IN_DATA')
+                
+                # 3. Demoted Items (Create = False)
+                demoted_count = sum(1 for g in found_games if not g.get('create', False))
+                
+                # 3. Large LC Files (>5MB) set to create
+                large_lc_count = 0
+                large_lc_details = []
+                path_keys = [
+                    'controller_mapper_path', 'borderless_windowing_path', 'multi_monitor_app_path',
+                    'just_after_launch_path', 'just_before_exit_path',
+                    'pre1_path', 'pre2_path', 'pre3_path',
+                    'post1_path', 'post2_path', 'post3_path',
+                    'launcher_executable'
+                ]
+                
+                for g in found_games:
+                    if g.get('create', False):
+                        for key in path_keys:
+                            mode = self.config.deployment_path_modes.get(key, 'CEN')
+                            if mode == 'LC':
+                                path = g.get(key, '')
+                                if path and os.path.exists(path):
+                                    try:
+                                        if os.path.getsize(path) > 5 * 1024 * 1024:
+                                            large_lc_count += 1
+                                    except: pass
+
+                separator = "_" * 50
+                self.status_updated.emit(f"\n{separator}\n{separator}\n{separator}", 0)
+                self.status_updated.emit(f"Indexing Summary:", 0)
+                self.status_updated.emit(f"  - Files with identical Name Overrides: {duplicate_files_count}", 0)
+                self.status_updated.emit(f"  - Files without Steam ID: {missing_steam_id_count}", 0)
+                self.status_updated.emit(f"  - Demoted items (Create=False): {demoted_count}", 0)
+                
+                if large_lc_count > 0:
+                    self.status_updated.emit(f"  - WARNING: {large_lc_count} items > 5MB are set to LC and Create.", 0)
+
         except Exception as e:
             logging.error(f"Error during indexing: {e}", exc_info=True)
             self.status_updated.emit(f"Error during indexing: {e}", 5000)
-        finally:
-            # Ensure the progress dialog is closed
-            progress.close()
 
     def load_index(self, file_path):
         """Loads game data from a .index file."""
+        # Ensure Steam cache is loaded for matching/display purposes
+        if not self.main_window.steam_cache_manager.normalized_steam_index:
+            self.main_window.steam_cache_manager.load_normalized_steam_index()
+            
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 games_data = json.load(f)

@@ -1,10 +1,13 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
-    QPushButton, QCheckBox, QGroupBox, QRadioButton, QButtonGroup, QGridLayout
+    QPushButton, QCheckBox, QGroupBox, QRadioButton, QButtonGroup, QGridLayout,
+    QLineEdit, QTextEdit, QProgressBar, QDialog, QDialogButtonBox, QFileDialog
 )
 from PyQt6.QtCore import pyqtSignal, Qt
 from Python.ui.accordion import AccordionSection
 from Python.models import AppConfig
+from Python import constants
+import datetime
 import os
 
 
@@ -45,11 +48,62 @@ PATH_LABELS = {
     "post3_path": "Overwrite Post-Launch App 3"
 }
 
+class LogViewerDialog(QDialog):
+    """Modal dialog to display process logs."""
+    def __init__(self, text, parent=None, clear_callback=None):
+        super().__init__(parent)
+        self.setWindowTitle("Process Log")
+        self.resize(600, 400)
+        self.clear_callback = clear_callback
+        
+        layout = QVBoxLayout(self)
+        self.text_edit = QTextEdit()
+        self.text_edit.setReadOnly(True)
+        self.text_edit.setText(text)
+        layout.addWidget(self.text_edit)
+        
+        # Buttons Layout
+        btn_layout = QHBoxLayout()
+        
+        save_btn = QPushButton("Save")
+        save_btn.clicked.connect(self.save_log)
+        btn_layout.addWidget(save_btn)
+        
+        clear_btn = QPushButton("Clear")
+        clear_btn.clicked.connect(self.clear_log)
+        btn_layout.addWidget(clear_btn)
+        
+        btn_layout.addStretch()
+        
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(close_btn)
+        
+        layout.addLayout(btn_layout)
+
+    def append_text(self, text):
+        self.text_edit.append(text)
+
+    def save_log(self):
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save Log", "", "Text Files (*.txt);;All Files (*)")
+        if file_path:
+            try:
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(self.text_edit.toPlainText())
+            except Exception as e:
+                pass
+
+    def clear_log(self):
+        self.text_edit.clear()
+        if self.clear_callback:
+            self.clear_callback()
+
 class DeploymentTab(QWidget):
     """A QWidget that encapsulates all UI and logic for the Deployment tab."""
 
     config_changed = pyqtSignal()
     index_sources_requested = pyqtSignal()
+    cancel_indexing_requested = pyqtSignal()
     create_selected_requested = pyqtSignal()
     download_steam_json_requested = pyqtSignal(int)
     delete_steam_json_requested = pyqtSignal()
@@ -60,6 +114,9 @@ class DeploymentTab(QWidget):
         super().__init__(main_window)
         self.main_window = main_window
         self.overwrite_checkboxes = {}
+        self.is_indexing = False
+        self.log_buffer = []
+        self.current_log_dialog = None
         self._populate_ui()
 
     def _populate_ui(self):
@@ -68,16 +125,16 @@ class DeploymentTab(QWidget):
         main_layout.setContentsMargins(10, 10, 10, 10)
 
         # --- General Options Section ---
-        general_options_widget = QWidget()
-        general_options_layout = QVBoxLayout(general_options_widget)
+        # Renamed to Database Indexing and split into 2 columns
+        database_indexing_widget = QWidget()
+        database_indexing_layout = QHBoxLayout(database_indexing_widget)
 
-        # Row 3: Enable Steam Name Matching (moved from Setup Tab)
-        self.name_check_checkbox = QCheckBox("Enable Steam Name Matching")
+        # --- Left Column: Acquisition & File Handling ---
+        left_col = QWidget()
+        left_layout = QVBoxLayout(left_col)
+        left_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.name_check_checkbox.setToolTip("Attempt to match indexed games with Steam titles for better naming. Requires steam.json.")
-        general_options_layout.addWidget(self.name_check_checkbox)
-
-        # Row 4: Steam JSON Version (moved from Setup Tab)
+        # Steam JSON Version
         steam_version_layout = QHBoxLayout()
         steam_version_label = QLabel("Steam JSON Version:")
         self.steam_json_v1_radio = QRadioButton("v1")
@@ -89,27 +146,75 @@ class DeploymentTab(QWidget):
         steam_version_layout.addWidget(steam_version_label)
         steam_version_layout.addWidget(self.steam_json_v1_radio)
         steam_version_layout.addWidget(self.steam_json_v2_radio)
+        steam_version_layout.addStretch()
+        left_layout.addLayout(steam_version_layout)
 
-        # Add a single download button
+        # Download & Process Buttons
+        steam_actions_layout = QHBoxLayout()
         self.download_steam_json_button = QPushButton("Download")
         self.download_steam_json_button.setToolTip("Download the selected version of steam.json")
-        steam_version_layout.addWidget(self.download_steam_json_button)
+        self.process_json_button = QPushButton("Process Json")
+        steam_actions_layout.addWidget(self.download_steam_json_button)
+        steam_actions_layout.addWidget(self.process_json_button)
+        left_layout.addLayout(steam_actions_layout)
 
-        steam_version_layout.addStretch(1)
-        general_options_layout.addLayout(steam_version_layout)
-
-        # Row 5: Steam Data Management Buttons
-        steam_data_buttons_layout = QHBoxLayout()
+        # Delete Buttons
+        delete_actions_layout = QHBoxLayout()
         self.delete_json_button = QPushButton("Delete steam.json")
         self.delete_cache_button = QPushButton("Delete Steam Caches")
-        self.process_json_button = QPushButton("Process Json")
+        delete_actions_layout.addWidget(self.delete_json_button)
+        delete_actions_layout.addWidget(self.delete_cache_button)
+        left_layout.addLayout(delete_actions_layout)
 
-        steam_data_buttons_layout.addWidget(self.process_json_button)
-        steam_data_buttons_layout.addStretch(1)
-        steam_data_buttons_layout.addWidget(self.delete_json_button)
-        steam_data_buttons_layout.addWidget(self.delete_cache_button)
-        general_options_layout.addSpacing(10)
-        general_options_layout.addLayout(steam_data_buttons_layout)
+        # Steam Status Textbox
+        self.steam_status_container = QWidget()
+        status_layout = QHBoxLayout(self.steam_status_container)
+        status_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.steam_status_textbox = QTextEdit()
+        self.steam_status_textbox.setReadOnly(True)
+        self.steam_status_textbox.setFixedHeight(65)
+        self.refresh_status_btn = QPushButton("U")
+        self.refresh_status_btn.setToolTip("Update Steam File Status")
+        self.refresh_status_btn.setFixedWidth(30)
+        self.refresh_status_btn.clicked.connect(self.update_steam_status)
+        
+        status_layout.addWidget(self.refresh_status_btn)
+        status_layout.addWidget(self.steam_status_textbox)
+        left_layout.addWidget(self.steam_status_container)
+        
+        left_layout.addStretch()
+
+        # --- Right Column: Deployment Options ---
+        right_col = QWidget()
+        right_layout = QVBoxLayout(right_col)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Enable Steam Name Matching
+        self.name_check_checkbox = QCheckBox("Enable Steam Name Matching")
+        self.name_check_checkbox.setToolTip("Attempt to match indexed games with Steam titles for better naming. Requires steam.json.")
+        right_layout.addWidget(self.name_check_checkbox)
+        
+        self.indexing_progress = QProgressBar()
+        self.indexing_progress.setRange(0, 0) # Indeterminate
+        self.indexing_progress.setVisible(False)
+
+        self.index_sources_button = QPushButton("INDEX SOURCES")
+        self.index_sources_button.setStyleSheet("QPushButton { font-weight: bold; background-color: #4CAF50; color: white; font-size: 120%; }")
+        self.index_sources_button.clicked.connect(self.index_sources_requested.emit)
+        self.index_sources_button.setMinimumHeight(40)
+
+        self.view_log_button = QPushButton("View Log")
+        self.view_log_button.clicked.connect(self.show_log_viewer)
+
+        right_layout.addWidget(self.index_sources_button)
+        right_layout.addWidget(self.indexing_progress)
+        right_layout.addWidget(self.view_log_button)
+        right_layout.addStretch()
+
+        # Add columns to main layout
+        database_indexing_layout.addWidget(left_col, 1)
+        database_indexing_layout.addWidget(right_col, 1)
 
         # --- Creation Options Section ---
         creation_options_widget = QWidget()
@@ -120,10 +225,6 @@ class DeploymentTab(QWidget):
         
         self.download_artwork_checkbox = QCheckBox("Download Artwork")
         self.download_artwork_checkbox.setToolTip("Downloads header and background images to the profile folder.")
-
-        # Index Sources moved to Database Indexing (General Options) section
-        index_sources_button = QPushButton("INDEX SOURCES")
-        index_sources_button.setStyleSheet("QPushButton { font-weight: bold; }")
 
         # Create button shows dynamic count of selected items
         self.create_button = QPushButton()
@@ -163,7 +264,7 @@ class DeploymentTab(QWidget):
 
         # --- Accordion Setup ---
         # Rename General Options to Database Indexing
-        general_options_section = AccordionSection("DATABASE INDEXING", general_options_widget)
+        general_options_section = AccordionSection("DATABASE INDEXING", database_indexing_widget)
         general_options_section.content_height += 75
         creation_section = AccordionSection("CREATION", creation_options_widget)
         creation_section.content_height += 75
@@ -178,22 +279,45 @@ class DeploymentTab(QWidget):
         self.download_game_json_checkbox.stateChanged.connect(self.config_changed.emit)
         self.download_artwork_checkbox.stateChanged.connect(self.config_changed.emit)
 
-        index_sources_button.clicked.connect(self.index_sources_requested.emit)
         self.create_button.clicked.connect(self.create_selected_requested.emit)
         self.download_steam_json_button.clicked.connect(self._on_download_clicked)
         self.delete_json_button.clicked.connect(self.delete_steam_json_requested.emit)
         self.delete_cache_button.clicked.connect(self.delete_steam_cache_requested.emit)
         self.process_json_button.clicked.connect(self.process_steam_json_requested.emit)
 
-        # Add the Index Sources button into the general options area for prominence
-        try:
-            # place after the steam data buttons
-            general_options_layout.addWidget(index_sources_button)
-        except Exception:
-            pass
-
         # Initialize and connect to editor tab data changes
         self.update_create_button_count()
+        self.update_steam_status()
+
+    def set_indexing_state(self, active):
+        """Update UI state based on indexing status."""
+        self.is_indexing = active
+        self.indexing_progress.setVisible(active)
+        if active:
+            self.index_sources_button.setText("CANCEL")
+            self.index_sources_button.setStyleSheet("QPushButton { font-weight: bold; background-color: #F44336; color: white; font-size: 120%; }")
+        else:
+            self.index_sources_button.setText("INDEX SOURCES")
+            self.index_sources_button.setStyleSheet("QPushButton { font-weight: bold; background-color: #4CAF50; color: white; font-size: 120%; }")
+
+    def show_log_viewer(self):
+        """Open the modal log viewer dialog."""
+        log_text = "\n".join(self.log_buffer)
+        self.current_log_dialog = LogViewerDialog(log_text, self, clear_callback=self.clear_log_buffer)
+        self.current_log_dialog.exec()
+        self.current_log_dialog = None
+
+    def clear_log_buffer(self):
+        self.log_buffer = []
+
+    def append_log_message(self, message, timeout=0):
+        """Append a message to the log buffer and update dialog if open."""
+        # timeout arg is accepted to be compatible with status_updated signal signature (str, int)
+        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+        entry = f"[{timestamp}] {message}"
+        self.log_buffer.append(entry)
+        if self.current_log_dialog and self.current_log_dialog.isVisible():
+            self.current_log_dialog.append_text(entry)
 
     def update_create_button_count(self):
         """Update the create button text with the number of items marked for creation."""
@@ -205,6 +329,63 @@ class DeploymentTab(QWidget):
             pass
         self.create_button.setText(f"CREATE {count} ITEMS")
         self.create_button.setEnabled(count > 0)
+
+    def update_steam_status(self):
+        """Update the status textbox for Steam files."""
+        files = [
+            ("steam.json", constants.STEAM_JSON_FILE),
+            ("steam_filtered.txt", os.path.join(constants.APP_ROOT_DIR, "steam_filtered.txt")),
+            ("normalized_steam_games.cache", os.path.join(constants.APP_ROOT_DIR, "normalized_steam_games.cache"))
+        ]
+        
+        status_parts = []
+        alert = False
+        
+        for name, path in files:
+            if os.path.exists(path):
+                size = os.path.getsize(path)
+                mtime = os.path.getmtime(path)
+                date_str = datetime.datetime.fromtimestamp(mtime).strftime('%y/%m/%d %H:%M')
+                
+                size_str = f"{size/1024:.1f}KB"
+                if size > 1024*1024:
+                    size_str = f"{size/(1024*1024):.2f}MB"
+                
+                status_parts.append(f"{name}: {size_str} ({date_str})")
+                
+                if size < 500 * 1024: # 500k
+                    alert = True
+            else:
+                status_parts.append(f"{name}: MISSING")
+                alert = True
+        
+        self.steam_status_textbox.setText("\n".join(status_parts))
+        
+        if alert:
+            self.steam_status_textbox.setStyleSheet("QTextEdit { color: red; font-weight: bold; }")
+        else:
+            self.steam_status_textbox.setStyleSheet("")
+
+    def update_overwrite_checkboxes(self, config: AppConfig):
+        """Uncheck overwrite boxes if the corresponding path is empty or disabled."""
+        self.blockSignals(True)
+        for key, cb in self.overwrite_checkboxes.items():
+            # Check if path is empty
+            path_val = getattr(config, key, "")
+            
+            # Check if enabled (if applicable)
+            enabled_key = f"{key}_enabled"
+            is_enabled = config.defaults.get(enabled_key, True)
+            
+            # If path is empty or explicitly disabled, uncheck overwrite
+            if not path_val or not is_enabled:
+                cb.setChecked(False)
+                # Update config to match UI
+                config.overwrite_states[key] = False
+            else:
+                # Otherwise respect the existing config state
+                cb.setChecked(config.overwrite_states.get(key, True))
+        self.blockSignals(False)
 
     def _on_download_clicked(self):
         """Emit the download signal with the currently selected version."""

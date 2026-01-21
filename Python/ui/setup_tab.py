@@ -993,7 +993,13 @@ class SetupTab(QWidget):
                 row = self.path_rows[attr_name]
                 row.path = getattr(config, attr_name, "")
                 row.mode = config.deployment_path_modes.get(attr_name, "CEN")
-                row.enabled = config.defaults.get(f"{attr_name}_enabled", True)
+                
+                # Default state logic: Uncheck if path is empty, unless it's a core directory
+                if not row.path and attr_name not in ["profiles_dir", "launchers_dir"]:
+                    row.enabled = False
+                else:
+                    row.enabled = config.defaults.get(f"{attr_name}_enabled", True)
+
                 row.run_wait = config.run_wait_states.get(f"{attr_name}_run_wait", False)
 
                 # Initialize last detected tool to prevent overwrite on load/sync
