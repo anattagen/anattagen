@@ -2,6 +2,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget, 
     QMessageBox, QMenu, QFileDialog, QProgressDialog
 )
+from Python.ui.theme.gui.theme_manager import ThemeManager
 from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtGui import QCursor, QIcon
 import os
@@ -14,6 +15,7 @@ from Python.managers.config_manager import ConfigManager
 from Python.managers.data_manager import DataManager
 from Python.managers.steam_manager import SteamManager
 from Python import constants
+from Python.ui.theme.gui.images import icons_rc
 import logging
 
 
@@ -21,8 +23,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         """Initialize the main window"""
         super().__init__()
-        
-        # Store original style before any changes are made
+         # Store original style before any changes are made
         app = QApplication.instance()
         self.original_style_name = app.style().objectName()
         self.original_palette = app.palette()

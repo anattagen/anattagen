@@ -1,0 +1,34 @@
+<RCC>
+    <qresource prefix="/icons">
+        <file>svg_icons/active_menu.svg</file>
+        <file>svg_icons/icon_add_user.svg</file>
+        <file>svg_icons/icon_arrow_left.svg</file>
+        <file>svg_icons/icon_arrow_right.svg</file>
+        <file>svg_icons/icon_attachment.svg</file>
+        <file>svg_icons/icon_busy.svg</file>
+        <file>svg_icons/icon_close.svg</file>
+        <file>svg_icons/icon_emoticons.svg</file>
+        <file>svg_icons/icon_file.svg</file>
+        <file>svg_icons/icon_folder.svg</file>
+        <file>svg_icons/icon_folder_open.svg</file>
+        <file>svg_icons/icon_heart.svg</file>
+        <file>svg_icons/icon_home.svg</file>
+        <file>svg_icons/icon_idle.svg</file>
+        <file>svg_icons/icon_info.svg</file>
+        <file>svg_icons/icon_invisible.svg</file>
+        <file>svg_icons/icon_maximize.svg</file>
+        <file>svg_icons/icon_menu.svg</file>
+        <file>svg_icons/icon_menu_close.svg</file>
+        <file>svg_icons/icon_minimize.svg</file>
+        <file>svg_icons/icon_more_options.svg</file>
+        <file>svg_icons/icon_online.svg</file>
+        <file>svg_icons/icon_restore.svg</file>
+        <file>svg_icons/icon_save.svg</file>
+        <file>svg_icons/icon_search.svg</file>
+        <file>svg_icons/icon_send.svg</file>
+        <file>svg_icons/icon_settings.svg</file>
+        <file>svg_icons/icon_signal.svg</file>
+        <file>svg_icons/icon_widgets.svg</file>
+        <file>svg_icons/no_icon.svg</file>
+    </qresource>
+</RCC>

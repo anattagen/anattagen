@@ -34,6 +34,7 @@ class PathConfigRow(QWidget):
         self.is_directory = is_directory
         self.add_enabled = add_enabled
         self.add_run_wait = add_run_wait
+        self._overwrite = True
         
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -112,7 +113,12 @@ class PathConfigRow(QWidget):
         """Apply styling if LC is enabled and file > 10MB."""
         path = self.line_edit.text()
         style = ""
-        if self.mode == "LC" and path and os.path.exists(path):
+         
+        if self.mode == "LC" and not self.overwrite:
+            style = "QLineEdit { color: red; }"
+        elif self.mode == "CEN":
+            style = "QLineEdit { color: green; }"
+        elif self.mode == "LC" and path and os.path.exists(path):
             try:
                 if os.path.isfile(path) and os.path.getsize(path) > 10 * 1024 * 1024:
                     style = "QLineEdit { font-weight: bold; text-decoration: underline; color: red; }"
@@ -192,3 +198,12 @@ class PathConfigRow(QWidget):
     def run_wait(self, value):
         if self.run_wait_cb:
             self.run_wait_cb.setChecked(value)
+
+    @property
+    def overwrite(self):
+        return self._overwrite
+
+    @overwrite.setter
+    def overwrite(self, value):
+        self._overwrite = value
+        self._check_styling()

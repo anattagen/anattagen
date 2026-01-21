@@ -58,90 +58,67 @@ Run the installer or extract the binary to a location of your choice, **or** dow
 ```sh
 [RJ_PROJ]
 
-├── README.set
-├── requirements_win.txt
-├── requirements.txt
-├── steam.json
-│
-├── assets/
-│   ├── ax_DeskTemplate.set
-│   ├── ax_GameTemplate.set
-│   ├── ax_KBM_Template.set
-│   ├── ax_Trigger.set
-│   ├── cmdtemplate.set
-│   ├── demoted.set
-│   ├── exclude_exe.set
-│   ├── folder_demoted.set
-│   ├── folder_exclude.set
-│   ├── Joystick.ico
-│   ├── killprocs.set
-│   ├── ks_Blank.Template.set
-│   ├── ks_Desk.Template.set
-│   ├── ks_Game.Template.set
-│   ├── ks_Trigger.set
-│   ├── release_groups.set
-│   ├── repos.set
-│   └── transformed_vars.set
-│
-├── bin/
-│   ├── Shortcut.exe
-│   └── Shortcut.txt
-│
-├── Python/
+anattagen/
+├── anattagen/
 │   ├── __init__.py
-│   ├── constants.py
-│   ├── events.py
-│   ├── Launcher.py
-│   ├── main_window_new.py
-│   ├── main.py
-│   ├── models.py
-│   ├── sequence_executor.py
 │   │
-│   ├── managers/
+│   ├── core/                    # Existing logic (unchanged)
 │   │   ├── __init__.py
-│   │   ├── config_manager.py
-│   │   ├── data_manager.py
-│   │   ├── index_manager.py
-│   │   ├── steam_manager.py
-│   │   └── steam_processor.py
+│   │   └── ...
 │   │
-│   └── ui/
-│       ├── accordion.py
-│       ├── deployment_tab_ui.py
-│       ├── deployment_tab.py
-│       ├── editor_tab_ui.py
-│       ├── editor_tab.py
-│       ├── game_indexer.py
-│       ├── name_processor.py
-│       ├── name_utils.py
-│       ├── setup_tab.py
-│       ├── steam_cache.py
-│       ├── steam_utils.py
-│       ├── widgets.py
-│       │
-│       └── creation/
-│           ├── creation_controller.py
-│           ├── file_propagator.py
-│           └── joystick_profile_manager.py
+│   ├── ui/
+│   │   ├── __init__.py
+│   │   │
+│   │   ├── main_window.py       # Existing or refactored main window
+│   │   ├── dialogs/             # Custom dialogs
+│   │   │   ├── __init__.py
+│   │   │   └── ...
+│   │   │
+│   │   ├── widgets/             # App-specific widgets
+│   │   │   ├── __init__.py
+│   │   │   └── ...
+│   │   │
+│   │   ├── theme/               # 🔥 NEW: Theme system
+│   │   │   ├── __init__.py
+│   │   │   ├── theme_loader.py
+│   │   │   │
+│   │   │   └── pyonedark/        # PyOneDark integration
+│   │   │       ├── __init__.py
+│   │   │       │
+│   │   │       ├── themes/
+│   │   │       │   ├── dark.qss
+│   │   │       │   └── light.qss
+│   │   │       │
+│   │   │       ├── resources/
+│   │   │       │   ├── icons.qrc
+│   │   │       │   └── icons/    # svg/png files
+│   │   │       │
+│   │   │       └── widgets/      # (Optional) PyOneDark widgets
+│   │   │           ├── __init__.py
+│   │   │           └── ...
+│   │   │
+│   │   └── utils/
+│   │       ├── __init__.py
+│   │       └── ...
+│   │
+│   ├── assets/                  # Non-Qt assets (data, models, etc.)
+│   │   └── ...
+│   │
+│   └── config/
+│       ├── __init__.py
+│       └── settings.py
 │
-└── site/
-    ├── AnkaCoder_b.ttf
-    ├── AnonymiceProNerdFontPropo-Regular.ttf
-    ├── Hermit-Regular.otf
-    ├── index.html
-    ├── index.set
-    ├── InterUI.ttf
-    ├── key.ico
-    ├── malgun.ttf
-    ├── MonofurNerdFont-Regular.ttf
-    ├── TruenoLt.otf
-    └── img/
-        ├── Install.png
-        ├── key.png
-        ├── keymapper.png
-        ├── runas.png
-        ├── tip.png
-        └── Update.png
+├── scripts/
+│   └── run_anattagen.py
+│
+├── tests/
+│   └── ...
+│
+├── requirements.txt
+├── requirements_win.txt
+├── README.md
+└── pyproject.toml / setup.py
+
 ```
 # Documentation
 
@@ -185,7 +162,7 @@ win
 ## Apple Mac Users
 ```
 		Ask Tim if it's okay.  Hint: (It's not okay)
-		Upgrade your monitor-stand.  Pleb.
+		Upgrade your monitor-stand. Simplify your life and remove all button
 ```
 
 

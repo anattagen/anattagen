@@ -17,7 +17,7 @@ from Python.models import AppConfig
 from Python.ui.widgets import DragDropListWidget, PathConfigRow
 from Python.ui.accordion import AccordionSection
 from Python import constants
-
+from .theme.gui.core import json_settings, json_themes
 class DownloadThread(QThread):
     """Thread for downloading and extracting tools."""
     progress = pyqtSignal(int)
@@ -144,7 +144,40 @@ class SetupTab(QWidget):
         "Borderless": "Starts/Stops Borderless Gaming.",
         "Cloud-Sync": "Runs the Cloud Sync application.",
     }
+    def apply_selected_theme(self, theme_name: str):
+        """Applies the selected JSON theme to the current UI."""
+        if not theme_name:
+            return
 
+        themes_dir = os.path.join(os.path.dirname(__file__), "theme", "gui", "themes")
+        theme_file = os.path.join(themes_dir, f"{theme_name}.json")
+
+        if not os.path.exists(theme_file):
+            print(f"Theme not found: {theme_file}")
+            return
+
+        # Load framework settings
+        json_settings.Settings()  # auto-load settings
+
+        # Load the theme JSON
+        theme_engine = json_themes.JsonThemes()
+
+        # Detect correct method to load theme
+        if hasattr(theme_engine, "load_theme"):
+            theme_engine.load_theme(theme_file)
+        elif hasattr(theme_engine, "set_theme"):
+            theme_engine.set_theme(theme_file)
+        elif hasattr(theme_engine, "load"):
+            theme_engine.load(theme_file)
+        else:
+            raise RuntimeError("Unsupported JsonThemes API in your framework.")
+
+        # Apply the generated stylesheet to the QApplication
+        app = QApplication.instance()
+        if app is not None:
+            app.setStyleSheet(theme_engine.stylesheet)
+        else:
+            print("No QApplication instance found; cannot apply theme")
     def __init__(self, parent=None): # parent is main_window
         super().__init__(parent)
         self.main_window = parent
@@ -399,7 +432,27 @@ class SetupTab(QWidget):
         # Theme
         self.theme_combo = QComboBox()
         self.theme_combo.addItems(["System", "Dark", "Light", "Auto", "Midnight", "Ocean"])
+        themes_dir = os.path.join(os.path.dirname(__file__), "theme", "gui", "themes")
+        available_themes = [
+            f.replace(".json", "") for f in os.listdir(themes_dir) if f.endswith(".json")
+        ] 
+        self.theme_combo.addItems(sorted(available_themes))
         appearance_layout.addRow("Theme:", self.theme_combo)
+        try:
+            settings = json_settings.Settings()
+            current_theme = getattr(settings, "theme_name", "default")
+        except Exception:
+            current_theme = "default"
+
+    # Set combo box to current theme
+        if current_theme in self.available_themes:
+            index = self.available_themes.index(current_theme)
+            self.theme_combo.setCurrentIndex(index)
+
+    # Connect signal to apply theme on selection
+        self.theme_combo.currentTextChanged.connect(self.apply_selected_theme)
+    # --- end theme combo setup ---
+        
         # Editor Page Size
         self.page_size_spin = QSpinBox()
         self.page_size_spin.setRange(75, 2000)
