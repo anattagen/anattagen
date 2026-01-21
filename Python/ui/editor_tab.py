@@ -689,11 +689,14 @@ class EditorTab(QWidget):
 
         menu = QMenu(self)
         select_col_action = menu.addAction("Select Column")
+        resize_col_action = menu.addAction("Resize to Contents")
         
         action = menu.exec(self.table.horizontalHeader().mapToGlobal(position))
         
         if action == select_col_action:
             self.table.selectColumn(index)
+        elif action == resize_col_action:
+            self.table.resizeColumnToContents(index)
 
     def on_context_menu(self, position):
         """Create and display custom context menu for the table."""

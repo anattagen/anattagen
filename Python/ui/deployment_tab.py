@@ -366,10 +366,16 @@ class DeploymentTab(QWidget):
         else:
             self.steam_status_textbox.setStyleSheet("")
 
-    def update_overwrite_checkboxes(self, config: AppConfig):
+    def update_overwrite_checkboxes(self, config: AppConfig, specific_key: str = None):
         """Uncheck overwrite boxes if the corresponding path is empty or disabled."""
         self.blockSignals(True)
-        for key, cb in self.overwrite_checkboxes.items():
+        
+        keys_to_update = [specific_key] if specific_key else self.overwrite_checkboxes.keys()
+        
+        for key in keys_to_update:
+            if key not in self.overwrite_checkboxes:
+                continue
+            cb = self.overwrite_checkboxes[key]
             # Check if path is empty
             path_val = getattr(config, key, "")
             
@@ -377,11 +383,20 @@ class DeploymentTab(QWidget):
             enabled_key = f"{key}_enabled"
             is_enabled = config.defaults.get(enabled_key, True)
             
+            # Check propagation mode
+            mode = config.deployment_path_modes.get(key, "CEN")
+            
             # If path is empty or explicitly disabled, uncheck overwrite
             if not path_val or not is_enabled:
                 cb.setChecked(False)
                 # Update config to match UI
                 config.overwrite_states[key] = False
+            elif mode == "CEN":
+                cb.setChecked(False)
+                config.overwrite_states[key] = False
+            elif mode == "LC":
+                cb.setChecked(True)
+                config.overwrite_states[key] = True
             else:
                 # Otherwise respect the existing config state
                 cb.setChecked(config.overwrite_states.get(key, True))

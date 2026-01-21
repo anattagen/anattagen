@@ -114,6 +114,7 @@ class SetupTab(QWidget):
     """A QWidget that encapsulates all UI and logic for the Setup tab."""
     
     config_changed = pyqtSignal()
+    setting_changed = pyqtSignal(str)
     
     PATH_ATTRIBUTES = [
         "profiles_dir", "launchers_dir", "launcher_executable", "controller_mapper_path", 
@@ -539,8 +540,9 @@ class SetupTab(QWidget):
         self.excluded_dirs_list.model().rowsInserted.connect(lambda: self.config_changed.emit())
         self.excluded_dirs_list.model().rowsRemoved.connect(self.config_changed.emit)
         # Path rows
-        for row in self.path_rows.values():
+        for key, row in self.path_rows.items():
             row.valueChanged.connect(self.config_changed.emit)
+            row.valueChanged.connect(lambda k=key: self.setting_changed.emit(k))
             row.downloadRequested.connect(self._on_download_requested)
         
         for key, row in self.path_rows.items():

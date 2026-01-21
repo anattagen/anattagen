@@ -123,8 +123,8 @@ class MainWindow(QMainWindow):
         # --- UI Signals ---
         self.setup_tab.config_changed.connect(self._sync_config_from_ui_and_save)
         self.setup_tab.config_changed.connect(self.editor_tab.update_from_config)
-        # Update deployment tab overwrite boxes when setup config changes
-        self.setup_tab.config_changed.connect(lambda: self.deployment_tab.update_overwrite_checkboxes(self.config))
+        # Update deployment tab overwrite boxes when specific settings change
+        self.setup_tab.setting_changed.connect(lambda key: self.deployment_tab.update_overwrite_checkboxes(self.config, key))
         
         self.deployment_tab.config_changed.connect(self._sync_config_from_ui_and_save)
         self.deployment_tab.index_sources_requested.connect(self._on_index_sources_requested)
@@ -402,27 +402,100 @@ class MainWindow(QMainWindow):
             if reply != QMessageBox.StandardButton.Yes:
                 return
 
-        # Confirmation Dialog
-        count = len(games_to_process)
-        msg_text = f"Ready to create {count} item(s).\n\nSelected items:"
+        # --- Statistics Calculation ---
+        create_count = len(games_to_process)
         
-        # Show first 10 items
-        preview_limit = 10
-        for i, game in enumerate(games_to_process[:preview_limit]):
-            name = game.get('name_override') or game.get('name') or "Unknown"
-            msg_text += f"\n- {name}"
+        # 1. Duplicates
+        name_counts = {}
+        for g in games_to_process:
+            name = g.get('name_override', '')
+            name_counts[name] = name_counts.get(name, 0) + 1
+        duplicate_count = sum(1 for g in games_to_process if name_counts.get(g.get('name_override', ''), 0) > 1)
+        
+        # 2. Empty Steam ID
+        empty_steam_id_count = sum(1 for g in games_to_process if not g.get('steam_id') or str(g.get('steam_id')) == 'NOT_FOUND_IN_DATA')
+        
+        # 3. Launchers/Profiles Status
+        def get_status_html(name, enabled_key, overwrite_key):
+            enabled = self.config.defaults.get(enabled_key, True)
+            overwrite = self.config.overwrite_states.get(overwrite_key, True)
+            status_str = f"Create: {enabled}, Overwrite: {overwrite}"
+            if not enabled or not overwrite:
+                return f"<b><font color='red'>{name}: {status_str}</font></b>"
+            return f"{name}: {status_str}"
+
+        launchers_status = get_status_html("Launchers", "launchers_dir_enabled", "launchers_dir")
+        profiles_status = get_status_html("Profiles", "profiles_dir_enabled", "profiles_dir")
+        
+        # 4. File Size Calculation
+        lc_unchecked_size = 0
+        lc_overwrite_size = 0
+        
+        file_keys = [
+            "launcher_executable",
+            "controller_mapper_path", "borderless_gaming_path", "multi_monitor_tool_path",
+            "just_after_launch_path", "just_before_exit_path",
+            "p1_profile_path", "p2_profile_path", "mediacenter_profile_path",
+            "multimonitor_gaming_path", "multimonitor_media_path",
+            "pre1_path", "post1_path", "pre2_path", "post2_path", "pre3_path", "post3_path"
+        ]
+        
+        for key in file_keys:
+            mode = self.config.deployment_path_modes.get(key, "CEN")
+            if mode == "LC":
+                path = getattr(self.config, key, "")
+                if path and os.path.exists(path) and os.path.isfile(path):
+                    size = os.path.getsize(path)
+                    overwrite = self.config.overwrite_states.get(key, True)
+                    if not overwrite:
+                        lc_unchecked_size += size
+                    else:
+                        lc_overwrite_size += size
+
+        # Count existing profiles
+        existing_profiles_count = 0
+        from Python.ui.name_utils import make_safe_filename
+        for g in games_to_process:
+            safe_name = make_safe_filename(g.get('name_override', '') or g.get('name', ''))
+            profile_path = os.path.join(self.config.profiles_dir, safe_name)
+            if os.path.exists(profile_path):
+                existing_profiles_count += 1
+        
+        new_profiles_count = max(0, create_count - existing_profiles_count)
+        total_bytes = (lc_unchecked_size * new_profiles_count) + (lc_overwrite_size * create_count)
+        
+        def format_bytes(size):
+            power = 2**10
+            n = 0
+            power_labels = {0 : '', 1: 'KB', 2: 'MB', 3: 'GB', 4: 'TB'}
+            while size > power:
+                size /= power
+                n += 1
+            return f"{size:.2f} {power_labels.get(n, '')}"
             
-        if count > preview_limit:
-            msg_text += f"\n... and {count - preview_limit} more."
-            
-        msg_text += "\n\nProceed with creation?"
+        total_size_str = format_bytes(total_bytes)
+
+        # Construct Message
+        msg_text = (
+            f"<h3>Creation Summary</h3>"
+            f"Items to be created: <b>{create_count}</b><br>"
+            f"Duplicate Name-Overrides: <b>{duplicate_count}</b><br>"
+            f"Titles with Empty Steam ID: <b>{empty_steam_id_count}</b><br>"
+            f"<br>"
+            f"{launchers_status}<br>"
+            f"{profiles_status}<br>"
+            f"<br>"
+            f"Estimated Total File Copy Size: <b>{total_size_str}</b><br>"
+            f"<br>"
+            f"Proceed with creation?"
+        )
         
         reply = QMessageBox.question(self, "Confirm Creation", msg_text, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
         if reply != QMessageBox.StandardButton.Yes:
             return
 
         # Create Progress Dialog
-        progress = QProgressDialog("Creating launchers...", "Cancel", 0, count, self)
+        progress = QProgressDialog("Creating launchers...", "Cancel", 0, create_count, self)
         progress.setWindowModality(Qt.WindowModality.WindowModal)
         progress.setMinimumDuration(0)
         
@@ -443,7 +516,7 @@ class MainWindow(QMainWindow):
         # Call create_all with the selected games
         result = self.creation_controller.create_all(games_to_process, progress_callback=update_progress)
         
-        progress.setValue(count)
+        progress.setValue(create_count)
         
         if progress.wasCanceled():
             self.statusBar().showMessage(f"Creation cancelled. Processed: {result['processed_count']}", 5000)
