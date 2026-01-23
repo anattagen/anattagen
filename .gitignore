@@ -4,6 +4,7 @@
 *.pyc
 normalized_steam_games.cache
 python.lnk
+Launcher.spec
 steam_filtered.txt
 Player1.amgp
 Player2.amgp

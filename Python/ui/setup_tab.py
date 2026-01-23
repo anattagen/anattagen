@@ -6,23 +6,21 @@ import zipfile
 import shutil
 import subprocess
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QGroupBox, QLabel, QFormLayout, QPushButton,
-    QComboBox, QHBoxLayout, QCheckBox, QTabWidget,
-    QFileDialog, QApplication, QSpinBox, QMessageBox, QMenu, QInputDialog,
-    QDialog, QDialogButtonBox, QLineEdit, QProgressDialog, QGridLayout
+    QWidget, QVBoxLayout, QLabel, QFormLayout, QHBoxLayout,
+    QFileDialog, QApplication,
+    QGridLayout, QFrame, QStackedWidget
 )
 from PyQt6.QtGui import QFontDatabase, QFont, QPalette, QColor
 from PyQt6.QtCore import pyqtSignal, Qt, QThread, pyqtSlot
+from qfluentwidgets import (
+    Pivot, PushButton, PrimaryPushButton, ComboBox, RoundMenu,
+    CheckBox, SpinBox, LineEdit, BodyLabel, SubtitleLabel, TitleLabel,
+    CardWidget, SimpleCardWidget, InfoBar, InfoBarPosition, MessageBox, MessageBoxBase,
+    ProgressBar, ScrollArea, FluentIcon as FIF
+)
 from Python.models import AppConfig
 from Python.ui.widgets import DragDropListWidget, PathConfigRow
-from Python.ui.accordion import AccordionSection
 from Python import constants
-
-# Register icons (compile .qrc file or load directly)
-try:
-    from .theme.gui.images import icons_rc  # noqa: F401
-except ImportError:
-    print("Warning: icons_rc.py not found; icons will not display.")
 
 class DownloadThread(QThread):
     """Thread for downloading and extracting tools."""
@@ -159,9 +157,9 @@ class SetupTab(QWidget):
         self.download_thread = None
         self._setup_ui()
 
-    def _add_path_row(self, layout, label_text, config_key, row_widget):
+    def _add_path_row(self, layout, label_text, config_key, row_widget, parent_widget=None):
         formatted_text = f"{label_text}"
-        label = QLabel(formatted_text)
+        label = BodyLabel(formatted_text, parent_widget)
         label.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         label.setToolTip("Right-click to configure Options & Arguments")
         label.customContextMenuRequested.connect(
@@ -172,21 +170,58 @@ class SetupTab(QWidget):
     def _setup_ui(self):
         """Create and arrange all widgets for the Setup tab."""
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(5, 5, 0, 5)
+        main_layout.setContentsMargins(20, 10, 20, 20)
+        main_layout.setSpacing(10)
+
+        # Navigation Pivot
+        self.pivot = Pivot(self)
+        main_layout.addWidget(self.pivot)
+
+        # Stacked Widget for pages
+        self.stackedWidget = QStackedWidget(self)
+        main_layout.addWidget(self.stackedWidget)
+
+        # Create Pages
+        self.sources_page = self._create_sources_page()
+        self.paths_page = self._create_paths_page()
+        self.sequences_page = self._create_sequences_page()
+        self.appearance_page = self._create_appearance_page()
+
+        self.stackedWidget.addWidget(self.sources_page)
+        self.stackedWidget.addWidget(self.paths_page)
+        self.stackedWidget.addWidget(self.sequences_page)
+        self.stackedWidget.addWidget(self.appearance_page)
+
+        # Add items to Pivot
+        self.pivot.addItem(routeKey="sources", text="Sources & Indexing", onClick=lambda: self.stackedWidget.setCurrentWidget(self.sources_page))
+        self.pivot.addItem(routeKey="paths", text="Paths & Profiles", onClick=lambda: self.stackedWidget.setCurrentWidget(self.paths_page))
+        self.pivot.addItem(routeKey="sequences", text="Execution Sequences", onClick=lambda: self.stackedWidget.setCurrentWidget(self.sequences_page))
+        self.pivot.addItem(routeKey="appearance", text="Appearance & Behavior", onClick=lambda: self.stackedWidget.setCurrentWidget(self.appearance_page))
+        
+        self.pivot.setCurrentItem("sources")
+        
+        self._connect_signals()
+
+    def _create_sources_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 10, 0, 0)
+        layout.setSpacing(10)
 
         # --- Section 1: Sources & Indexing ---
-        source_config_widget = QWidget()
+        source_config_widget = CardWidget(page)
         source_config_layout = QGridLayout(source_config_widget)
         source_config_layout.setSpacing(10)
+        source_config_layout.setContentsMargins(16, 16, 16, 16)
 
         # Sources
         self.source_dirs_list = DragDropListWidget()
         self.source_dirs_list.setMaximumHeight(100)
         
-        source_label = QLabel("Source Directories:")
-        add_source_button = QPushButton("Add...")
+        source_label = SubtitleLabel("Source Directories:", page)
+        add_source_button = PushButton("Add...", page)
         add_source_button.setToolTip("Add a directory to scan for games.")
-        remove_source_button = QPushButton("Remove")
+        remove_source_button = PushButton("Remove", page)
         remove_source_button.setToolTip("Remove the selected directory from scanning.")
         
         # Left side: Label + Buttons
@@ -208,10 +243,10 @@ class SetupTab(QWidget):
         self.excluded_dirs_list = DragDropListWidget()
         self.excluded_dirs_list.setMaximumHeight(25)
         
-        excluded_label = QLabel("Excluded Directories:")
-        add_excluded_button = QPushButton("Add...")
+        excluded_label = SubtitleLabel("Excluded Directories:", page)
+        add_excluded_button = PushButton("Add...", page)
         add_excluded_button.setToolTip("Add a directory to exclude from scanning.")
-        remove_excluded_button = QPushButton("Remove")
+        remove_excluded_button = PushButton("Remove", page)
         remove_excluded_button.setToolTip("Remove the selected directory from exclusion.")
         
         # Right side: Label + Buttons
@@ -230,29 +265,37 @@ class SetupTab(QWidget):
         self.remove_excluded_dir_button = remove_excluded_button
 
         # Game managers
-        self.other_managers_combo = QComboBox()
+        self.other_managers_combo = ComboBox()
         self.other_managers_combo.addItems(["None", "Steam", "Epic", "GOG", "Origin", "Ubisoft Connect", "Battle.net", "Xbox"])
-        self.exclude_manager_checkbox = QCheckBox("Exclude Selected Manager's Games")
+        self.exclude_manager_checkbox = CheckBox("Exclude Selected Manager's Games")
         game_managers_layout = QHBoxLayout()
         game_managers_layout.addWidget(self.other_managers_combo)
         game_managers_layout.addWidget(self.exclude_manager_checkbox)
         game_managers_layout.addStretch(1)
         
-        source_config_layout.addWidget(QLabel("Game Managers Present"), 2, 0)
+        source_config_layout.addWidget(SubtitleLabel("Game Managers Present", page), 2, 0)
         source_config_layout.addLayout(game_managers_layout, 2, 1)
         
         # Set column stretch to allow lists to expand
         source_config_layout.setColumnStretch(0, 1)
         source_config_layout.setColumnStretch(1, 1)
 
-        source_config_section = AccordionSection("SOURCES AND INDEXING", source_config_widget)
+        layout.addWidget(source_config_widget)
+        layout.addStretch()
+        return page
 
+    def _create_paths_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 10, 0, 0)
+        
         # --- Section 2: Paths & Profiles ---
-        paths_widget = QWidget()
-        paths_layout = QVBoxLayout(paths_widget)
-        paths_layout.setContentsMargins(0,0,0,0)
-        paths_tabs = QTabWidget()
-        paths_layout.addWidget(paths_tabs)
+        
+        # Inner Pivot for Paths tabs
+        paths_pivot = Pivot(page)
+        paths_stacked = QStackedWidget(page)
+        layout.addWidget(paths_pivot)
+        layout.addWidget(paths_stacked)
 
         # Core Paths Tab
         # Prepare repo items for generic lists (All except GLOBAL)
@@ -263,30 +306,37 @@ class SetupTab(QWidget):
 
         core_paths_widget = QWidget()
         core_paths_layout = QVBoxLayout(core_paths_widget)
+        core_paths_layout.setContentsMargins(0, 10, 0, 0)
         
         # Directories Group
-        directories_group = QGroupBox("Directories")
+        directories_group = SimpleCardWidget(core_paths_widget)
         directories_layout = QFormLayout(directories_group)
+        directories_layout.setContentsMargins(16, 16, 16, 16)
+        directories_layout.addRow(SubtitleLabel("Directories", core_paths_widget))
+        
         self.path_rows["profiles_dir"] = PathConfigRow("profiles_dir", is_directory=True, add_enabled=True, add_cen_lc=True)
         self.path_rows["profiles_dir"].enabled_cb.setToolTip("Create Profile Folders")
-        directories_layout.addRow("Profiles Directory:", self.path_rows["profiles_dir"]) # No options/args for dirs
+        directories_layout.addRow(BodyLabel("Profiles Directory:", core_paths_widget), self.path_rows["profiles_dir"])
         self.path_rows["launchers_dir"] = PathConfigRow("launchers_dir", is_directory=True, add_enabled=True, add_cen_lc=True)
         self.path_rows["launchers_dir"].enabled_cb.setToolTip("Create Launcher")
-        directories_layout.addRow("Launchers Directory:", self.path_rows["launchers_dir"]) # No options/args for dirs
+        directories_layout.addRow(BodyLabel("Launchers Directory:", core_paths_widget), self.path_rows["launchers_dir"])
         core_paths_layout.addWidget(directories_group)
 
         # Launcher Configuration Group
-        launcher_group = QGroupBox("Launcher Configuration")
+        launcher_group = SimpleCardWidget(core_paths_widget)
         launcher_layout = QFormLayout(launcher_group)
+        launcher_layout.setContentsMargins(16, 16, 16, 16)
+        launcher_layout.addRow(SubtitleLabel("Launcher Configuration", core_paths_widget))
+        
         self.path_rows["launcher_executable"] = PathConfigRow("launcher_executable", is_directory=False, add_enabled=False, add_cen_lc=True)
         self.path_rows["launcher_executable"].line_edit.setPlaceholderText(constants.LAUNCHER_EXECUTABLE)
-        self._add_path_row(launcher_layout, "Launcher Executable:", "launcher_executable", self.path_rows["launcher_executable"])
+        self._add_path_row(launcher_layout, "Launcher Executable:", "launcher_executable", self.path_rows["launcher_executable"], core_paths_widget)
 
         # Moved checkboxes from Deployment Tab
-        self.run_as_admin_checkbox = QCheckBox("Run As Admin")
-        self.use_kill_list_checkbox = QCheckBox("Use Kill List")
-        self.hide_taskbar_checkbox = QCheckBox("Hide Taskbar")
-        self.terminate_bw_on_exit_checkbox = QCheckBox("Terminate Borderless on Exit")
+        self.run_as_admin_checkbox = CheckBox("Run As Admin")
+        self.use_kill_list_checkbox = CheckBox("Use Kill List")
+        self.hide_taskbar_checkbox = CheckBox("Hide Taskbar")
+        self.terminate_bw_on_exit_checkbox = CheckBox("Terminate Borderless on Exit")
 
         cb_container = QWidget()
         cb_layout = QGridLayout(cb_container)
@@ -300,119 +350,136 @@ class SetupTab(QWidget):
         core_paths_layout.addWidget(launcher_group)
         core_paths_layout.addStretch()
 
-        paths_tabs.addTab(core_paths_widget, "   CORE   ")
+        paths_stacked.addWidget(core_paths_widget)
+        paths_pivot.addItem("core", "Core", lambda: paths_stacked.setCurrentWidget(core_paths_widget))
 
         # Application Paths Tab
         app_paths_widget = QWidget()
         app_paths_layout = QFormLayout(app_paths_widget)
+        app_paths_layout.setContentsMargins(0, 10, 0, 0)
         self.path_rows["controller_mapper_path"] = PathConfigRow("controller_mapper_path", add_run_wait=True, repo_items=self.repos.get("MAPPERS"))
         self.path_rows["controller_mapper_path"].enabled_cb.setToolTip("Enable Controller Mapper")
-        self._add_path_row(app_paths_layout, "Controller Mapper:", "controller_mapper_path", self.path_rows["controller_mapper_path"])
+        self._add_path_row(app_paths_layout, "Controller Mapper:", "controller_mapper_path", self.path_rows["controller_mapper_path"], app_paths_widget)
         self.path_rows["borderless_gaming_path"] = PathConfigRow("borderless_gaming_path", add_run_wait=True, repo_items=self.repos.get("WINDOWING"))
         self.path_rows["borderless_gaming_path"].enabled_cb.setToolTip("Enable Borderless Windowing")
-        self._add_path_row(app_paths_layout, "Borderless Windowing:", "borderless_gaming_path", self.path_rows["borderless_gaming_path"])
+        self._add_path_row(app_paths_layout, "Borderless Windowing:", "borderless_gaming_path", self.path_rows["borderless_gaming_path"], app_paths_widget)
         self.path_rows["multi_monitor_tool_path"] = PathConfigRow("multi_monitor_tool_path", add_run_wait=True, repo_items=self.repos.get("DISPLAY"))
         self.path_rows["multi_monitor_tool_path"].enabled_cb.setToolTip("Enable Multi-Monitor Tool")
-        self._add_path_row(app_paths_layout, "Multi-Monitor App:", "multi_monitor_tool_path", self.path_rows["multi_monitor_tool_path"])
+        self._add_path_row(app_paths_layout, "Multi-Monitor App:", "multi_monitor_tool_path", self.path_rows["multi_monitor_tool_path"], app_paths_widget)
         self.path_rows["just_after_launch_path"] = PathConfigRow("just_after_launch_path", add_run_wait=True, repo_items=all_tools)
         self.path_rows["just_after_launch_path"].enabled_cb.setToolTip("Enable Just After Launch App")
-        self._add_path_row(app_paths_layout, "Just After Launch:", "just_after_launch_path", self.path_rows["just_after_launch_path"])
+        self._add_path_row(app_paths_layout, "Just After Launch:", "just_after_launch_path", self.path_rows["just_after_launch_path"], app_paths_widget)
         self.path_rows["just_before_exit_path"] = PathConfigRow("just_before_exit_path", add_run_wait=True, repo_items=all_tools)
         self.path_rows["just_before_exit_path"].enabled_cb.setToolTip("Enable Just Before Exit App")
-        self._add_path_row(app_paths_layout, "Just Before Exit:", "just_before_exit_path", self.path_rows["just_before_exit_path"])
-        paths_tabs.addTab(app_paths_widget, "APPLICATIONS")
+        self._add_path_row(app_paths_layout, "Just Before Exit:", "just_before_exit_path", self.path_rows["just_before_exit_path"], app_paths_widget)
+        
+        paths_stacked.addWidget(app_paths_widget)
+        paths_pivot.addItem("apps", "Applications", lambda: paths_stacked.setCurrentWidget(app_paths_widget))
 
         # Profile Paths Tab
         profile_paths_widget = QWidget()
         profile_paths_layout = QFormLayout(profile_paths_widget)
+        profile_paths_layout.setContentsMargins(0, 10, 0, 0)
         self.path_rows["p1_profile_path"] = PathConfigRow("p1_profile_path", add_enabled=True)
-        profile_paths_layout.addRow("Player 1 Profile:", self.path_rows["p1_profile_path"])
+        profile_paths_layout.addRow(BodyLabel("Player 1 Profile:", profile_paths_widget), self.path_rows["p1_profile_path"])
         self.path_rows["p2_profile_path"] = PathConfigRow("p2_profile_path", add_enabled=True)
-        profile_paths_layout.addRow("Player 2 Profile:", self.path_rows["p2_profile_path"])
+        profile_paths_layout.addRow(BodyLabel("Player 2 Profile:", profile_paths_widget), self.path_rows["p2_profile_path"])
         self.path_rows["mediacenter_profile_path"] = PathConfigRow("mediacenter_profile_path", add_enabled=True)
-        profile_paths_layout.addRow("MediaCenter Profile:", self.path_rows["mediacenter_profile_path"])
+        profile_paths_layout.addRow(BodyLabel("MediaCenter Profile:", profile_paths_widget), self.path_rows["mediacenter_profile_path"])
         self.path_rows["multimonitor_gaming_path"] = PathConfigRow("multimonitor_gaming_path", add_enabled=True)
-        profile_paths_layout.addRow("MM Gaming Config:", self.path_rows["multimonitor_gaming_path"])
+        profile_paths_layout.addRow(BodyLabel("MM Gaming Config:", profile_paths_widget), self.path_rows["multimonitor_gaming_path"])
         self.path_rows["multimonitor_media_path"] = PathConfigRow("multimonitor_media_path", add_enabled=True)
-        profile_paths_layout.addRow("MM Desktop Config:", self.path_rows["multimonitor_media_path"])
-        paths_tabs.addTab(profile_paths_widget, "   PROFILES   ")
+        profile_paths_layout.addRow(BodyLabel("MM Desktop Config:", profile_paths_widget), self.path_rows["multimonitor_media_path"])
+        
+        paths_stacked.addWidget(profile_paths_widget)
+        paths_pivot.addItem("profiles", "Profiles", lambda: paths_stacked.setCurrentWidget(profile_paths_widget))
 
         # Script Paths Tab
         script_paths_widget = QWidget()
         script_paths_layout = QFormLayout(script_paths_widget)
+        script_paths_layout.setContentsMargins(0, 10, 0, 0)
         for i in range(1, 4):
             key = f"pre{i}_path"
             self.path_rows[key] = PathConfigRow(key, add_run_wait=True, repo_items=all_tools)
             self.path_rows[key].enabled_cb.setToolTip(f"Enable Pre-Launch App {i}")
-            self._add_path_row(script_paths_layout, f"Pre-Launch App {i}:", key, self.path_rows[key])
+            self._add_path_row(script_paths_layout, f"Pre-Launch App {i}:", key, self.path_rows[key], script_paths_widget)
         for i in range(1, 4):
             key = f"post{i}_path"
             self.path_rows[key] = PathConfigRow(key, add_run_wait=True, repo_items=all_tools)
             self.path_rows[key].enabled_cb.setToolTip(f"Enable Post-Launch App {i}")
-            self._add_path_row(script_paths_layout, f"Post-Launch App {i}:", key, self.path_rows[key])
-        paths_tabs.addTab(script_paths_widget, "   SCRIPTS   ")
+            self._add_path_row(script_paths_layout, f"Post-Launch App {i}:", key, self.path_rows[key], script_paths_widget)
         
-        paths_section = AccordionSection("PATHS AND PROFILES", paths_widget)
+        paths_stacked.addWidget(script_paths_widget)
+        paths_pivot.addItem("scripts", "Scripts", lambda: paths_stacked.setCurrentWidget(script_paths_widget))
+        
+        paths_pivot.setCurrentItem("core")
+        return page
 
+    def _create_sequences_page(self):
+        page = QWidget()
         # --- Section 3: Execution Sequence ---
-        sequences_widget = QWidget()
-        sequences_layout = QHBoxLayout(sequences_widget)
+        sequences_layout = QHBoxLayout(page)
+        sequences_layout.setContentsMargins(0, 10, 0, 0)
 
         # Launch Sequence
-        launch_sequence_group = QGroupBox("LAUNCH ORDER")
+        launch_sequence_group = SimpleCardWidget(page)
         launch_sequence_layout = QVBoxLayout(launch_sequence_group)
+        launch_sequence_layout.setContentsMargins(16, 16, 16, 16)
+        launch_sequence_layout.addWidget(SubtitleLabel("LAUNCH ORDER", page))
+        
         self.launch_sequence_list = DragDropListWidget()
         self.launch_sequence_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.launch_sequence_list.customContextMenuRequested.connect(lambda pos: self._on_sequence_context_menu(pos, self.launch_sequence_list, "launch"))
-        self.reset_launch_btn = QPushButton("Reset")
+        self.reset_launch_btn = PushButton("Reset", page)
         launch_sequence_layout.addWidget(self.launch_sequence_list)
         launch_sequence_layout.addWidget(self.reset_launch_btn)
         sequences_layout.addWidget(launch_sequence_group)
 
         # Exit Sequence
-        exit_sequence_group = QGroupBox("EXIT ORDER")
+        exit_sequence_group = SimpleCardWidget(page)
         exit_sequence_layout = QVBoxLayout(exit_sequence_group)
+        exit_sequence_layout.setContentsMargins(16, 16, 16, 16)
+        exit_sequence_layout.addWidget(SubtitleLabel("EXIT ORDER", page))
+        
         self.exit_sequence_list = DragDropListWidget()
         self.exit_sequence_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.exit_sequence_list.customContextMenuRequested.connect(lambda pos: self._on_sequence_context_menu(pos, self.exit_sequence_list, "exit"))
-        self.reset_exit_btn = QPushButton("Reset")
+        self.reset_exit_btn = PushButton("Reset", page)
         exit_sequence_layout.addWidget(self.exit_sequence_list)
         exit_sequence_layout.addWidget(self.reset_exit_btn)
         sequences_layout.addWidget(exit_sequence_group)
-        sequences_section = AccordionSection("EXECUTION SEQUENCES", sequences_widget)
+        
+        return page
 
+    def _create_appearance_page(self):
+        page = QWidget()
         # --- Section 4: Appearance & Behavior ---
-        appearance_widget = QWidget()
-        appearance_layout = QFormLayout(appearance_widget)
+        appearance_layout = QFormLayout(page)
+        appearance_layout.setContentsMargins(0, 10, 0, 0)
+        
         # Logging Verbosity
-        self.logging_verbosity_combo = QComboBox()
+        self.logging_verbosity_combo = ComboBox()
         self.logging_verbosity_combo.addItems(["None", "Low", "Medium", "High", "Debug"])
-        appearance_layout.addRow("LOGGING VERBOSITY:", self.logging_verbosity_combo)
+        appearance_layout.addRow(BodyLabel("LOGGING VERBOSITY:", page), self.logging_verbosity_combo)
         # Editor Page Size
-        self.page_size_spin = QSpinBox()
+        self.page_size_spin = SpinBox()
         self.page_size_spin.setRange(75, 2000)
         self.page_size_spin.setValue(150)
         self.page_size_spin.setToolTip("Number of rows per page in the Editor tab (75-2000)")
-        appearance_layout.addRow("Editor Page Size:", self.page_size_spin)
+        appearance_layout.addRow(BodyLabel("Editor Page Size:", page), self.page_size_spin)
         # Restart Button
-        self.restart_btn = QPushButton("Reset to Defaults")
+        self.restart_btn = PrimaryPushButton("Reset to Defaults", page)
         self.restart_btn.setToolTip("Reset all application configuration to defaults")
         appearance_layout.addRow(self.restart_btn)
-        appearance_section = AccordionSection("APPEARANCE AND BEHAVIOR", appearance_widget)
-
-        main_layout.addWidget(source_config_section)
-        main_layout.addWidget(paths_section)
-        main_layout.addWidget(sequences_section)
-        main_layout.addWidget(appearance_section)
-        main_layout.addStretch()
-        self._connect_signals()
+        
+        return page
 
     def _show_options_args_dialog(self, pos, config_key, label_text):
         """Show a modal dialog to edit options and arguments for the selected app."""
-        dialog = QDialog(self)
-        dialog.setWindowTitle(f"Options & Arguments - {label_text.strip(':')}")
-        layout = QFormLayout(dialog)
+        dialog = MessageBoxBase(self)
+        # dialog.setWindowTitle(f"Options & Arguments - {label_text.strip(':')}") # Frameless dialog doesn't show title bar
         
+        layout = QFormLayout()
         # Determine defaults based on the current executable path
         current_path = getattr(self.main_window.config, config_key, "")
         exe_name = os.path.basename(current_path).lower() if current_path else ""
@@ -428,17 +495,21 @@ class SetupTab(QWidget):
             defaults_state['opts'], defaults_state['args'] = self.options_args_map[exe_name]
             defaults_state['has_defaults'] = True
 
-        options_edit = QLineEdit()
+        options_edit = LineEdit()
         options_edit.setText(getattr(self.main_window.config, f"{config_key}_options", ""))
         layout.addRow("Options:", options_edit)
         
-        args_edit = QLineEdit()
+        args_edit = LineEdit()
         args_edit.setText(getattr(self.main_window.config, f"{config_key}_arguments", ""))
         layout.addRow("Arguments:", args_edit)
         
         # Visual indicator for defaults match
-        status_label = QLabel()
+        status_label = BodyLabel()
         layout.addRow("", status_label)
+        
+        # Add form layout to the dialog's view layout
+        dialog.viewLayout.addWidget(SubtitleLabel(f"Options & Arguments - {label_text.strip(':')}", dialog))
+        dialog.viewLayout.addLayout(layout)
 
         def check_defaults():
             if not defaults_state['has_defaults']:
@@ -461,10 +532,8 @@ class SetupTab(QWidget):
         # Initial check
         check_defaults()
 
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        
         # Add Reset button
-        reset_btn = buttons.addButton("Reset to Defaults", QDialogButtonBox.ButtonRole.ResetRole)
+        reset_btn = PushButton("Reset to Defaults")
         reset_btn.setVisible(defaults_state['has_defaults'])
         
         def reset_values():
@@ -492,9 +561,10 @@ class SetupTab(QWidget):
             check_defaults()
             reset_btn.setVisible(defaults_state['has_defaults'])
 
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
-        layout.addRow(buttons)
+        # Add reset button to the button layout of MessageBoxBase
+        dialog.buttonLayout.insertWidget(0, reset_btn)
+        dialog.yesButton.setText("Save")
+        dialog.cancelButton.setText("Cancel")
         
         self._current_dialog_key = config_key
         self._current_dialog_updater = update_defaults_from_path
@@ -610,7 +680,7 @@ class SetupTab(QWidget):
 
     def _on_download_requested(self, tool_name, tool_data):
         if self.download_thread and self.download_thread.isRunning():
-            QMessageBox.warning(self, "Download in Progress", "Please wait for the current download to finish.")
+            MessageBox("Download in Progress", "Please wait for the current download to finish.", self).exec()
             return
 
         # Check if files exist
@@ -623,27 +693,24 @@ class SetupTab(QWidget):
         zip_path = os.path.join(extract_dir, zip_name)
         
         if os.path.exists(exe_path) or os.path.exists(zip_path):
-            reply = QMessageBox.question(
-                self, "File Exists",
-                f"The tool '{tool_name}' appears to be already downloaded.\n"
-                "Do you want to download and overwrite it?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No
-            )
-            if reply != QMessageBox.StandardButton.Yes:
+            w = MessageBox("File Exists", f"The tool '{tool_name}' appears to be already downloaded.\nDo you want to download and overwrite it?", self)
+            if not w.exec():
                 return
 
         self.active_download_row = self.sender() # Store the row that requested the download
         
-        # Use QProgressDialog instead of embedded bar
-        self.progress_dialog = QProgressDialog(f"Downloading {tool_name}...", "Cancel", 0, 100, self)
-        self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
-        self.progress_dialog.setMinimumDuration(0)
-        self.progress_dialog.setAutoClose(False)
-        self.progress_dialog.show()
+        # Use custom dialog for progress
+        self.progress_dialog = MessageBoxBase(self)
+        self.progress_dialog.viewLayout.addWidget(SubtitleLabel(f"Downloading {tool_name}...", self.progress_dialog))
+        self.progress_bar = ProgressBar(self.progress_dialog)
+        self.progress_bar.setRange(0, 100)
+        self.progress_dialog.viewLayout.addWidget(self.progress_bar)
+        self.progress_dialog.yesButton.hide()
+        self.progress_dialog.cancelButton.hide()
+        self.progress_dialog.show() # Non-blocking show
 
         self.download_thread = DownloadThread(tool_data['url'], tool_data['extract_dir'], tool_data['exe_name'])
-        self.download_thread.progress.connect(self.progress_dialog.setValue)
+        self.download_thread.progress.connect(self.progress_bar.setValue)
         self.download_thread.finished.connect(self._on_download_finished_slot)
         self.download_thread.start()
 
@@ -654,18 +721,15 @@ class SetupTab(QWidget):
         if success:
             if hasattr(self, 'active_download_row') and self.active_download_row:
                 self.active_download_row.line_edit.setText(result_path)
-            QMessageBox.information(self, "Download Complete", f"Successfully downloaded to:\n{result_path}")
+            MessageBox("Download Complete", f"Successfully downloaded to:\n{result_path}", self).exec()
         else:
-            QMessageBox.critical(self, "Download Failed", f"Error: {message}")
+            MessageBox("Download Failed", f"Error: {message}", self).exec()
         self.active_download_row = None
 
     def _reset_to_defaults(self):
         """Reset the application's configuration to the shipped defaults."""
-        reply = QMessageBox.question(self, "Reset to Defaults",
-                                     "This will reset all configuration to the application's default values. Continue?",
-                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                                     QMessageBox.StandardButton.No)
-        if reply != QMessageBox.StandardButton.Yes:
+        w = MessageBox("Reset to Defaults", "This will reset all configuration to the application's default values. Continue?", self)
+        if not w.exec():
             return
         
         # Call the main window's method to handle the reset logic
@@ -711,7 +775,7 @@ class SetupTab(QWidget):
     def _on_sequence_context_menu(self, pos, list_widget, sequence_type):
         item = list_widget.itemAt(pos)
 
-        menu = QMenu(self)
+        menu = RoundMenu(parent=self)
         
         # Define full sets
         if sequence_type == "launch":

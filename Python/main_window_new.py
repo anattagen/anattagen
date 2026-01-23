@@ -2,7 +2,6 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget, 
     QMessageBox, QMenu, QFileDialog, QProgressDialog
 )
-from Python.ui.theme.gui.theme_manager import ThemeManager
 from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtGui import QCursor, QIcon
 import os

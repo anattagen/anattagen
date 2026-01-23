@@ -1,9 +1,14 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem, QLabel,
-    QPushButton, QHeaderView, QAbstractItemView, QMenu, QCheckBox, QLineEdit,
-    QApplication, QFileDialog, QInputDialog, QMessageBox, QSpinBox, QDialog,
-    QDialogButtonBox, QComboBox, QProgressDialog
+    QWidget, QVBoxLayout, QHBoxLayout, QTableWidgetItem, QHeaderView, 
+    QAbstractItemView, QApplication, QFileDialog, QComboBox,
+    QDialog, QDialogButtonBox, QProgressDialog
 )
+from qfluentwidgets import (
+    TableWidget, PushButton, PrimaryPushButton, CheckBox, LineEdit, 
+    SearchLineEdit, ComboBox, SpinBox, BodyLabel, ToolButton, 
+    FluentIcon as FIF, RoundMenu, MessageBox, MessageBoxBase, SubtitleLabel
+)
+from Python.ui.fluent_dialogs import FluentInputDialog
 import os
 import json 
 import configparser
@@ -24,11 +29,11 @@ class AppendKillListDialog(QDialog):
         self.resize(400, 150)
         layout = QVBoxLayout(self)
         
-        layout.addWidget(QLabel("Enter executable name (e.g. notepad.exe) or variable:"))
+        layout.addWidget(BodyLabel("Enter executable name (e.g. notepad.exe) or variable:"))
         
         input_layout = QHBoxLayout()
-        self.input_edit = QLineEdit()
-        browse_btn = QPushButton("...")
+        self.input_edit = LineEdit()
+        browse_btn = ToolButton(FIF.FOLDER)
         browse_btn.setMaximumWidth(40)
         browse_btn.clicked.connect(self.browse_file)
         
@@ -75,14 +80,13 @@ class EditorTab(QWidget):
 
         # --- Search Bar ---
         search_layout = QHBoxLayout()
-        self.search_bar = QLineEdit()
+        self.search_bar = SearchLineEdit()
         self.search_bar.setPlaceholderText("Search games by name...")
         self.search_bar.textChanged.connect(self.filter_table)
-        search_layout.addWidget(QLabel("Search:"))
         search_layout.addWidget(self.search_bar)
         
         # Add Game Button
-        self.add_game_button = QPushButton("Add Game")
+        self.add_game_button = PushButton(FIF.ADD, "Add Game")
         self.add_game_button.clicked.connect(self.add_game_manually)
         search_layout.addWidget(self.add_game_button)
         main_layout.addLayout(search_layout)
@@ -91,18 +95,18 @@ class EditorTab(QWidget):
         tools_layout = QHBoxLayout()
         
         # Toggle Create
-        self.toggle_create_button = QPushButton("Toggle Create")
+        self.toggle_create_button = PushButton("Toggle Create")
         self.toggle_create_button.clicked.connect(self.toggle_create_column)
         tools_layout.addWidget(self.toggle_create_button)
 
         # Remove Unchecked
-        self.remove_unchecked_btn = QPushButton("Remove Unchecked")
+        self.remove_unchecked_btn = PushButton("Remove Unchecked")
         self.remove_unchecked_btn.clicked.connect(self.remove_unchecked_items)
         tools_layout.addWidget(self.remove_unchecked_btn)
 
         # Select Flyout
-        self.select_flyout_btn = QPushButton("Select By... ▼")
-        self.select_flyout_menu = QMenu(self)
+        self.select_flyout_btn = PushButton("Select By... ▼")
+        self.select_flyout_menu = RoundMenu(parent=self)
         self.select_flyout_menu.addAction("Empty Steam ID", lambda: self.select_by_criteria("empty_steamid"))
         self.select_flyout_menu.addAction("Empty Kill List", lambda: self.select_by_criteria("empty_killlist"))
         self.select_flyout_menu.addAction("Invalid/Absent Paths", lambda: self.select_by_criteria("invalid_paths"))
@@ -111,16 +115,16 @@ class EditorTab(QWidget):
         tools_layout.addWidget(self.select_flyout_btn)
 
         # Change Flyout
-        self.change_flyout_btn = QPushButton("Change Selected... ▼")
-        self.change_flyout_menu = QMenu(self)
+        self.change_flyout_btn = PushButton("Change Selected... ▼")
+        self.change_flyout_menu = RoundMenu(parent=self)
         self.change_flyout_menu.addAction("Swap LC/CEN Type", self.swap_lc_cen_selected)
         self.change_flyout_menu.addAction("Restore Defaults", self.restore_defaults_selected)
         self.change_flyout_btn.setMenu(self.change_flyout_menu)
         tools_layout.addWidget(self.change_flyout_btn)
 
         # Sort Flyout
-        self.sort_flyout_btn = QPushButton("Sort By... ▼")
-        self.sort_flyout_menu = QMenu(self)
+        self.sort_flyout_btn = PushButton("Sort By... ▼")
+        self.sort_flyout_menu = RoundMenu(parent=self)
         self.sort_flyout_menu.addAction("Create Status", lambda: self.sort_data('create'))
         self.sort_flyout_menu.addAction("Name", lambda: self.sort_data('name'))
         self.sort_flyout_menu.addAction("Name Override", lambda: self.sort_data('name_override'))
@@ -134,20 +138,20 @@ class EditorTab(QWidget):
         tools_layout.addWidget(self.sort_flyout_btn)
 
         # Undo Button
-        self.undo_button = QPushButton("Undo")
+        self.undo_button = PushButton(FIF.UNDO, "Undo")
         self.undo_button.setEnabled(False)
         self.undo_button.clicked.connect(self.undo)
         tools_layout.addWidget(self.undo_button)
         
         # Compact View Checkbox
-        self.compact_view_cb = QCheckBox("Compact View")
+        self.compact_view_cb = CheckBox("Compact View")
         self.compact_view_cb.stateChanged.connect(self.update_compact_view)
         tools_layout.addWidget(self.compact_view_cb)
 
         main_layout.addLayout(tools_layout)
 
         # --- Table ---
-        self.table = QTableWidget()
+        self.table = TableWidget()
         # set column count based on EditorCols mapping
         self.table.setColumnCount(max(c.value for c in constants.EditorCols) + 1)
         
@@ -246,19 +250,19 @@ class EditorTab(QWidget):
 
         # --- Pagination ---
         pagination_layout = QHBoxLayout()
-        self.prev_page_button = QPushButton("< Prev")
+        self.prev_page_button = PushButton("< Prev")
         self.prev_page_button.clicked.connect(self.prev_page)
         
-        self.page_input = QSpinBox()
+        self.page_input = SpinBox()
         self.page_input.setMinimum(1)
-        self.page_input.setKeyboardTracking(False)
+        # self.page_input.setKeyboardTracking(False) # SpinBox in Fluent might behave differently
         self.page_input.valueChanged.connect(self.go_to_page)
         
-        self.next_page_button = QPushButton("Next >")
+        self.next_page_button = PushButton("Next >")
         self.next_page_button.clicked.connect(self.next_page)
-        self.page_label = QLabel("of 1")
+        self.page_label = BodyLabel("of 1")
         pagination_layout.addWidget(self.prev_page_button)
-        pagination_layout.addWidget(QLabel("Page:"))
+        pagination_layout.addWidget(BodyLabel("Page:"))
         pagination_layout.addWidget(self.page_input)
         pagination_layout.addWidget(self.page_label)
         pagination_layout.addWidget(self.next_page_button)
@@ -266,11 +270,11 @@ class EditorTab(QWidget):
 
         # --- Buttons ---
         buttons_layout = QHBoxLayout()
-        self.save_button = QPushButton("Save Index")
-        self.load_button = QPushButton("Load Index")
-        self.import_profiles_button = QPushButton("Import Profiles")
-        self.delete_button = QPushButton("Delete Indexes")
-        self.clear_button = QPushButton("Clear View")
+        self.save_button = PushButton(FIF.SAVE, "Save Index")
+        self.load_button = PushButton(FIF.FOLDER, "Load Index")
+        self.import_profiles_button = PushButton(FIF.IMPORT, "Import Profiles")
+        self.delete_button = PushButton(FIF.DELETE, "Delete Indexes")
+        self.clear_button = PushButton(FIF.REMOVE, "Clear View")
         buttons_layout.addWidget(self.save_button)
         buttons_layout.addWidget(self.load_button)
         buttons_layout.addWidget(self.import_profiles_button)
@@ -278,11 +282,11 @@ class EditorTab(QWidget):
         buttons_layout.addWidget(self.clear_button)
         
         # Bulk Edit and Validate
-        self.bulk_edit_button = QPushButton("Bulk Edit")
+        self.bulk_edit_button = PushButton(FIF.EDIT, "Bulk Edit")
         self.bulk_edit_button.clicked.connect(self.open_bulk_edit_dialog)
         buttons_layout.addWidget(self.bulk_edit_button)
 
-        self.validate_btn = QPushButton("Validate Paths")
+        self.validate_btn = PushButton(FIF.ACCEPT, "Validate Paths")
         self.validate_btn.clicked.connect(self.validate_paths)
         buttons_layout.addWidget(self.validate_btn)
         
@@ -372,7 +376,7 @@ class EditorTab(QWidget):
                 for col_enum in path_cols:
                     widget = self.table.cellWidget(row, col_enum.value)
                     if widget:
-                        le = widget.findChild(QLineEdit)
+                        le = widget.findChild(LineEdit)
                         path = le.text().strip() if le else ""
                         clean_path = path[2:] if path.startswith("> ") or path.startswith("< ") else path
                         if clean_path and not os.path.exists(clean_path):
@@ -687,7 +691,7 @@ class EditorTab(QWidget):
         if index < 0:
             return
 
-        menu = QMenu(self)
+        menu = RoundMenu(parent=self)
         select_col_action = menu.addAction("Select Column")
         resize_col_action = menu.addAction("Resize to Contents")
         
@@ -706,7 +710,7 @@ class EditorTab(QWidget):
         if row < 0 or col < 0:
             return
 
-        menu = QMenu(self)
+        menu = RoundMenu(parent=self)
         
         # Toggle Create Action
         toggle_create_action = menu.addAction("Toggle 'Create' for Selected")
@@ -855,16 +859,15 @@ class EditorTab(QWidget):
                 selected_rows.add(r)
         
         if not selected_rows:
-            QMessageBox.information(self, "Bulk Edit", "Please select rows to edit.")
+            MessageBox("Bulk Edit", "Please select rows to edit.", self).exec()
             return
 
-        dialog = QDialog(self)
-        dialog.setWindowTitle(f"Bulk Edit ({len(selected_rows)} items)")
-        layout = QVBoxLayout(dialog)
+        dialog = MessageBoxBase(self)
+        dialog.viewLayout.addWidget(SubtitleLabel(f"Bulk Edit ({len(selected_rows)} items)", dialog))
         
         # Field selection
-        layout.addWidget(QLabel("Select Field to Edit:"))
-        field_combo = QComboBox()
+        dialog.viewLayout.addWidget(BodyLabel("Select Field to Edit:"))
+        field_combo = ComboBox()
         
         # Define editable fields and their types
         fields = [
@@ -885,17 +888,15 @@ class EditorTab(QWidget):
         for name, col, type_ in fields:
             field_combo.addItem(name, (col, type_))
             
-        layout.addWidget(field_combo)
+        dialog.viewLayout.addWidget(field_combo)
         
         # Value input
-        layout.addWidget(QLabel("New Value:"))
-        value_check = QCheckBox("Enable / True")
-        layout.addWidget(value_check)
+        dialog.viewLayout.addWidget(BodyLabel("New Value:"))
+        value_check = CheckBox("Enable / True")
+        dialog.viewLayout.addWidget(value_check)
         
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
-        layout.addWidget(buttons)
+        dialog.yesButton.setText("OK")
+        dialog.cancelButton.setText("Cancel")
         
         if dialog.exec():
             col_enum, type_ = field_combo.currentData()
@@ -906,13 +907,13 @@ class EditorTab(QWidget):
                 if type_ == "bool":
                     widget = self.table.cellWidget(row, col_enum.value)
                     if widget:
-                        cbs = widget.findChildren(QCheckBox)
+                        cbs = widget.findChildren(CheckBox)
                         if cbs: cbs[0].setChecked(new_value)
                 elif type_ == "bool_merged":
                     # Need to update the enabled checkbox of the merged widget
                     widget = self.table.cellWidget(row, col_enum.value)
                     if widget:
-                        cbs = widget.findChildren(QCheckBox)
+                        cbs = widget.findChildren(CheckBox)
                         if cbs: cbs[0].setChecked(new_value)
                 elif type_ == "bool_special":
                     # Kill list enabled state
@@ -949,7 +950,7 @@ class EditorTab(QWidget):
                 # Get path from widget or item
                 widget = self.table.cellWidget(row, col)
                 if widget:
-                    le = widget.findChild(QLineEdit)
+                    le = widget.findChild(LineEdit)
                     if le: path = le.text()
                 else:
                     item = self.table.item(row, col)
@@ -992,13 +993,10 @@ class EditorTab(QWidget):
 
         # Confirmation for multiple rows
         if len(rows_to_clone) > 1:
-            reply = QMessageBox.question(
-                self, "Confirm Clone",
-                f"Are you sure you want to clone {len(rows_to_clone)} games?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No
-            )
-            if reply != QMessageBox.StandardButton.Yes:
+            w = MessageBox("Confirm Clone", f"Are you sure you want to clone {len(rows_to_clone)} games?", self)
+            if w.exec():
+                pass # Proceed
+            else:
                 return
 
         self.push_undo()
@@ -1062,13 +1060,10 @@ class EditorTab(QWidget):
         if not selected_rows:
             return
 
-        reply = QMessageBox.question(
-            self, "Confirm Remove",
-            f"Are you sure you want to remove {len(selected_rows)} items from the list?\nThis will NOT delete any files.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-        if reply != QMessageBox.StandardButton.Yes:
+        w = MessageBox("Confirm Remove", f"Are you sure you want to remove {len(selected_rows)} items from the list?\nThis will NOT delete any files.", self)
+        if w.exec():
+            pass
+        else:
             return
 
         self.push_undo()
@@ -1105,7 +1100,7 @@ class EditorTab(QWidget):
             if os.path.exists(ini_path):
                 os.startfile(ini_path)
             else:
-                QMessageBox.warning(self, "File Not Found", f"Game.ini not found at:\n{ini_path}\n\nHas the game been created yet?")
+                MessageBox("File Not Found", f"Game.ini not found at:\n{ini_path}\n\nHas the game been created yet?", self).exec()
 
     def open_profile_folder(self, row):
         """Open the profile folder for the selected game."""
@@ -1124,7 +1119,7 @@ class EditorTab(QWidget):
             if os.path.exists(profile_path):
                 os.startfile(profile_path)
             else:
-                QMessageBox.warning(self, "Folder Not Found", f"Profile folder not found at:\n{profile_path}\n\nHas the game been created yet?")
+                MessageBox("Folder Not Found", f"Folder not found at:\n{profile_path}\n\nHas the game been created yet?", self).exec()
 
     def regenerate_names_selected(self, row):
         """Regenerate names for selected rows using NameProcessor."""
@@ -1233,7 +1228,7 @@ class EditorTab(QWidget):
             self.main_window.steam_cache_manager.load_normalized_steam_index()
             
         if not self.main_window.steam_cache_manager.normalized_steam_index:
-            QMessageBox.warning(self, "Cache Empty", "Steam index cache is empty or not loaded.")
+            MessageBox("Cache Empty", "Steam index cache is empty or not loaded.", self).exec()
             return
 
         from Python.ui.name_processor import NameProcessor
@@ -1286,7 +1281,7 @@ class EditorTab(QWidget):
                     # Fuzzy match
                     matches = difflib.get_close_matches(match_name, all_keys, n=5, cutoff=0.6)
                     if matches:
-                        combo = QComboBox()
+                        combo = ComboBox()
                         combo.setEditable(True)
                         combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
                         # Add original as first item
@@ -1308,7 +1303,7 @@ class EditorTab(QWidget):
                 msg += f" and found {fuzzy_count} fuzzy matches"
             self.main_window.statusBar().showMessage(msg, 3000)
         else:
-            QMessageBox.information(self, "Auto-Match", "No matches found in cache for selected items.")
+            MessageBox("Auto-Match", "No matches found in cache for selected items.", self).exec()
 
     def download_artwork_selected(self, row):
         """Download artwork for selected games."""
@@ -1325,13 +1320,10 @@ class EditorTab(QWidget):
 
         # Confirmation for multiple items
         if len(selected_rows) > 1:
-            reply = QMessageBox.question(
-                self, "Confirm Download",
-                f"Are you sure you want to download artwork for {len(selected_rows)} games?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No
-            )
-            if reply != QMessageBox.StandardButton.Yes:
+            w = MessageBox("Confirm Download", f"Are you sure you want to download artwork for {len(selected_rows)} games?", self)
+            if w.exec():
+                pass
+            else:
                 return
 
         # Progress Dialog setup
@@ -1385,9 +1377,9 @@ class EditorTab(QWidget):
             progress.setValue(len(selected_rows))
 
         if canceled:
-            QMessageBox.information(self, "Artwork Download", f"Download cancelled. Processed {count} games.")
+            MessageBox("Artwork Download", f"Download cancelled. Processed {count} games.", self).exec()
         else:
-            QMessageBox.information(self, "Artwork Download", f"Attempted to download artwork for {count} games.")
+            MessageBox("Artwork Download", f"Attempted to download artwork for {count} games.", self).exec()
 
     def toggle_create_for_selection(self):
         """Toggle the 'create' status for all selected rows."""
@@ -1424,7 +1416,7 @@ class EditorTab(QWidget):
         current_path = ""
         widget = self.table.cellWidget(row, col)
         if widget:
-            le = widget.findChild(QLineEdit)
+            le = widget.findChild(LineEdit)
             if le:
                 current_path = le.text()
                 if current_path.startswith("< ") or current_path.startswith("> "):
@@ -1446,7 +1438,7 @@ class EditorTab(QWidget):
         if file_path:
             self.push_undo()
             if widget:
-                le = widget.findChild(QLineEdit)
+                le = widget.findChild(LineEdit)
                 if le:
                     text = le.text()
                     prefix = ""
@@ -1504,9 +1496,11 @@ class EditorTab(QWidget):
         
         current_name = name_item.text() if name_item else ""
         
-        search_term, ok = QInputDialog.getText(self, "Search Steam AppID", "Enter game name:", text=current_name)
+        dialog = FluentInputDialog("Search Steam AppID", "Enter game name:", self)
+        dialog.setText(current_name)
         
-        if ok and search_term:
+        if dialog.exec():
+            search_term = dialog.textValue()
             if not self.main_window.steam_cache_manager.normalized_steam_index:
                 self.main_window.steam_cache_manager.load_normalized_steam_index()
             
@@ -1522,12 +1516,13 @@ class EditorTab(QWidget):
                 if match_data:
                     steam_id = match_data.get("id")
                     steam_name = match_data.get("name")
-                    confirm = QMessageBox.question(self, "Steam AppID Found", f"Found: {steam_name}\nAppID: {steam_id}\n\nApply this ID?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-                    if confirm == QMessageBox.StandardButton.Yes:
+                    
+                    w = MessageBox("Steam AppID Found", f"Found: {steam_name}\nAppID: {steam_id}\n\nApply this ID?", self)
+                    if w.exec():
                         self.table.setItem(row, constants.EditorCols.STEAMID.value, QTableWidgetItem(str(steam_id)))
                         self.main_window._on_editor_table_edited(None)
                 else:
-                    QMessageBox.information(self, "Not Found", f"No Steam game found matching '{search_term}'")
+                    MessageBox("Not Found", f"No Steam game found matching '{search_term}'", self).exec()
             except Exception as e:
                 print(f"Error searching Steam ID: {e}")
 
@@ -1630,13 +1625,8 @@ class EditorTab(QWidget):
         """Reset the row to its original state."""
         self.push_undo()
         if 0 <= row < len(self.original_data):
-            reply = QMessageBox.question(
-                self, "Confirm Reset",
-                "Are you sure you want to reset this row to its original state?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No
-            )
-            if reply != QMessageBox.StandardButton.Yes:
+            w = MessageBox("Confirm Reset", "Are you sure you want to reset this row to its original state?", self)
+            if not w.exec():
                 return
 
             game_data = self.original_data[row]
@@ -1671,7 +1661,7 @@ class EditorTab(QWidget):
         """Create a centered checkbox widget for table cells."""
         widget = QWidget()
         layout = QHBoxLayout(widget)
-        checkbox = QCheckBox()
+        checkbox = CheckBox()
         checkbox.setChecked(checked)
         checkbox.stateChanged.connect(lambda state: self._on_checkbox_changed(row, col, state))
         layout.addWidget(checkbox)
@@ -1686,18 +1676,18 @@ class EditorTab(QWidget):
         layout.setContentsMargins(4, 0, 4, 0)
         layout.setSpacing(6)
         
-        cb_enabled = QCheckBox()
+        cb_enabled = CheckBox()
         cb_enabled.setChecked(enabled)
         cb_enabled.setToolTip("Enable")
         cb_enabled.stateChanged.connect(lambda state: self._on_merged_widget_changed(row, col))
         
-        line_edit = QLineEdit(path_text)
+        line_edit = LineEdit(path_text)
         line_edit.setToolTip(path_text)
         line_edit.textChanged.connect(lambda: self._sanitize_widget_text(line_edit))
         line_edit.textChanged.connect(lambda text: self._on_merged_widget_changed(row, col))
         line_edit.textChanged.connect(lambda: self._apply_merged_widget_styling(line_edit))
         
-        cb_overwrite = QCheckBox()
+        cb_overwrite = CheckBox()
         cb_overwrite.setChecked(overwrite)
         cb_overwrite.setToolTip("Overwrite")
         cb_overwrite.stateChanged.connect(lambda state: self._on_merged_widget_changed(row, col))
@@ -1719,7 +1709,7 @@ class EditorTab(QWidget):
             path = text[2:]
             if path and os.path.exists(path) and os.path.isfile(path) and os.path.getsize(path) > 10 * 1024 * 1024:
                 style = "QLineEdit { font-weight: bold; text-decoration: underline; color: red; }"
-        line_edit.setStyleSheet(style)
+        # line_edit.setStyleSheet(style) # Fluent LineEdit might need different styling approach
 
     def _on_checkbox_changed(self, row, col, state):
         self._sync_cell_to_data(row, col)
@@ -1766,7 +1756,7 @@ class EditorTab(QWidget):
                 for row in range(self.table.rowCount()):
                     widget = self.table.cellWidget(row, path_col)
                     if widget:
-                        le = widget.findChild(QLineEdit)
+                        le = widget.findChild(LineEdit)
                         if le and le.text().strip().lstrip('<> '):
                             is_empty = False
                             break
@@ -2084,7 +2074,7 @@ class EditorTab(QWidget):
         if col == constants.EditorCols.INCLUDE.value:
             widget = self.table.cellWidget(row, col)
             if widget:
-                cb = widget.findChild(QCheckBox)
+                cb = widget.findChild(CheckBox)
                 if cb: cb.setChecked(value)
         self.table.blockSignals(False)
 
@@ -2092,7 +2082,7 @@ class EditorTab(QWidget):
         """Get checkbox value from a cell widget."""
         widget = self.table.cellWidget(row, col)
         if widget:
-            checkbox = widget.findChild(QCheckBox)
+            checkbox = widget.findChild(CheckBox)
             if checkbox:
                 return checkbox.isChecked()
         return False
@@ -2101,10 +2091,10 @@ class EditorTab(QWidget):
         """Extract enabled, path, and overwrite from a merged widget."""
         widget = self.table.cellWidget(row, col)
         if widget:
-            cbs = widget.findChildren(QCheckBox)
+            cbs = widget.findChildren(CheckBox)
             enabled = cbs[0].isChecked() if len(cbs) > 0 else False
             overwrite = cbs[1].isChecked() if len(cbs) > 1 else False
-            le = widget.findChild(QLineEdit)
+            le = widget.findChild(LineEdit)
             path = le.text() if le else ""
             return enabled, path, overwrite
         return False, "", False
@@ -2112,7 +2102,7 @@ class EditorTab(QWidget):
     def _swap_lc_cen_cell(self, row, col):
         widget = self.table.cellWidget(row, col)
         if widget:
-            le = widget.findChild(QLineEdit)
+            le = widget.findChild(LineEdit)
             if le:
                 text = le.text()
                 if text.startswith("> "):
@@ -2122,7 +2112,7 @@ class EditorTab(QWidget):
                 self._sync_cell_to_data(row, col)
 
     def _check_widget_large_lc(self, widget):
-        le = widget.findChild(QLineEdit)
+        le = widget.findChild(LineEdit)
         if le:
             text = le.text()
             if text.startswith("> "):
@@ -2401,7 +2391,7 @@ class EditorTab(QWidget):
             col = col_enum.value
             widget = self.table.cellWidget(row, col)
             if widget:
-                le = widget.findChild(QLineEdit)
+                le = widget.findChild(LineEdit)
                 if le and le.text().strip().startswith(">"):
                     set_bg(row, col, QColor(230, 230, 250)) # Lavender
 
@@ -2459,11 +2449,11 @@ class EditorTab(QWidget):
     def _get_cell_state(self, row, col):
         widget = self.table.cellWidget(row, col)
         if widget:
-            cbs = widget.findChildren(QCheckBox)
+            cbs = widget.findChildren(CheckBox)
             if len(cbs) >= 2: # Merged
                 enabled = cbs[0].isChecked()
                 overwrite = cbs[1].isChecked()
-                le = widget.findChild(QLineEdit)
+                le = widget.findChild(LineEdit)
                 path = le.text() if le else ""
                 return {'type': 'merged', 'enabled': enabled, 'path': path, 'overwrite': overwrite}
             elif len(cbs) == 1: # Simple Checkbox
@@ -2485,17 +2475,17 @@ class EditorTab(QWidget):
         if state['type'] == 'merged':
             widget = self.table.cellWidget(row, col)
             if widget:
-                cbs = widget.findChildren(QCheckBox)
+                cbs = widget.findChildren(CheckBox)
                 if len(cbs) >= 2:
                     cbs[0].setChecked(state['enabled'])
                     cbs[1].setChecked(state['overwrite'])
-                    le = widget.findChild(QLineEdit)
+                    le = widget.findChild(LineEdit)
                     if le: le.setText(state['path'])
         
         elif state['type'] == 'checkbox':
             widget = self.table.cellWidget(row, col)
             if widget:
-                cbs = widget.findChildren(QCheckBox)
+                cbs = widget.findChildren(CheckBox)
                 if cbs:
                     cbs[0].setChecked(state['checked'])
                     
@@ -2551,9 +2541,9 @@ class EditorTab(QWidget):
         if imported_count > 0:
             self.filter_table(self.search_bar.text())
             self.main_window._on_editor_table_edited(None)
-            QMessageBox.information(self, "Import Complete", f"Imported {imported_count} profiles.")
+            MessageBox("Import Complete", f"Imported {imported_count} profiles.", self).exec()
         else:
-            QMessageBox.information(self, "Import", "No valid profiles found.")
+            MessageBox("Import", "No valid profiles found.", self).exec()
 
     def _parse_game_ini(self, ini_path, profile_path):
         """Parse a Game.ini file and return a game data dictionary."""
