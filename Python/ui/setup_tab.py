@@ -8,7 +8,7 @@ import subprocess
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QGroupBox, QLabel, QFormLayout, QPushButton,
     QComboBox, QHBoxLayout, QCheckBox, QTabWidget,
-    QFileDialog, QApplication, QSpinBox, QMessageBox, QMenu,
+    QFileDialog, QApplication, QSpinBox, QMessageBox, QMenu, QInputDialog,
     QDialog, QDialogButtonBox, QLineEdit, QProgressDialog, QGridLayout
 )
 from PyQt6.QtGui import QFontDatabase, QFont, QPalette, QColor
@@ -17,7 +17,6 @@ from Python.models import AppConfig
 from Python.ui.widgets import DragDropListWidget, PathConfigRow
 from Python.ui.accordion import AccordionSection
 from Python import constants
-from .theme.gui.core import json_settings, json_themes
 
 # Register icons (compile .qrc file or load directly)
 try:
@@ -150,43 +149,6 @@ class SetupTab(QWidget):
         "Borderless": "Starts/Stops Borderless Gaming.",
         "Cloud-Sync": "Runs the Cloud Sync application.",
     }
-    def apply_selected_theme(self, theme_name: str):
-        """Applies the selected JSON theme to the current UI."""
-        if not theme_name:
-            return
-
-        themes_dir = os.path.join(os.path.dirname(__file__), "theme", "gui", "themes")
-        theme_file = os.path.join(themes_dir, f"{theme_name}.json")
-
-        if not os.path.exists(theme_file):
-            print(f"Theme not found: {theme_file}")
-            return
-
-        # Load framework settings
-        json_settings.Settings()  # auto-load settings
-
-        # Load the theme JSON
-        theme_engine = json_themes.JsonThemes()
-
-        # Detect correct method to load theme
-        if hasattr(theme_engine, "load_theme"):
-            theme_engine.load_theme(theme_file)
-        elif hasattr(theme_engine, "set_theme"):
-            theme_engine.set_theme(theme_file)
-        elif hasattr(theme_engine, "load"):
-            theme_engine.load(theme_file)
-        elif hasattr(theme_engine, "load_json_theme"):
-            theme_engine.load_json_theme(theme_file)
-        else:
-            print("Unsupported JsonThemes API in your framework.")
-            return
-
-        # Apply the generated stylesheet to the QApplication
-        app = QApplication.instance()
-        if app is not None and hasattr(theme_engine, "stylesheet"):
-            app.setStyleSheet(theme_engine.stylesheet)
-        else:
-            print("No QApplication instance found; cannot apply theme")
     def __init__(self, parent=None):
         super().__init__(parent)
         self.main_window = parent
@@ -195,7 +157,6 @@ class SetupTab(QWidget):
         self.last_detected_tools = {}
         self.options_args_map = self._parse_options_arguments_set()
         self.download_thread = None
-        self.available_themes = []
         self._setup_ui()
 
     def _add_path_row(self, layout, label_text, config_key, row_widget):
@@ -427,42 +388,6 @@ class SetupTab(QWidget):
         self.logging_verbosity_combo = QComboBox()
         self.logging_verbosity_combo.addItems(["None", "Low", "Medium", "High", "Debug"])
         appearance_layout.addRow("LOGGING VERBOSITY:", self.logging_verbosity_combo)
-        # Font
-        font_layout = QHBoxLayout()
-        self.font_combo = QComboBox()
-        self.font_combo.addItem("System")
-        custom_fonts = self._load_and_get_custom_fonts()
-        self.font_combo.addItems(custom_fonts)
-        font_layout.addWidget(self.font_combo)
-        font_layout.addWidget(QLabel("Size:"))
-        self.font_size_spin = QSpinBox()
-        self.font_size_spin.setRange(8, 24)
-        self.font_size_spin.setValue(10)
-        font_layout.addWidget(self.font_size_spin)
-        appearance_layout.addRow("Font:", font_layout)
-        # Theme
-        self.theme_combo = QComboBox(self)
-        themes_dir = os.path.join(os.path.dirname(__file__), "theme", "gui", "themes")
-        self.available_themes = [
-            f.replace(".json", "") for f in os.listdir(themes_dir) if f.endswith(".json")
-        ]
-        self.available_themes.sort()
-        self.theme_combo.addItems(self.available_themes)
-
-        # Load current theme from settings
-        try:
-            settings = json_settings.Settings()
-            current_theme = getattr(settings, "theme_name", "default")
-        except Exception:
-            current_theme = "default"
-
-        if current_theme in self.available_themes:
-            index = self.available_themes.index(current_theme)
-            self.theme_combo.setCurrentIndex(index)
-
-        self.theme_combo.currentTextChanged.connect(self.apply_selected_theme)
-
-        appearance_layout.addRow("Theme Selection:", self.theme_combo)
         # Editor Page Size
         self.page_size_spin = QSpinBox()
         self.page_size_spin.setRange(75, 2000)
@@ -619,9 +544,6 @@ class SetupTab(QWidget):
         self.logging_verbosity_combo.currentTextChanged.connect(self.main_window._on_logging_verbosity_changed)
         
         # Appearance
-        self.font_combo.currentTextChanged.connect(self._on_appearance_changed)
-        self.font_size_spin.valueChanged.connect(self._on_appearance_changed)
-        self.theme_combo.currentTextChanged.connect(self._on_appearance_changed)
         self.page_size_spin.valueChanged.connect(self.config_changed.emit)
         self.restart_btn.clicked.connect(self._reset_to_defaults)
 
@@ -737,21 +659,6 @@ class SetupTab(QWidget):
             QMessageBox.critical(self, "Download Failed", f"Error: {message}")
         self.active_download_row = None
 
-    def _load_and_get_custom_fonts(self):
-        """Load fonts from the 'site' directory and return their family names."""
-        custom_fonts = []
-        site_path = os.path.join(constants.APP_ROOT_DIR, "site")
-        if os.path.exists(site_path):
-            for f in os.listdir(site_path):
-                if f.lower().endswith((".ttf", ".otf")):
-                    font_path = os.path.join(site_path, f)
-                    font_id = QFontDatabase.addApplicationFont(font_path)
-                    if font_id != -1:
-                        families = QFontDatabase.applicationFontFamilies(font_id)
-                        if families:
-                            custom_fonts.append(families[0])
-        return sorted(list(set(custom_fonts)))
-
     def _reset_to_defaults(self):
         """Reset the application's configuration to the shipped defaults."""
         reply = QMessageBox.question(self, "Reset to Defaults",
@@ -800,10 +707,6 @@ class SetupTab(QWidget):
         self.exit_sequence_list.addItems(["Kill-Game", "Kill-List", "Unmount-Iso", "Monitor-Config", "Taskbar", "Post1", "Controller-Mapper", "Post2", "Borderless", "Post3"])
         self.config_changed.emit()
         self._update_list_tooltips(self.exit_sequence_list)
-
-    def _on_appearance_changed(self):
-        self.config_changed.emit()
-        self._apply_visual_settings()
 
     def _on_sequence_context_menu(self, pos, list_widget, sequence_type):
         item = list_widget.itemAt(pos)
@@ -918,115 +821,6 @@ class SetupTab(QWidget):
         for i in range(list_widget.count()):
             self._update_item_tooltip(list_widget.item(i))
 
-    def _create_dark_palette(self):
-        """Creates a QPalette for a dark theme."""
-        dark_palette = QPalette()
-        dark_palette.setColor(QPalette.ColorRole.Window, QColor(53, 53, 53))
-        dark_palette.setColor(QPalette.ColorRole.WindowText, Qt.GlobalColor.white)
-        dark_palette.setColor(QPalette.ColorRole.Base, QColor(25, 25, 25))
-        dark_palette.setColor(QPalette.ColorRole.AlternateBase, QColor(53, 53, 53))
-        dark_palette.setColor(QPalette.ColorRole.ToolTipBase, Qt.GlobalColor.white)
-        dark_palette.setColor(QPalette.ColorRole.ToolTipText, Qt.GlobalColor.white)
-        dark_palette.setColor(QPalette.ColorRole.Text, Qt.GlobalColor.white)
-        dark_palette.setColor(QPalette.ColorRole.Button, QColor(53, 53, 53))
-        dark_palette.setColor(QPalette.ColorRole.ButtonText, Qt.GlobalColor.white)
-        dark_palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.red)
-        dark_palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
-        dark_palette.setColor(QPalette.ColorRole.Highlight, QColor(42, 130, 218))
-        dark_palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.black)
-        
-        dark_palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, QColor(127, 127, 127))
-        dark_palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, QColor(127, 127, 127))
-        dark_palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor(127, 127, 127))
-        return dark_palette
-
-    def _create_midnight_palette(self):
-        """Creates a QPalette for a Midnight (blue-black) theme."""
-        p = QPalette()
-        p.setColor(QPalette.ColorRole.Window, QColor(15, 15, 30))
-        p.setColor(QPalette.ColorRole.WindowText, QColor(220, 220, 220))
-        p.setColor(QPalette.ColorRole.Base, QColor(10, 10, 20))
-        p.setColor(QPalette.ColorRole.AlternateBase, QColor(20, 20, 40))
-        p.setColor(QPalette.ColorRole.ToolTipBase, QColor(255, 255, 220))
-        p.setColor(QPalette.ColorRole.ToolTipText, QColor(0, 0, 0))
-        p.setColor(QPalette.ColorRole.Text, QColor(220, 220, 220))
-        p.setColor(QPalette.ColorRole.Button, QColor(25, 25, 50))
-        p.setColor(QPalette.ColorRole.ButtonText, QColor(220, 220, 220))
-        p.setColor(QPalette.ColorRole.Link, QColor(80, 180, 255))
-        p.setColor(QPalette.ColorRole.Highlight, QColor(60, 80, 140))
-        p.setColor(QPalette.ColorRole.HighlightedText, QColor(255, 255, 255))
-        return p
-
-    def _create_ocean_palette(self):
-        """Creates a QPalette for an Ocean (teal/slate) theme."""
-        p = self._create_dark_palette() # Start with dark base
-        p.setColor(QPalette.ColorRole.Window, QColor(30, 45, 50))
-        p.setColor(QPalette.ColorRole.Base, QColor(20, 30, 35))
-        p.setColor(QPalette.ColorRole.AlternateBase, QColor(35, 50, 55))
-        p.setColor(QPalette.ColorRole.Button, QColor(40, 60, 65))
-        p.setColor(QPalette.ColorRole.Highlight, QColor(0, 150, 136)) # Teal highlight
-        p.setColor(QPalette.ColorRole.Link, QColor(0, 188, 212))
-        return p
-
-    def _apply_visual_settings(self):
-        """Apply theme and font settings from configuration."""
-        app = QApplication.instance()
-        if not app:
-            return
-
-        theme = self.theme_combo.currentText()
-        font_name = self.font_combo.currentText() or "System"
-        font_size = self.font_size_spin.value()
-
-        # 1. Set Font
-        font = QFont()
-        if font_name != "System":
-            font.setFamily(font_name)
-        font.setPointSize(font_size)
-        app.setFont(font)
-
-        # 2. Set Theme/Style
-        app.setStyleSheet("") # Clear any previous stylesheet
-
-        if theme == 'System':
-            # Restore original system style and palette
-            app.setStyle(self.main_window.original_style_name)
-            app.setPalette(self.main_window.original_palette)
-            return
-
-        if theme == "Midnight":
-            app.setStyle("Fusion")
-            app.setPalette(self._create_midnight_palette())
-            return
-        elif theme == "Ocean":
-            app.setStyle("Fusion")
-            app.setPalette(self._create_ocean_palette())
-            return
-
-        # Check if it is a JSON theme
-        if theme in self.available_themes:
-            self.apply_selected_theme(theme)
-            return
-
-        try:
-            import qdarktheme
-            theme_key = theme.lower()
-            if theme_key not in ["dark", "light", "auto"]:
-                theme_key = "dark"
-
-            if hasattr(qdarktheme, "setup_theme"):
-                qdarktheme.setup_theme(theme_key)
-            elif hasattr(qdarktheme, "load_stylesheet"):
-                if theme_key == "auto": theme_key = "dark"
-                app.setStyleSheet(qdarktheme.load_stylesheet(theme_key))
-        except Exception as e:
-            logging.warning(f"pyqtdarktheme module error: {e}. Falling back to Fusion.")
-            app.setStyle("Fusion")
-            if "Dark" in theme or theme == "Dark":
-                app.setPalette(self._create_dark_palette())
-            else:
-                app.setPalette(app.style().standardPalette())
-
     def sync_ui_from_config(self, config: AppConfig):
         self.blockSignals(True)
 
@@ -1037,25 +831,12 @@ class SetupTab(QWidget):
         self.other_managers_combo.setCurrentText(config.game_managers_present)
         self.exclude_manager_checkbox.setChecked(config.exclude_selected_manager_games)
         self.logging_verbosity_combo.setCurrentText(config.logging_verbosity)
-        self.font_combo.setCurrentText(config.app_font)
         
         self.run_as_admin_checkbox.setChecked(config.run_as_admin)
         self.use_kill_list_checkbox.setChecked(config.use_kill_list)
         self.hide_taskbar_checkbox.setChecked(config.hide_taskbar)
         self.terminate_bw_on_exit_checkbox.setChecked(config.terminate_borderless_on_exit)
 
-        # Handle legacy themes
-        theme = config.app_theme
-        if theme not in ["System", "Dark", "Light", "Auto", "Midnight", "Ocean"]:
-            if "Dark" in theme:
-                theme = "Dark"
-            elif "Light" in theme:
-                theme = "Light"
-            else:
-                theme = "Dark"
-        self.theme_combo.setCurrentText(theme)
-        
-        self.font_size_spin.setValue(config.font_size)
         self.page_size_spin.setValue(config.editor_page_size)
 
         for attr_name in self.PATH_ATTRIBUTES:
@@ -1101,9 +882,6 @@ class SetupTab(QWidget):
         config.game_managers_present = self.other_managers_combo.currentText()
         config.exclude_selected_manager_games = self.exclude_manager_checkbox.isChecked()
         config.logging_verbosity = self.logging_verbosity_combo.currentText()
-        config.app_font = self.font_combo.currentText()
-        config.app_theme = self.theme_combo.currentText()
-        config.font_size = self.font_size_spin.value()
         config.editor_page_size = self.page_size_spin.value()
 
         config.run_as_admin = self.run_as_admin_checkbox.isChecked()

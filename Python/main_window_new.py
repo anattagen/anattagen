@@ -361,19 +361,13 @@ class MainWindow(QMainWindow):
         """Updates the UI widgets with values from the AppConfig model."""
         self.setup_tab.sync_ui_from_config(self.config)
         self.deployment_tab.sync_ui_from_config(self.config)
-        
-        # Apply visual settings (Theme/Font)
-        self.setup_tab._apply_visual_settings()
 
     @pyqtSlot()
     def _sync_config_from_ui_and_save(self):
         """Updates the AppConfig model from the UI and saves it to disk."""
         self.setup_tab.sync_config_from_ui(self.config)
         self.deployment_tab.sync_config_from_ui(self.config)
-        
-        # Apply visual settings immediately
-        self.setup_tab._apply_visual_settings()
-        
+                
         self.config_manager.save_config(self.config)
 
     def on_create_button_clicked(self):
