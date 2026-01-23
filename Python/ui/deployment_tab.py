@@ -62,7 +62,6 @@ class LogViewerDialog(MessageBoxBase):
         self.text_edit = TextEdit()
         self.text_edit.setReadOnly(True)
         self.text_edit.setText(text)
-        self.viewLayout.addWidget(self.text_edit)
         
         # Buttons Layout
         btn_layout = QHBoxLayout()

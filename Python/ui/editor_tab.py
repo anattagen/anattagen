@@ -21,15 +21,11 @@ from PyQt6.QtGui import QColor
 from Python import constants
 from Python.managers.index_manager import backup_index
 
-class AppendKillListDialog(QDialog):
+class AppendKillListDialog(MessageBoxBase):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Append to Kill List")
-        self.setModal(True)
-        self.resize(400, 150)
-        layout = QVBoxLayout(self)
-        
-        layout.addWidget(BodyLabel("Enter executable name (e.g. notepad.exe) or variable:"))
+        self.viewLayout.addWidget(SubtitleLabel("Append to Kill List", self))
+        self.viewLayout.addWidget(BodyLabel("Enter executable name (e.g. notepad.exe) or variable:"))
         
         input_layout = QHBoxLayout()
         self.input_edit = LineEdit()
@@ -39,12 +35,11 @@ class AppendKillListDialog(QDialog):
         
         input_layout.addWidget(self.input_edit)
         input_layout.addWidget(browse_btn)
-        layout.addLayout(input_layout)
-        
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        self.viewLayout.addLayout(input_layout)
+
+        self.yesButton.setText("OK")
+        self.cancelButton.setText("Cancel")
+        self.widget.setMinimumWidth(400)
 
     def browse_file(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Select Executable", "", "Executables (*.exe);;All Files (*)")
@@ -862,11 +857,12 @@ class EditorTab(QWidget):
             MessageBox("Bulk Edit", "Please select rows to edit.", self).exec()
             return
 
-        dialog = MessageBoxBase(self)
-        dialog.viewLayout.addWidget(SubtitleLabel(f"Bulk Edit ({len(selected_rows)} items)", dialog))
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Bulk Edit ({len(selected_rows)} items)")
+        layout = QVBoxLayout(dialog)
         
         # Field selection
-        dialog.viewLayout.addWidget(BodyLabel("Select Field to Edit:"))
+        layout.addWidget(BodyLabel("Select Field to Edit:"))
         field_combo = ComboBox()
         
         # Define editable fields and their types
@@ -888,15 +884,17 @@ class EditorTab(QWidget):
         for name, col, type_ in fields:
             field_combo.addItem(name, (col, type_))
             
-        dialog.viewLayout.addWidget(field_combo)
+        layout.addWidget(field_combo)
         
         # Value input
-        dialog.viewLayout.addWidget(BodyLabel("New Value:"))
+        layout.addWidget(BodyLabel("New Value:"))
         value_check = CheckBox("Enable / True")
-        dialog.viewLayout.addWidget(value_check)
+        layout.addWidget(value_check)
         
-        dialog.yesButton.setText("OK")
-        dialog.cancelButton.setText("Cancel")
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
         
         if dialog.exec():
             col_enum, type_ = field_combo.currentData()
