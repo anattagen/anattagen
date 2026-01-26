@@ -1,7 +1,8 @@
 .gitignore
 */__pycache__
 *.index
-/site/site_values.ini
+deploy_ui.ini
+site_values.ini
 *.pyc
 *.spec
 *.cache
