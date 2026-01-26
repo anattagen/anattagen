@@ -2,7 +2,10 @@
 */__pycache__
 *.index
 *.pyc
-normalized_steam_games.cache
+*.spec
+*.cache
+*.code-workspace
+clean.bat
 python.lnk
 steam_filtered.txt
 Player1.amgp
@@ -15,7 +18,7 @@ config.json
 Python/app.log
 bin/7z.exe
 bin/*/*
-bin/*.log
+*.log
 bin/*.ini
 bin/*.cfg
 bin/*.conf

@@ -4,9 +4,6 @@ import logging
 import argparse
 from PyQt6.QtWidgets import QApplication
 app = QApplication(sys.argv)
-
-from ui.theme.theme_loader import ThemeLoader
-
 # Add the parent directory (anattagen) to the Python path
 # This allows for absolute imports from the project root (e.g., from Python.main_window_new)
 script_dir = os.path.dirname(os.path.abspath(__file__))
