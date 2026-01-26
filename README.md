@@ -1,4 +1,4 @@
-GITTY YUPPY
+anattagen
 
 A desktop application to create isolated environments for PC games. 
 
@@ -41,13 +41,13 @@ AntimicroX, keySticks, multimonitortool.
 
 
 ## Installation
-.99.99.9.9
+.98.82.11
 
-ver
+1.0
 
 Run the installer or extract the binary to a location of your choice, **or** download and build and run the source files and executables.
 ```
-GITTY YUPPY/
+anattagen/
 ├── assets/
 │   ├── ax_DeskTemplate.set
 │   ├── ax_GameTemplate.set
@@ -135,7 +135,7 @@ GITTY YUPPY/
 ```
 # Documentation
 
-GITTY YUPPY
+anattagen
 
 # Setup
 
@@ -146,8 +146,8 @@ GITTY YUPPY
 ```
 		sudo apt install python3-venv python3-pip
 		cd ~
-		git clone --recursive https://hi/GITTY YUPPY.git
-		cd GITTY YUPPY
+		git clone --recursive https://https://github.com/anattagen/anattagen/anattagen.git
+		cd anattagen
 		python3 -m venv .venv
 		source .venv/bin/activate
 		python -m pip install -r requirements.txt
@@ -164,8 +164,8 @@ win
 ### Now you can clone or download the repo, and install the requirements via pip
 ```
 		cd %userprofile%/Downloads
-		git clone --recursive https://hi/GITTY YUPPY
-		cd GITTY YUPPY
+		git clone --recursive https://https://github.com/anattagen/anattagen/anattagen
+		cd anattagen
 		python -m pip install -r requirements_win.txt
 		python -m Python\main.py
 ```
