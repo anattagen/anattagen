@@ -221,127 +221,111 @@ class SiteGenerator(QWidget): # temp
             QMessageBox.critical(self, "Error", f"Could not load file: {e}")
             return
 
-        # Clear existing fields
-        for i in reversed(range(self.form_layout.count())):
-            self.form_layout.itemAt(i).widget().setParent(None)
-        self.tag_widgets.clear()
-
-        # Find tags that match known tags (whitelist). This avoids matching
-        # arbitrary bracketed strings from JS/HTML that aren't variables.
+        # When loading a template, do NOT destroy the existing UI. Instead
+        # update theme-related fields from the template (if concrete values
+        # are present) and add any new bracketed tags as editable fields.
         all_bracketed = set(re.findall(r'\[([^\]]+)\]', self.template_content))
-        found_tags = {t for t in all_bracketed if f"[{t}]" in self.known_tags}
+        found_tags = {f"[{t}]" for t in all_bracketed}
 
-        # Sort alphabetically
-        sorted_tags = sorted(list(found_tags))
+        # parse concrete theme values from the template text (if present)
+        parsed_theme_vals = self.parse_theme_values(self.template_content)
 
-        for tag_inner in sorted_tags:
-            tag_full = f"[{tag_inner}]"
-            
+        # Update existing widgets for theme tags
+        for tag, widget in list(self.tag_widgets.items()):
+            if tag.startswith('[THEME_]') or tag.startswith('[THEME_'):
+                if tag in parsed_theme_vals:
+                    val = parsed_theme_vals.get(tag)
+                    try:
+                        if isinstance(widget, QLineEdit):
+                            widget.setText(val)
+                        elif isinstance(widget, QTextEdit):
+                            widget.setPlainText(val)
+                        elif isinstance(widget, QComboBox):
+                            widget.setCurrentText(val)
+                    except Exception:
+                        pass
+
+        # For any bracketed tag found in the template that we don't yet have
+        # a widget for, create one. For theme tags prefer parsed value or
+        # site default, otherwise initialize to the tag string.
+        for tag_full in sorted(found_tags):
+            if tag_full in self.tag_widgets:
+                continue
+            tag_info = self.known_tags.get(tag_full, {})
+            label_text = tag_info.get('desc', tag_full)
+            widget_type = tag_info.get('type', 'lineedit')
+
             row_widget = QWidget()
             row_layout = QVBoxLayout(row_widget)
             row_layout.setContentsMargins(0, 5, 0, 5)
-            
-            tag_info = self.known_tags.get(tag_full, {})
-            label_text = tag_info.get("desc", tag_full)
-            widget_type = tag_info.get("type", "lineedit")
-
             label = QLabel(label_text)
-            label.setStyleSheet("font-weight: bold;")
-            
-            edit = None
-            if widget_type == "textarea":
+            label.setStyleSheet('font-weight: bold;')
+
+            if widget_type == 'textarea':
                 edit = QTextEdit()
-                edit.setPlaceholderText(f"Value for {tag_full}")
                 edit.setAcceptRichText(False)
                 edit.setMinimumHeight(80)
-            elif widget_type == "combobox":
+            elif widget_type == 'combobox':
                 edit = QComboBox()
-                edit.setPlaceholderText(f"Value for {tag_full}")
-                if tag_info.get("editable", False):
+                if tag_info.get('editable', False):
                     edit.setEditable(True)
-                edit.addItems(tag_info.get("options", []))
-            else: # lineedit
+                edit.addItems(tag_info.get('options', []))
+            else:
                 edit = QLineEdit()
-                edit.setPlaceholderText(f"Value for {tag_full}")
-            # Pre-populate widgets with the tag text itself as a visible default
-            # so users can see/keep the placeholder value easily.
+
+            # choose initial value
+            init_val = None
+            if tag_full in parsed_theme_vals:
+                init_val = parsed_theme_vals[tag_full]
+            elif tag_full in self.site_defaults:
+                init_val = self.site_defaults[tag_full]
+            else:
+                init_val = tag_full if not tag_full.startswith('[THEME_') else self.site_defaults.get(tag_full, tag_full)
+
             try:
                 if isinstance(edit, QLineEdit):
-                    edit.setText(tag_full)
+                    edit.setText(init_val)
                 elif isinstance(edit, QTextEdit):
-                    edit.setPlainText(tag_full)
+                    edit.setPlainText(init_val)
                 elif isinstance(edit, QComboBox):
-                    # setCurrentText will work for editable combos
-                    edit.setCurrentText(tag_full)
+                    edit.setCurrentText(init_val)
             except Exception:
                 pass
+
             row_layout.addWidget(label)
             row_layout.addWidget(edit)
-            
             line = QFrame()
             line.setFrameShape(QFrame.Shape.HLine)
             line.setFrameShadow(QFrame.Shadow.Sunken)
-            
             self.form_layout.addWidget(row_widget)
             self.form_layout.addWidget(line)
-            
             self.tag_widgets[tag_full] = edit
-
-        # If the "Load defaults" checkbox is enabled, populate widgets
-        if hasattr(self, 'load_defaults_cb') and self.load_defaults_cb.isChecked():
-            self.apply_defaults()
 
     def generate_html(self):
         if not self.template_content:
             return
 
         output_content = self.template_content
-        # If the 'Load defaults' checkbox is checked, prefer known defaults
-        # (or first combobox option) when the user left the field as the tag
-        # placeholder. This produces a hardcoded HTML with concrete values.
-        if hasattr(self, 'load_defaults_cb') and self.load_defaults_cb.isChecked():
-            # build a replacement map taking widget values unless they
-            # equal the literal tag (or are empty) in which case use
-            # the declared default or first option
-            replacements = {}
-            for tag, widget in self.tag_widgets.items():
-                tag_info = self.known_tags.get(tag, {})
-                preferred = tag_info.get('default')
-                # if default is the literal tag, try combobox options
-                if preferred == tag:
-                    if tag_info.get('type') == 'combobox':
-                        opts = tag_info.get('options', [])
-                        preferred = opts[0] if opts else ''
-                    else:
-                        preferred = ''
+        # Build replacements from current widgets. For each tag, if the
+        # widget value is empty or equals the literal tag and a site default
+        # exists, prefer the site default. This behavior is not tied to a
+        # checkbox now — the `Load defaults` button resets UI; generation
+        # uses current widget values (falling back to site defaults when
+        # fields are left as the literal tag).
+        for tag, widget in self.tag_widgets.items():
+            value = ""
+            if isinstance(widget, QLineEdit):
+                value = widget.text()
+            elif isinstance(widget, QTextEdit):
+                value = widget.toPlainText()
+            elif isinstance(widget, QComboBox):
+                value = widget.currentText()
 
-                # read widget current value
-                value = ''
-                if isinstance(widget, QLineEdit):
-                    value = widget.text()
-                elif isinstance(widget, QTextEdit):
-                    value = widget.toPlainText()
-                elif isinstance(widget, QComboBox):
-                    value = widget.currentText()
+            # if value empty or equals the literal tag and site default exists
+            if (not value or value == tag) and tag in self.site_defaults:
+                value = self.site_defaults[tag]
 
-                # If value is empty or still the literal tag, use preferred
-                if not value or value == tag:
-                    replacements[tag] = preferred
-                else:
-                    replacements[tag] = value
-
-            for tag, value in replacements.items():
-                output_content = output_content.replace(tag, value)
-        else:
-            for tag, widget in self.tag_widgets.items():
-                value = ""
-                if isinstance(widget, QLineEdit):
-                    value = widget.text()
-                elif isinstance(widget, QTextEdit):
-                    value = widget.toPlainText()
-                elif isinstance(widget, QComboBox):
-                    value = widget.currentText()
-                output_content = output_content.replace(tag, value)
+            output_content = output_content.replace(tag, value)
 
         save_path, _ = QFileDialog.getSaveFileName(self, "Save HTML", "", "HTML Files (*.html)")
         if save_path:
