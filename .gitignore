@@ -1,6 +1,7 @@
 .gitignore
 */__pycache__
 *.index
+/site/site_values.ini
 *.pyc
 *.spec
 *.cache
