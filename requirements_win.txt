@@ -1,3 +1,4 @@
+py7zr
 PyQt6
 nltk
 winshell
@@ -7,4 +8,3 @@ beautifulsoup4
 configparser
 psutil
 pygame
-pyqtdarktheme
