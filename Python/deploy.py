@@ -25,6 +25,27 @@ SITE_SET = Path("site") / "index.set"
 OUT_README = Path("README.md")
 OUT_INDEX = Path("site") / "index.html"
 
+# Variables to exclude from the deploy UI
+EXCLUDED_TAGS = {
+    "0",
+    "1",
+    "?&",
+    "htmlinjection",
+    "just after lauch &amp; just before exit",
+    "keymappers",
+    "monitors",
+    '^"&?\\/',
+    "^\\/",
+    "assigned level",
+    '"module", "exports"',
+    "data-smoothie",
+    "i",
+    "r",
+    "t",
+    "user",
+    "pre / post",
+}
+
 
 def read_file(path: Path) -> str:
     if not path.exists():
@@ -35,13 +56,16 @@ def read_file(path: Path) -> str:
 def find_tags_in_text(text: str) -> Set[str]:
     # Find bracketed tokens like [TAG]
     tokens = re.findall(r"\[([^\]]+)\]", text)
-    return set(tokens)
+    return set(token.strip() for token in tokens)
 
 
 def find_tags(files: List[Path]) -> List[str]:
     tags: Set[str] = set()
     for p in files:
         tags.update(find_tags_in_text(read_file(p)))
+    # Filter out excluded tags (case-insensitive)
+    excluded_lower = {tag.lower() for tag in EXCLUDED_TAGS}
+    tags = {tag for tag in tags if tag.lower() not in excluded_lower}
     # Keep deterministic order
     return sorted(tags)
 
@@ -259,6 +283,8 @@ def load_ini_values(ini_path: Path):
 def find_tags_in_text(text: str) -> Set[str]:
     # find tokens like [KEY]
     tags = set(re.findall(r"\[([A-Za-z0-9_\-]+)\]", text))
+    # Filter out excluded tags
+    tags = tags - EXCLUDED_TAGS
     return tags
 
 

@@ -7,6 +7,7 @@ site_values.ini
 *.spec
 *.cache
 *.code-workspace
+codespaces-start-gui.sh
 clean.bat
 python.lnk
 steam_filtered.txt
@@ -18,7 +19,6 @@ Game.*
 .vscode
 config.json
 Python/app.log
-bin/7z.exe
 bin/*/*
 *.log
 bin/*.ini
