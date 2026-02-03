@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem, QLabel,
     QPushButton, QHeaderView, QAbstractItemView, QMenu, QCheckBox, QLineEdit,
     QApplication, QFileDialog, QInputDialog, QMessageBox, QSpinBox, QDialog,
-    QDialogButtonBox, QComboBox, QProgressDialog
+    QDialogButtonBox, QComboBox, QProgressDialog, QSizePolicy
 )
 import os
 import json 
@@ -808,6 +808,10 @@ class EditorTab(QWidget):
         if col == constants.EditorCols.KILL_LIST.value:
             self._add_kill_list_menu(menu, row)
 
+        if col == constants.EditorCols.ISO_PATH.value:
+            search_iso_action = menu.addAction("Search for disc images")
+            search_iso_action.triggered.connect(lambda: self.search_disc_images_selected(row))
+
         # Append to Kill List Action (for selection)
         selected_rows = self.table.selectionModel().selectedRows()
         if len(selected_rows) > 0:
@@ -1549,6 +1553,54 @@ class EditorTab(QWidget):
             except Exception as e:
                 print(f"Error searching Steam ID: {e}")
 
+    def search_disc_images_selected(self, row):
+        """Search for disc images in the game directory for selected rows."""
+        selected_rows = set()
+        for range_ in self.table.selectedRanges():
+            for r in range(range_.topRow(), range_.bottomRow() + 1):
+                selected_rows.add(r)
+        
+        if row is not None and row >= 0 and row not in selected_rows:
+            selected_rows.add(row)
+            
+        if not selected_rows:
+            return
+
+        self.push_undo()
+        
+        disc_extensions = {'.iso', '.cue', '.bin', '.img', '.mdf', '.nrg', '.gdi', '.cdi', '.vhd', '.vhdx', '.vmdk', '.wbfs', '.cso', '.chd'}
+        
+        count = 0
+        for r in selected_rows:
+            real_index = (self.current_page * self.page_size) + r
+            if real_index < len(self.filtered_data):
+                game = self.filtered_data[real_index]
+                directory = game.get('directory', '')
+                
+                if not directory or not os.path.exists(directory):
+                    continue
+                
+                found_images = []
+                try:
+                    for root, dirs, files in os.walk(directory):
+                        for f in files:
+                            if os.path.splitext(f)[1].lower() in disc_extensions:
+                                found_images.append(os.path.join(root, f))
+                except Exception as e:
+                    print(f"Error searching for ISOs in {directory}: {e}")
+                    continue
+                
+                if found_images:
+                    game['_found_isos'] = found_images
+                    self.table.setCellWidget(r, constants.EditorCols.ISO_PATH.value, 
+                        self._create_iso_combo_widget(game.get('iso_path', ''), found_images, r, constants.EditorCols.ISO_PATH.value))
+                    count += 1
+        
+        if count > 0:
+            self.main_window.statusBar().showMessage(f"Found disc images for {count} games", 3000)
+        else:
+            QMessageBox.information(self, "Search Complete", "No disc images found in the scanned directories.")
+
     def _add_kill_list_menu(self, menu, row):
         """Add context menu items for Kill List."""
         kp_menu = menu.addMenu("Add Common Process")
@@ -1994,8 +2046,12 @@ class EditorTab(QWidget):
         elif col == constants.EditorCols.ISO_PATH.value:
             widget = self.table.cellWidget(row, col)
             if widget:
-                le = widget.findChild(QLineEdit)
-                if le: game['iso_path'] = le.text()
+                combo = widget.findChild(QComboBox)
+                if combo:
+                    game['iso_path'] = combo.currentText()
+                else:
+                    le = widget.findChild(QLineEdit)
+                    if le: game['iso_path'] = le.text()
             else:
                 item = self.table.item(row, col)
                 if item: game['iso_path'] = item.text()
@@ -2362,7 +2418,11 @@ class EditorTab(QWidget):
         self.table.setItem(row_num, constants.EditorCols.TERM_ORDER.value, QTableWidgetItem(", ".join(self.main_window.config.exit_sequence)))
 
         # ISO Path
-        self.table.setCellWidget(row_num, constants.EditorCols.ISO_PATH.value, self._create_iso_path_widget(game.get('iso_path', ''), row_num, constants.EditorCols.ISO_PATH.value))
+        found_isos = game.get('_found_isos')
+        if found_isos:
+            self.table.setCellWidget(row_num, constants.EditorCols.ISO_PATH.value, self._create_iso_combo_widget(game.get('iso_path', ''), found_isos, row_num, constants.EditorCols.ISO_PATH.value))
+        else:
+            self.table.setCellWidget(row_num, constants.EditorCols.ISO_PATH.value, self._create_iso_path_widget(game.get('iso_path', ''), row_num, constants.EditorCols.ISO_PATH.value))
 
         # Disc-Mount (CheckBox, Path with symbol, RunWait)
         dm_symbol, dm_run_wait = self._get_propagation_symbol_and_run_wait('disc_mount_path')
@@ -2578,6 +2638,46 @@ class EditorTab(QWidget):
             self.push_undo()
             line_edit.setText(file_path)
 
+    def _create_iso_combo_widget(self, path_text, items, row, col):
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(4, 0, 4, 0)
+        layout.setSpacing(2)
+        
+        combo = QComboBox()
+        combo.setEditable(True)
+        combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        
+        combo_items = [""] + sorted(items)
+        if path_text and path_text not in combo_items:
+            combo_items.insert(1, path_text)
+        combo.addItems(combo_items)
+        
+        combo.setCurrentText(path_text)
+        combo.setToolTip(path_text)
+        combo.currentTextChanged.connect(lambda: self._sync_cell_to_data(row, col))
+        
+        browse_btn = QPushButton("...")
+        browse_btn.setMaximumWidth(30)
+        browse_btn.clicked.connect(lambda: self._browse_iso_path_combo(combo))
+        
+        layout.addWidget(combo)
+        layout.addWidget(browse_btn)
+        return widget
+
+    def _browse_iso_path_combo(self, combo):
+        current_path = combo.currentText()
+        start_dir = os.path.dirname(current_path) if current_path and os.path.exists(current_path) else ""
+        
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select Disc Image", start_dir, 
+            "Disc Images (*.iso *.cue *.bin *.img *.mdf *.nrg *.gdi *.cdi *.vhd *.vhdx *.vmdk *.wbfs *.cso *.chd);;All Files (*.*)"
+        )
+        
+        if file_path:
+            self.push_undo()
+            combo.setCurrentText(file_path)
+
     def clear_table(self):
         """Clear the table and reset original data."""
         self.table.setRowCount(0)
@@ -2621,6 +2721,208 @@ class EditorTab(QWidget):
 
     def _parse_game_ini(self, ini_path, profile_path):
         """Parse a Game.ini file and return a game data dictionary."""
+        config = configparser.ConfigParser()
+        config.read(ini_path)
+        
+        game_data = {}
+        
+        # [Game]
+        game_data['create'] = True
+        game_data['name'] = config.get('Game', 'Executable', fallback='')
+        game_data['directory'] = config.get('Game', 'Directory', fallback='')
+        game_data['name_override'] = config.get('Game', 'Name', fallback=os.path.basename(profile_path))
+        game_data['iso_path'] = config.get('Game', 'IsoPath', fallback='')
+        
+        # Try to find Steam ID from Game.json
+        json_path = os.path.join(profile_path, "Game.json")
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, 'r') as f:
+                    data = json.load(f)
+                    if data:
+                        key = next(iter(data))
+                        game_data['steam_id'] = key
+            except:
+                pass
+        
+        # [Options]
+        game_data['run_as_admin'] = config.getboolean('Options', 'RunAsAdmin', fallback=False)
+        game_data['hide_taskbar'] = config.getboolean('Options', 'HideTaskbar', fallback=False)
+        game_data['options'] = config.get('Options', 'Borderless', fallback='0')
+        game_data['kill_list_enabled'] = config.getboolean('Options', 'UseKillList', fallback=False)
+        game_data['terminate_borderless_on_exit'] = config.getboolean('Options', 'TerminateBorderlessOnExit', fallback=False)
+        game_data['kill_list'] = config.get('Options', 'KillList', fallback='')
+        
+        # Helper for paths
+        def get_path(section, key, source_key=None):
+            if source_key and config.has_option('SourcePaths', source_key):
+                return "> " + config.get('SourcePaths', source_key)
+            val = config.get(section, key, fallback='')
+            return val
+
+        # [Paths]
+        game_data['controller_mapper_path'] = get_path('Paths', 'ControllerMapperApp', 'ControllerMapperApp')
+        game_data['controller_mapper_options'] = config.get('Paths', 'ControllerMapperOptions', fallback='')
+        game_data['controller_mapper_arguments'] = config.get('Paths', 'ControllerMapperArguments', fallback='')
+        game_data['controller_mapper_enabled'] = bool(game_data['controller_mapper_path'])
+        
+        game_data['borderless_windowing_path'] = get_path('Paths', 'BorderlessWindowingApp', 'BorderlessWindowingApp')
+        game_data['borderless_windowing_options'] = config.get('Paths', 'BorderlessWindowingOptions', fallback='')
+        game_data['borderless_windowing_arguments'] = config.get('Paths', 'BorderlessWindowingArguments', fallback='')
+        game_data['borderless_windowing_enabled'] = bool(game_data['borderless_windowing_path'])
+        
+        game_data['multi_monitor_app_path'] = get_path('Paths', 'MultiMonitorTool', 'MultiMonitorTool')
+        game_data['multi_monitor_app_options'] = config.get('Paths', 'MultiMonitorOptions', fallback='')
+        game_data['multi_monitor_app_arguments'] = config.get('Paths', 'MultiMonitorArguments', fallback='')
+        game_data['multi_monitor_app_enabled'] = bool(game_data['multi_monitor_app_path'])
+        
+        game_data['player1_profile'] = get_path('Paths', 'Player1Profile', 'Player1Profile')
+        game_data['player1_profile_enabled'] = bool(game_data['player1_profile'])
+        game_data['player2_profile'] = get_path('Paths', 'Player2Profile', 'Player2Profile')
+        game_data['player2_profile_enabled'] = bool(game_data['player2_profile'])
+        game_data['mm_game_profile'] = get_path('Paths', 'MultiMonitorGamingConfig', 'MultiMonitorGamingConfig')
+        game_data['mm_game_profile_enabled'] = bool(game_data['mm_game_profile'])
+        game_data['mm_desktop_profile'] = get_path('Paths', 'MultiMonitorDesktopConfig', 'MultiMonitorDesktopConfig')
+        game_data['mm_desktop_profile_enabled'] = bool(game_data['mm_desktop_profile'])
+        game_data['mediacenter_profile'] = get_path('Paths', 'MediaCenterProfile', 'MediaCenterProfile')
+        game_data['mediacenter_profile_enabled'] = bool(game_data['mediacenter_profile'])
+        
+        game_data['launcher_executable'] = config.get('Paths', 'LauncherExecutable', fallback='')
+        game_data['launcher_executable_enabled'] = bool(game_data['launcher_executable'])
+        
+        # [PreLaunch]
+        for i in range(1, 4):
+            app_key = f'App{i}'
+            game_data[f'pre{i}_path'] = get_path('PreLaunch', app_key, f'PreLaunchApp{i}')
+            game_data[f'pre{i}_options'] = config.get('PreLaunch', f'{app_key}Options', fallback='')
+            game_data[f'pre{i}_arguments'] = config.get('PreLaunch', f'{app_key}Arguments', fallback='')
+            game_data[f'pre_{i}_run_wait'] = config.getboolean('PreLaunch', f'{app_key}Wait', fallback=False)
+            game_data[f'pre_{i}_enabled'] = bool(game_data[f'pre{i}_path'])
+
+        # [PostLaunch]
+        for i in range(1, 4):
+            app_key = f'App{i}'
+            game_data[f'post{i}_path'] = get_path('PostLaunch', app_key, f'PostLaunchApp{i}')
+            game_data[f'post{i}_options'] = config.get('PostLaunch', f'{app_key}Options', fallback='')
+            game_data[f'post{i}_arguments'] = config.get('PostLaunch', f'{app_key}Arguments', fallback='')
+            game_data[f'post_{i}_run_wait'] = config.getboolean('PostLaunch', f'{app_key}Wait', fallback=False)
+            game_data[f'post_{i}_enabled'] = bool(game_data[f'post{i}_path'])
+            
+        game_data['just_after_launch_path'] = get_path('PostLaunch', 'JustAfterLaunchApp', 'JustAfterLaunchApp')
+        game_data['just_after_launch_options'] = config.get('PostLaunch', 'JustAfterLaunchOptions', fallback='')
+        game_data['just_after_launch_arguments'] = config.get('PostLaunch', 'JustAfterLaunchArguments', fallback='')
+        game_data['just_after_launch_run_wait'] = config.getboolean('PostLaunch', 'JustAfterLaunchWait', fallback=False)
+        game_data['just_after_launch_enabled'] = bool(game_data['just_after_launch_path'])
+        
+        game_data['just_before_exit_path'] = get_path('PostLaunch', 'JustBeforeExitApp', 'JustBeforeExitApp')
+        game_data['just_before_exit_options'] = config.get('PostLaunch', 'JustBeforeExitOptions', fallback='')
+        game_data['just_before_exit_arguments'] = config.get('PostLaunch', 'JustBeforeExitArguments', fallback='')
+        game_data['just_before_exit_run_wait'] = config.getboolean('PostLaunch', 'JustBeforeExitWait', fallback=False)
+        game_data['just_before_exit_enabled'] = bool(game_data['just_before_exit_path'])
+
+        return game_data
+        config = configparser.ConfigParser()
+        config.read(ini_path)
+        game_data = {}
+        
+        # [Game]
+        game_data['create'] = True
+        game_data['name'] = config.get('Game', 'Executable', fallback='')
+        game_data['directory'] = config.get('Game', 'Directory', fallback='')
+        game_data['name_override'] = config.get('Game', 'Name', fallback=os.path.basename(profile_path))
+        game_data['iso_path'] = config.get('Game', 'IsoPath', fallback='')
+        
+        # Try to find Steam ID from Game.json
+        json_path = os.path.join(profile_path, "Game.json")
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, 'r') as f:
+                    data = json.load(f)
+                    if data:
+                        key = next(iter(data))
+                        game_data['steam_id'] = key
+            except:
+                pass
+        
+        # [Options]
+        game_data['run_as_admin'] = config.getboolean('Options', 'RunAsAdmin', fallback=False)
+        game_data['hide_taskbar'] = config.getboolean('Options', 'HideTaskbar', fallback=False)
+        game_data['options'] = config.get('Options', 'Borderless', fallback='0')
+        game_data['kill_list_enabled'] = config.getboolean('Options', 'UseKillList', fallback=False)
+        game_data['terminate_borderless_on_exit'] = config.getboolean('Options', 'TerminateBorderlessOnExit', fallback=False)
+        game_data['kill_list'] = config.get('Options', 'KillList', fallback='')
+        
+        # Helper for paths
+        def get_path(section, key, source_key=None):
+            if source_key and config.has_option('SourcePaths', source_key):
+                return "> " + config.get('SourcePaths', source_key)
+            val = config.get(section, key, fallback='')
+            return val
+
+        # [Paths]
+        game_data['controller_mapper_path'] = get_path('Paths', 'ControllerMapperApp', 'ControllerMapperApp')
+        game_data['controller_mapper_options'] = config.get('Paths', 'ControllerMapperOptions', fallback='')
+        game_data['controller_mapper_arguments'] = config.get('Paths', 'ControllerMapperArguments', fallback='')
+        game_data['controller_mapper_enabled'] = bool(game_data['controller_mapper_path'])
+        
+        game_data['borderless_windowing_path'] = get_path('Paths', 'BorderlessWindowingApp', 'BorderlessWindowingApp')
+        game_data['borderless_windowing_options'] = config.get('Paths', 'BorderlessWindowingOptions', fallback='')
+        game_data['borderless_windowing_arguments'] = config.get('Paths', 'BorderlessWindowingArguments', fallback='')
+        game_data['borderless_windowing_enabled'] = bool(game_data['borderless_windowing_path'])
+        
+        game_data['multi_monitor_app_path'] = get_path('Paths', 'MultiMonitorTool', 'MultiMonitorTool')
+        game_data['multi_monitor_app_options'] = config.get('Paths', 'MultiMonitorOptions', fallback='')
+        game_data['multi_monitor_app_arguments'] = config.get('Paths', 'MultiMonitorArguments', fallback='')
+        game_data['multi_monitor_app_enabled'] = bool(game_data['multi_monitor_app_path'])
+        
+        game_data['player1_profile'] = get_path('Paths', 'Player1Profile', 'Player1Profile')
+        game_data['player1_profile_enabled'] = bool(game_data['player1_profile'])
+        game_data['player2_profile'] = get_path('Paths', 'Player2Profile', 'Player2Profile')
+        game_data['player2_profile_enabled'] = bool(game_data['player2_profile'])
+        game_data['mm_game_profile'] = get_path('Paths', 'MultiMonitorGamingConfig', 'MultiMonitorGamingConfig')
+        game_data['mm_game_profile_enabled'] = bool(game_data['mm_game_profile'])
+        game_data['mm_desktop_profile'] = get_path('Paths', 'MultiMonitorDesktopConfig', 'MultiMonitorDesktopConfig')
+        game_data['mm_desktop_profile_enabled'] = bool(game_data['mm_desktop_profile'])
+        game_data['mediacenter_profile'] = get_path('Paths', 'MediaCenterProfile', 'MediaCenterProfile')
+        game_data['mediacenter_profile_enabled'] = bool(game_data['mediacenter_profile'])
+        
+        game_data['launcher_executable'] = config.get('Paths', 'LauncherExecutable', fallback='')
+        game_data['launcher_executable_enabled'] = bool(game_data['launcher_executable'])
+        
+        # [PreLaunch]
+        for i in range(1, 4):
+            app_key = f'App{i}'
+            game_data[f'pre{i}_path'] = get_path('PreLaunch', app_key, f'PreLaunchApp{i}')
+            game_data[f'pre{i}_options'] = config.get('PreLaunch', f'{app_key}Options', fallback='')
+            game_data[f'pre{i}_arguments'] = config.get('PreLaunch', f'{app_key}Arguments', fallback='')
+            game_data[f'pre_{i}_run_wait'] = config.getboolean('PreLaunch', f'{app_key}Wait', fallback=False)
+            game_data[f'pre_{i}_enabled'] = bool(game_data[f'pre{i}_path'])
+
+        # [PostLaunch]
+        for i in range(1, 4):
+            app_key = f'App{i}'
+            game_data[f'post{i}_path'] = get_path('PostLaunch', app_key, f'PostLaunchApp{i}')
+            game_data[f'post{i}_options'] = config.get('PostLaunch', f'{app_key}Options', fallback='')
+            game_data[f'post{i}_arguments'] = config.get('PostLaunch', f'{app_key}Arguments', fallback='')
+            game_data[f'post_{i}_run_wait'] = config.getboolean('PostLaunch', f'{app_key}Wait', fallback=False)
+            game_data[f'post_{i}_enabled'] = bool(game_data[f'post{i}_path'])
+            
+        game_data['just_after_launch_path'] = get_path('PostLaunch', 'JustAfterLaunchApp', 'JustAfterLaunchApp')
+        game_data['just_after_launch_options'] = config.get('PostLaunch', 'JustAfterLaunchOptions', fallback='')
+        game_data['just_after_launch_arguments'] = config.get('PostLaunch', 'JustAfterLaunchArguments', fallback='')
+        game_data['just_after_launch_run_wait'] = config.getboolean('PostLaunch', 'JustAfterLaunchWait', fallback=False)
+        game_data['just_after_launch_enabled'] = bool(game_data['just_after_launch_path'])
+        
+        game_data['just_before_exit_path'] = get_path('PostLaunch', 'JustBeforeExitApp', 'JustBeforeExitApp')
+        game_data['just_before_exit_options'] = config.get('PostLaunch', 'JustBeforeExitOptions', fallback='')
+        game_data['just_before_exit_arguments'] = config.get('PostLaunch', 'JustBeforeExitArguments', fallback='')
+        game_data['just_before_exit_run_wait'] = config.getboolean('PostLaunch', 'JustBeforeExitWait', fallback=False)
+        game_data['just_before_exit_enabled'] = bool(game_data['just_before_exit_path'])
+
+        return game_data
+        QMessageBox.information(self, "Import", "No valid profiles found.")
+
+    def _parse_game_ini(self, ini_path, profile_path):
         config = configparser.ConfigParser()
         config.read(ini_path)
         

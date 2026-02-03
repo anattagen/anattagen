@@ -3,5 +3,16 @@ REM nativemount.cmd.set - Native Windows Mount Template
 set "DISCIMAGE=%~1"
 if "%DISCIMAGE%"=="" goto :eof
 if exist "drvltr" del /q "drvltr"
-
+for %%a in (d e f g h i j k l m n o p q r s t u v w x y z) do (
+    vol %%a: | find "Volume" 
+    if not errorlevel 1 (
+         set CUR_DRVS=%%a!CUR_DRVS!
+         continue
+    ) 
+    else FREEDRV=%%a !FREEDRV!
+)
 powershell -Command "$m = Mount-DiskImage -ImagePath '%DISCIMAGE%' -PassThru; if ($m) { ($m | Get-Volume).DriveLetter | Out-File -FilePath 'drvltr' -Encoding ASCII -NoNewline }"
+for %%a in (%FREEDRV%) do (
+    vol %%a: | find "Volume" 
+    if not errorlevel 1 echo.%%~a>>drvltr
+)

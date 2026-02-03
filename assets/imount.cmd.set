@@ -10,42 +10,44 @@ if "%IEXE%" == "" || if !exist("%IEXE%") (
 )
 set "DISCIMAGE=%~1"
 set "DRIVELETTER=%~2"
+
+REM Detect available drive letter if not specified
 for %%a in (a b c d e f g h i j k l m n o p q r s t u v w x y z) do (
     vol CUR_DRVS: | find "%%a" 
     if not errorlevel 1 (
          set CUR_DRVS=%%a!CUR_DRVS!
-    ) 
+    ) else( 
+        set CUR_AVIL=%%a !CUR_AVAIL!
+    )
 )
 
-REM Detect available drive letter if not specified
 if "%DRIVELETTER%"=="" (
-    for %%a in (a b c d e f g h i j k l m n o p q r s t u v w x y z) do (
+    for %%a in (CUR_AVAIL) do (
         vol %%a: | find "Volume" >nul 2>&1
         if errorlevel 1 (
-            
             set "DRIVELETTER=%%a"
-            goto :found_drive
+            call :found_drive
         )
     )
 )
 :found_drive
-
 REM Mount disc image using imount
 if exist "%IEXE%" (
     if "%DRIVELETTER%"=="" (
         "%IEXE%" "%DISCIMAGE%"
     ) else (
-            for %%a in (d e f g h i j k l m n o p q r s t u v w x y z) do (
+            for %%a in (%CUR_AVAIL%) do (
                 echo.%CUR_DRVS% | find "%%a" >NUL 2&1
                 if errorlevel 0 (
                     set DRIVELETTER=%%a
                     break
                     )
         )
+        if "%DRIVELETTER%" == "" goto :eof
         "%IEXE%" "%DISCIMAGE%" "%DRIVELETTER%"
-        
     )
     REM Store the drive letter for unmounting
     if "%DRIVELETTER%" NEQ "" echo.3%DRIVELETTER%>drvltr
 )
 )
+exit /b
