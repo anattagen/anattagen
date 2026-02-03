@@ -7,8 +7,12 @@ import requests
 import json
 import subprocess
 import zipfile
+import re
+import random
+import time
 
 from Python import constants
+from Python.managers.pcgw_manager import PCGWManager
 from Python.ui.name_utils import make_safe_filename
 
 class CreationController:
@@ -18,6 +22,7 @@ class CreationController:
     def __init__(self, main_window):
         self.main_window = main_window
         self.repo_tools = self._parse_repos_set()
+        self.pcgw_manager = PCGWManager()
 
     def create_all(self, selected_games, progress_callback=None):
         """
@@ -271,7 +276,11 @@ class CreationController:
             if app_config.download_game_json:
                 self._download_game_json(game_data, game_profile_dir)
 
-            # 3c. Download Artwork if enabled
+            # 3c. Download PCGW if enabled
+            if app_config.download_pcgw_metadata:
+                self._download_pcgw_data(game_data, game_profile_dir)
+
+            # 3d. Download Artwork if enabled
             if app_config.download_artwork:
                 self.download_artwork(game_data, game_profile_dir)
 
@@ -351,11 +360,44 @@ class CreationController:
             data = response.json()
             
             json_path = game_launcher_dir / "Game.json"
+            
+            # Check overwrite
+            if json_path.exists() and not self.main_window.config.overwrite_game_json:
+                logging.info(f"Skipping Game.json download (Overwrite disabled) for {game_data.get('name_override')}")
+                return
+
             with open(json_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=4)
             logging.info(f"Downloaded Game.json for {game_data.get('name_override')} (AppID: {steam_id})")
+            
         except Exception as e:
             logging.error(f"Failed to download Game.json for {game_data.get('name_override')} (AppID: {steam_id}): {e}")
+
+    def _download_pcgw_data(self, game_data, game_launcher_dir):
+        """Downloads metadata from PCGamingWiki."""
+        steam_id = game_data.get('steam_id')
+        game_name = game_data.get('name_override', '')
+        
+        # Check overwrite
+        pcgw_path = game_launcher_dir / "pcgw.json"
+        if pcgw_path.exists() and not self.main_window.config.overwrite_pcgw_metadata:
+            logging.info(f"Skipping PCGW download (Overwrite disabled) for {game_name}")
+            # Load existing data to game_data for INI generation
+            try:
+                with open(pcgw_path, 'r', encoding='utf-8') as f:
+                    game_data['pcgw_data'] = json.load(f)
+            except: pass
+            return
+
+        pcgw_data = self.pcgw_manager.fetch_data(game_name, steam_id)
+        
+        if pcgw_data:
+            with open(pcgw_path, 'w', encoding='utf-8') as f:
+                json.dump(pcgw_data, f, indent=4)
+            logging.info(f"Downloaded PCGW metadata for {game_name}")
+            game_data['pcgw_data'] = pcgw_data
+        elif hasattr(self.main_window, 'config') and self.main_window.config.logging_verbosity != "None":
+            logging.warning(f"[PCGW] No metadata found for: {game_name}")
 
     def download_artwork(self, game_data, profile_dir):
         """Downloads artwork for the game."""
@@ -385,18 +427,23 @@ class CreationController:
                 game_info = data[str(steam_id)]['data']
                 header_url = game_info.get('header_image')
                 background_url = game_info.get('background')
+                
+                overwrite = self.main_window.config.overwrite_artwork
 
                 if header_url:
-                    self._download_image(header_url, Path(profile_dir) / "Folder.jpg")
+                    self._download_image(header_url, Path(profile_dir) / "Folder.jpg", overwrite)
                 
                 if background_url:
-                    self._download_image(background_url, Path(profile_dir) / "Backdrop.jpg")
+                    self._download_image(background_url, Path(profile_dir) / "Backdrop.jpg", overwrite)
                     
         except Exception as e:
             logging.error(f"Failed to download artwork for {game_data.get('name_override')}: {e}")
 
-    def _download_image(self, url, target_path):
+    def _download_image(self, url, target_path, overwrite=False):
         try:
+            if target_path.exists() and not overwrite:
+                return
+
             response = requests.get(url, stream=True, timeout=10)
             response.raise_for_status()
             with open(target_path, 'wb') as f:
@@ -565,6 +612,25 @@ class CreationController:
                 
                 resolved_source = self._transform_path(clean_path, game_data, extra_context)
                 config.set('SourcePaths', ini_key, resolved_source)
+
+        # --- [Platform_CLOUD] Sections for save and config paths ---
+        pcgw_data = game_data.get('pcgw_data', {})
+        if pcgw_data:
+            save_locations = pcgw_data.get('save_locations', {})
+            config_locations = pcgw_data.get('config_locations', {})
+            
+            all_platforms = set(save_locations.keys()) | set(config_locations.keys())
+            for platform in all_platforms:
+                section_name = f"{platform}_CLOUD"
+                config.add_section(section_name)
+                
+                if platform in save_locations:
+                    save_paths = '|'.join(save_locations[platform])
+                    config.set(section_name, 'SAVE', save_paths)
+                
+                if platform in config_locations:
+                    config_paths = '|'.join(config_locations[platform])
+                    config.set(section_name, 'CONFIG', config_paths)
 
         # Write the INI file
         with open(ini_path, 'w', encoding='utf-8') as configfile:

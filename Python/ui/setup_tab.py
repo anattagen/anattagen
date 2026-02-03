@@ -12,18 +12,13 @@ from PyQt6.QtWidgets import (
     QDialog, QDialogButtonBox, QLineEdit, QProgressDialog, QGridLayout
 )
 from PyQt6.QtGui import QFontDatabase, QFont, QPalette, QColor
+import re
 from PyQt6.QtCore import pyqtSignal, Qt, QThread, pyqtSlot
 from Python.models import AppConfig
 from Python.ui.widgets import DragDropListWidget, PathConfigRow
 from Python.ui.accordion import AccordionSection
 from Python import constants
-
-# Register icons (compile .qrc file or load directly)
-try:
-    from .theme.gui.images import icons_rc  # noqa: F401
-except ImportError:
-    print("Warning: icons_rc.py not found; icons will not display.")
-
+    
 class DownloadThread(QThread):
     """Thread for downloading and extracting tools."""
     progress = pyqtSignal(int)
@@ -124,7 +119,7 @@ class SetupTab(QWidget):
     
     PATH_ATTRIBUTES = [
         "profiles_dir", "launchers_dir", "launcher_executable", "controller_mapper_path",
-        "borderless_gaming_path", "multi_monitor_tool_path", "p1_profile_path",
+        "borderless_gaming_path", "multi_monitor_tool_path", "disc_mount_path", "disc_unmount_path", "p1_profile_path",
         "p2_profile_path", "mediacenter_profile_path", "multimonitor_gaming_path",
         "multimonitor_media_path", "pre1_path", "pre2_path", "pre3_path",
         "just_after_launch_path", "just_before_exit_path",
@@ -156,6 +151,21 @@ class SetupTab(QWidget):
         self.repos = self._parse_repos_set()
         self.last_detected_tools = {}
         self.options_args_map = self._parse_options_arguments_set()
+        self.mounting_tools = {
+            "Native (Windows 8+)": {"special": "mount_native"},
+            "WinCDEmu": {
+                "url": "https://github.com/sysprogs/WinCDEmu/releases/download/v4.1/PortableWinCDEmu-4.1.exe",
+                "extract_dir": "bin",
+                "exe_name": "PortableWinCDEmu-4.1.exe",
+                "special": "mount_wincdemu"
+            },
+            "imount": {
+                "url": "https://github.com/anattagen/imount/releases/download/latest/imount.exe",
+                "extract_dir": "bin",
+                "exe_name": "imount.exe",
+                "special": "mount_imount"
+            }
+        }
         self.download_thread = None
         self._setup_ui()
 
@@ -257,6 +267,9 @@ class SetupTab(QWidget):
         # Core Paths Tab
         # Prepare repo items for generic lists (All except GLOBAL)
         all_tools = {}
+        # Add Mount DISC option at the top
+        all_tools["Mount DISC"] = {"special": "mount_disc"}
+        
         for section, items in self.repos.items():
             if section != "GLOBAL":
                 all_tools.update(items)
@@ -305,6 +318,13 @@ class SetupTab(QWidget):
         # Application Paths Tab
         app_paths_widget = QWidget()
         app_paths_layout = QFormLayout(app_paths_widget)
+        self.path_rows["disc_mount_path"] = PathConfigRow("disc_mount_path", add_run_wait=True, repo_items=self.mounting_tools, add_cen_lc=True, add_enabled=True)
+        self.path_rows["disc_mount_path"].enabled_cb.setToolTip("Overwrite Mounting")
+        self._add_path_row(app_paths_layout, "Disc-Mount:", "disc_mount_path", self.path_rows["disc_mount_path"])
+        self.path_rows["disc_unmount_path"] = PathConfigRow("disc_unmount_path", add_run_wait=True, repo_items=self.mounting_tools, add_cen_lc=True, add_enabled=True)
+        self.path_rows["disc_unmount_path"].enabled_cb.setToolTip("Overwrite Unmounting")
+        self._add_path_row(app_paths_layout, "Disc-Unmount:", "disc_unmount_path", self.path_rows["disc_unmount_path"])
+        
         self.path_rows["controller_mapper_path"] = PathConfigRow("controller_mapper_path", add_run_wait=True, repo_items=self.repos.get("MAPPERS"))
         self.path_rows["controller_mapper_path"].enabled_cb.setToolTip("Enable Controller Mapper")
         self._add_path_row(app_paths_layout, "Controller Mapper:", "controller_mapper_path", self.path_rows["controller_mapper_path"])
@@ -390,8 +410,8 @@ class SetupTab(QWidget):
         appearance_layout.addRow("LOGGING VERBOSITY:", self.logging_verbosity_combo)
         # Editor Page Size
         self.page_size_spin = QSpinBox()
-        self.page_size_spin.setRange(75, 2000)
-        self.page_size_spin.setValue(150)
+        self.page_size_spin.setRange(25, 2000)
+        self.page_size_spin.setValue(50)
         self.page_size_spin.setToolTip("Number of rows per page in the Editor tab (75-2000)")
         appearance_layout.addRow("Editor Page Size:", self.page_size_spin)
         # Restart Button
@@ -609,6 +629,20 @@ class SetupTab(QWidget):
         return mapping
 
     def _on_download_requested(self, tool_name, tool_data):
+        if tool_data.get("special") == "mount_disc":
+            self._generate_mount_scripts()
+            # Set the path in the row that requested it
+            sender_row = self.sender()
+            if sender_row:
+                script_name = "MountDisc.cmd" if os.name == 'nt' else "MountDisc.sh"
+                script_path = os.path.join(constants.APP_ROOT_DIR, "bin", script_name)
+                sender_row.line_edit.setText(script_path)
+            return
+        
+        if tool_data.get("special") in ["mount_native", "mount_wincdemu", "mount_imount"]:
+            self._handle_mount_tool_setup(tool_name, tool_data)
+            return
+
         if self.download_thread and self.download_thread.isRunning():
             QMessageBox.warning(self, "Download in Progress", "Please wait for the current download to finish.")
             return
@@ -634,6 +668,7 @@ class SetupTab(QWidget):
                 return
 
         self.active_download_row = self.sender() # Store the row that requested the download
+        self._current_download_tool_name = tool_name  # Store the tool name for config writing
         
         # Use QProgressDialog instead of embedded bar
         self.progress_dialog = QProgressDialog(f"Downloading {tool_name}...", "Cancel", 0, 100, self)
@@ -646,6 +681,311 @@ class SetupTab(QWidget):
         self.download_thread.progress.connect(self.progress_dialog.setValue)
         self.download_thread.finished.connect(self._on_download_finished_slot)
         self.download_thread.start()
+    
+    def _handle_mount_tool_setup(self, tool_name, tool_data):
+        special_type = tool_data.get("special")
+        bin_dir = os.path.join(constants.APP_ROOT_DIR, "bin")
+        os.makedirs(bin_dir, exist_ok=True)
+        
+        sender_row = self.sender()
+        
+        if special_type == "mount_native":
+            # Generate native scripts
+            self._generate_mount_scripts_files(bin_dir, "native")
+            if sender_row:
+                script_name = "nativemount.cmd" if os.name == 'nt' else "nativemount.sh"
+                sender_row.line_edit.setText(os.path.join(bin_dir, script_name))
+                # Auto-populate complementary field
+                if sender_row.config_key == "disc_mount_path":
+                    unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
+                    self.path_rows["disc_unmount_path"].line_edit.setText(os.path.join(bin_dir, unmount_script))
+                    self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
+                elif sender_row.config_key == "disc_unmount_path":
+                    mount_script = "nativemount.cmd" if os.name == 'nt' else "nativemount.sh"
+                    self.path_rows["disc_mount_path"].line_edit.setText(os.path.join(bin_dir, mount_script))
+                    self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
+                
+        elif special_type == "mount_wincdemu":
+            # Check if already downloaded
+            exe_path = os.path.join(bin_dir, tool_data['exe_name'])
+            if not os.path.exists(exe_path):
+                # Trigger download
+                self.active_download_row = sender_row
+                self.progress_dialog = QProgressDialog(f"Downloading {tool_name}...", "Cancel", 0, 100, self)
+                self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+                self.progress_dialog.setMinimumDuration(0)
+                self.progress_dialog.setAutoClose(False)
+                self.progress_dialog.show()
+
+                self.download_thread = DownloadThread(tool_data['url'], bin_dir, tool_data['exe_name'])
+                self.download_thread.progress.connect(self.progress_dialog.setValue)
+                
+                # Connect finished signal to a lambda that also generates scripts
+                self.download_thread.finished.connect(lambda s, m, p: self._on_wincdemu_download_finished(s, m, p, bin_dir))
+                self.download_thread.start()
+            else:
+                # Just generate scripts and set path
+                self._generate_mount_scripts_files(bin_dir, "wincdemu")
+                if sender_row:
+                    script_name = "cdemu.cmd" if os.name == 'nt' else "cdemu.sh"
+                    sender_row.line_edit.setText(os.path.join(bin_dir, script_name))
+                    # Auto-populate complementary field
+                    if sender_row.config_key == "disc_mount_path":
+                        unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
+                        self.path_rows["disc_unmount_path"].line_edit.setText(os.path.join(bin_dir, unmount_script))
+                        self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
+                    elif sender_row.config_key == "disc_unmount_path":
+                        mount_script = "cdemu.cmd" if os.name == 'nt' else "cdemu.sh"
+                        self.path_rows["disc_mount_path"].line_edit.setText(os.path.join(bin_dir, mount_script))
+                        self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
+
+    def _on_wincdemu_download_finished(self, success, message, result_path, bin_dir):
+        self._on_download_finished_slot(success, message, result_path)
+        if success:
+            self._generate_mount_scripts_files(bin_dir, "wincdemu")
+            if getattr(self, 'active_download_row', None):
+                script_name = "cdemu.cmd" if os.name == 'nt' else "cdemu.sh"
+                self.active_download_row.line_edit.setText(os.path.join(bin_dir, script_name))
+                # Auto-populate complementary field
+                if getattr(self.active_download_row, 'config_key', None) == "disc_mount_path":
+                    unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
+                    self.path_rows["disc_unmount_path"].line_edit.setText(os.path.join(bin_dir, unmount_script))
+                    self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
+                elif getattr(self.active_download_row, 'config_key', None) == "disc_unmount_path":
+                    mount_script = "cdemu.cmd" if os.name == 'nt' else "cdemu.sh"
+                    self.path_rows["disc_mount_path"].line_edit.setText(os.path.join(bin_dir, mount_script))
+                    self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
+
+        elif special_type == "mount_imount":
+            # Check if already downloaded
+            exe_path = os.path.join(bin_dir, tool_data['exe_name'])
+            if not os.path.exists(exe_path):
+                # Trigger download
+                self.active_download_row = sender_row
+                self.progress_dialog = QProgressDialog(f"Downloading {tool_name}...", "Cancel", 0, 100, self)
+                self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+                self.progress_dialog.setMinimumDuration(0)
+                self.progress_dialog.setAutoClose(False)
+                self.progress_dialog.show()
+
+                self.download_thread = DownloadThread(tool_data['url'], bin_dir, tool_data['exe_name'])
+                self.download_thread.progress.connect(self.progress_dialog.setValue)
+                
+                # Connect finished signal to a lambda that also generates scripts
+                self.download_thread.finished.connect(lambda s, m, p: self._on_imount_download_finished(s, m, p, bin_dir))
+                self.download_thread.start()
+            else:
+                # Just generate scripts and set path
+                self._generate_mount_scripts_files(bin_dir, "imount")
+                if sender_row:
+                    script_name = "imount.cmd" if os.name == 'nt' else "imount.sh"
+                    sender_row.line_edit.setText(os.path.join(bin_dir, script_name))
+                    # Write exe path to config
+                    self._write_exe_path_to_config("imount", exe_path)
+                    # Auto-populate complementary field
+                    if sender_row.config_key == "disc_mount_path":
+                        unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
+                        self.path_rows["disc_unmount_path"].line_edit.setText(os.path.join(bin_dir, unmount_script))
+                        self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
+                    elif sender_row.config_key == "disc_unmount_path":
+                        mount_script = "imount.cmd" if os.name == 'nt' else "imount.sh"
+                        self.path_rows["disc_mount_path"].line_edit.setText(os.path.join(bin_dir, mount_script))
+                        self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
+
+    def _on_wincdemu_download_finished(self, success, message, result_path, bin_dir):
+        if hasattr(self, 'progress_dialog'):
+            self.progress_dialog.close()
+
+        if success:
+            self._generate_mount_scripts_files(bin_dir, "wincdemu")
+            if getattr(self, 'active_download_row', None):
+                script_name = "cdemu.cmd" if os.name == 'nt' else "cdemu.sh"
+                self.active_download_row.line_edit.setText(os.path.join(bin_dir, script_name))
+                # Auto-populate complementary field
+                if getattr(self.active_download_row, 'config_key', None) == "disc_mount_path":
+                    unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
+                    self.path_rows["disc_unmount_path"].line_edit.setText(os.path.join(bin_dir, unmount_script))
+                    self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
+                elif getattr(self.active_download_row, 'config_key', None) == "disc_unmount_path":
+                    mount_script = "cdemu.cmd" if os.name == 'nt' else "cdemu.sh"
+                    self.path_rows["disc_mount_path"].line_edit.setText(os.path.join(bin_dir, mount_script))
+                    self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
+            
+            QMessageBox.information(self, "Download Complete", f"Successfully downloaded to:\n{result_path}")
+        else:
+            QMessageBox.critical(self, "Download Failed", f"Error: {message}")
+            
+        self.active_download_row = None
+        self._current_download_tool_name = None
+
+    def _on_imount_download_finished(self, success, message, result_path, bin_dir):
+        if hasattr(self, 'progress_dialog'):
+            self.progress_dialog.close()
+
+        if success:
+            self._generate_mount_scripts_files(bin_dir, "imount")
+            if getattr(self, 'active_download_row', None):
+                script_name = "imount.cmd" if os.name == 'nt' else "imount.sh"
+                self.active_download_row.line_edit.setText(os.path.join(bin_dir, script_name))
+                # Write exe path to config
+                exe_path = os.path.join(bin_dir, "imount.exe")
+                self._write_exe_path_to_config("imount", exe_path)
+                # Auto-populate complementary field
+                if getattr(self.active_download_row, 'config_key', None) == "disc_mount_path":
+                    unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
+                    self.path_rows["disc_unmount_path"].line_edit.setText(os.path.join(bin_dir, unmount_script))
+                    self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
+                elif getattr(self.active_download_row, 'config_key', None) == "disc_unmount_path":
+                    mount_script = "imount.cmd" if os.name == 'nt' else "imount.sh"
+                    self.path_rows["disc_mount_path"].line_edit.setText(os.path.join(bin_dir, mount_script))
+                    self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
+            
+            QMessageBox.information(self, "Download Complete", f"Successfully downloaded to:\n{result_path}")
+        else:
+            QMessageBox.critical(self, "Download Failed", f"Error: {message}")
+
+        self.active_download_row = None
+        self._current_download_tool_name = None
+
+    def _write_exe_path_to_config(self, exe_name, exe_path):
+        """Write the executable path to config.json with the format {exe_name}_exe_path."""
+        # Remove .exe extension if present for the config key
+        tool_name_no_ext = exe_name.replace('.exe', '')
+        config_key = f"{tool_name_no_ext}_exe_path"
+        if self.main_window and hasattr(self.main_window, 'config'):
+            setattr(self.main_window.config, config_key, exe_path)
+            self.config_changed.emit()
+            logging.info(f"Wrote executable path to config: {config_key} = {exe_path}")
+
+    def _generate_mount_scripts_files(self, bin_dir, tool_type):
+        """Generate the appropriate mount/unmount scripts based on tool type."""
+        assets_dir = constants.ASSETS_DIR
+        
+        if tool_type == "native":
+            # Copy nativeMount.cmd.set to nativemount.cmd
+            template_path = os.path.join(assets_dir, "nativeMount.cmd.set")
+            dest_path = os.path.join(bin_dir, "nativemount.cmd")
+            self._copy_template_file(template_path, dest_path)
+            
+            # Copy _unmount.cmd.set to _unmount.cmd
+            template_path = os.path.join(assets_dir, "_unmount.cmd.set")
+            dest_path = os.path.join(bin_dir, "_unmount.cmd")
+            self._copy_template_file(template_path, dest_path)
+            
+        elif tool_type == "wincdemu":
+            # Copy cdemu.cmd.set to cdemu.cmd
+            template_path = os.path.join(assets_dir, "cdemu.cmd.set")
+            dest_path = os.path.join(bin_dir, "cdemu.cmd")
+            self._copy_template_file(template_path, dest_path)
+            
+            # Copy _unmount.cmd.set to _unmount.cmd
+            template_path = os.path.join(assets_dir, "_unmount.cmd.set")
+            dest_path = os.path.join(bin_dir, "_unmount.cmd")
+            self._copy_template_file(template_path, dest_path)
+            
+        elif tool_type == "imount":
+            # Copy imount.cmd.set to imount.cmd
+            template_path = os.path.join(assets_dir, "imount.cmd.set")
+            dest_path = os.path.join(bin_dir, "imount.cmd")
+            self._copy_template_file(template_path, dest_path)
+            
+            # Copy _unmount.cmd.set to _unmount.cmd
+            template_path = os.path.join(assets_dir, "_unmount.cmd.set")
+            dest_path = os.path.join(bin_dir, "_unmount.cmd")
+            self._copy_template_file(template_path, dest_path)
+            
+    def _copy_template_file(self, template_path, dest_path):
+        """Copy a template file to destination with variable replacement."""
+        try:
+            if os.path.exists(template_path):
+                with open(template_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # Replace variables in brackets with config values
+                def replace_var(match):
+                    var_name = match.group(1)
+                    # Remove the $_$ prefix and _PATH suffix to get the config key
+                    if var_name.startswith('$_$') and var_name.endswith('_PATH'):
+                        config_key = var_name[3:-5].lower() + '_exe_path'
+                        if self.main_window and hasattr(self.main_window, 'config'):
+                            return getattr(self.main_window.config, config_key, match.group(0))
+                    return match.group(0)
+                
+                content = re.sub(r'\[\$_\$(.*?)\]', replace_var, content)
+                
+                with open(dest_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                    
+                # Remove .set extension from destination
+                if dest_path.endswith('.set'):
+                    final_path = dest_path[:-4]
+                    os.rename(dest_path, final_path)
+            else:
+                logging.warning(f"Template not found: {template_path}")
+        except Exception as e:
+            logging.error(f"Error copying template {template_path} to {dest_path}: {e}")
+
+    def _generate_mount_scripts(self):
+        """Generates batch and bash scripts for mounting disc images."""
+        bin_dir = os.path.join(constants.APP_ROOT_DIR, "bin")
+        os.makedirs(bin_dir, exist_ok=True)
+        
+        cmd_path = os.path.join(bin_dir, "MountDisc.cmd")
+        sh_path = os.path.join(bin_dir, "MountDisc.sh")
+        
+        # Generate CMD
+        with open(cmd_path, 'w') as f:
+            f.write("""@echo off
+setlocal enabledelayedexpansion
+REM Mount Disc Script generated by Anattagen
+REM Arguments: %1 = Disc Image Path
+
+set "DISCIMAGE=%~1"
+if "%DISCIMAGE%"=="" goto :eof
+
+REM Try WinCDEmu if available in bin
+if exist "%~dp0WinCDEmu.exe" (
+    "%~dp0WinCDEmu.exe" /mount "%DISCIMAGE%"
+    goto :eof
+)
+
+REM Try PowerShell Mount-DiskImage (Windows 8+)
+powershell -Command "Mount-DiskImage -ImagePath '%DISCIMAGE%'"
+if %errorlevel% equ 0 goto :eof
+
+echo Could not mount disc image.
+""")
+
+        # Generate SH
+        with open(sh_path, 'w') as f:
+            f.write("""#!/bin/bash
+# Mount Disc Script generated by Anattagen
+DISCIMAGE="$1"
+if [ -z "$DISCIMAGE" ]; then exit 1; fi
+
+# Try cdemu
+if command -v cdemu &> /dev/null; then
+    cdemu load 0 "$DISCIMAGE"
+    exit 0
+fi
+
+# Try udisksctl
+if command -v udisksctl &> /dev/null; then
+    udisksctl loop-setup -f "$DISCIMAGE"
+    exit 0
+fi
+
+echo "Could not mount disc image."
+exit 1
+""")
+        
+        # Make sh executable
+        try:
+            os.chmod(sh_path, 0o755)
+        except:
+            pass
+            
+        QMessageBox.information(self, "Scripts Generated", f"Mount scripts generated in:\n{bin_dir}")
 
     def _on_download_finished_slot(self, success, message, result_path):
         if hasattr(self, 'progress_dialog'):
@@ -654,10 +994,30 @@ class SetupTab(QWidget):
         if success:
             if hasattr(self, 'active_download_row') and self.active_download_row:
                 self.active_download_row.line_edit.setText(result_path)
+                
+                # Write the executable path to config.json
+                # Format: "{$flyout_app_name}_exe_path": "{$flyout_app_name_Extraction_path}\\{$flyout_app_name}.exe"
+                if hasattr(self, '_current_download_tool_name') and self._current_download_tool_name:
+                    tool_name = self._current_download_tool_name
+                    # Get the directory and exe name from the result path
+                    exe_dir = os.path.dirname(result_path)
+                    exe_name = os.path.basename(result_path)
+                    # Remove .exe extension for the config key
+                    tool_name_no_ext = tool_name.replace('.exe', '')
+                    config_key = f"{tool_name_no_ext}_exe_path"
+                    # Store the full path to the executable
+                    if self.main_window and hasattr(self.main_window, 'config'):
+                        setattr(self.main_window.config, config_key, result_path)
+                        # Emit config changed signal to trigger save
+                        self.config_changed.emit()
+                        logging.info(f"Wrote executable path to config: {config_key} = {result_path}")
+                
             QMessageBox.information(self, "Download Complete", f"Successfully downloaded to:\n{result_path}")
         else:
             QMessageBox.critical(self, "Download Failed", f"Error: {message}")
         self.active_download_row = None
+        if hasattr(self, '_current_download_tool_name'):
+            self._current_download_tool_name = None
 
     def _reset_to_defaults(self):
         """Reset the application's configuration to the shipped defaults."""
@@ -704,7 +1064,7 @@ class SetupTab(QWidget):
 
     def _reset_exit_sequence(self):
         self.exit_sequence_list.clear()
-        self.exit_sequence_list.addItems(["Kill-Game", "Kill-List", "Unmount-Iso", "Monitor-Config", "Taskbar", "Post1", "Controller-Mapper", "Post2", "Borderless", "Post3"])
+        self.exit_sequence_list.addItems(["Kill-Game", "Kill-List", "Unmount-Iso", "Monitor-Config", "Taskbar", "Post1", "Post2", "Post3", "Controller-Mapper", "Borderless"])
         self.config_changed.emit()
         self._update_list_tooltips(self.exit_sequence_list)
 
@@ -715,9 +1075,9 @@ class SetupTab(QWidget):
         
         # Define full sets
         if sequence_type == "launch":
-            full_set = ["Kill-Game", "Kill-List", "Mount-Iso", "Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Pre2", "Pre3", "Borderless", "Cloud-Sync"]
+            full_set = ["Kill-Game", "Kill-List", "Mount-Iso", "Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Borderless", "Pre2", "Pre3"]
         else:
-            full_set = ["Kill-Game", "Kill-List", "Unmount-Iso", "Monitor-Config", "Taskbar", "Post1", "Post2", "Post3", "Controller-Mapper", "Borderless", "Cloud-Sync"]
+            full_set = ["Kill-Game", "Kill-List", "Unmount-Iso", "Monitor-Config", "Taskbar", "Post1", "Post2", "Post3", "Controller-Mapper", "Borderless"]
             
         current_items = [list_widget.item(i).text() for i in range(list_widget.count())]
         removed_items = [x for x in full_set if x not in current_items]
@@ -950,5 +1310,52 @@ class SetupTab(QWidget):
                 self.config_changed.emit()
         
         # Update dialog if open
-        if getattr(self, '_current_dialog_key', None) == config_key and hasattr(self, '_current_dialog_updater'):
+        if getattr(self, '_current_dialog_key', None) == config_key and getattr(self, '_current_dialog_updater', None) is not None:
+            self._current_dialog_updater()
+            return
+            
+        exe_name = os.path.basename(new_path).lower()
+        exe_no_ext = os.path.splitext(exe_name)[0]
+        
+        target = None
+        if exe_name in self.options_args_map:
+            target = exe_name
+        elif exe_no_ext in self.options_args_map:
+            target = exe_no_ext
+            
+        # Determine current tool identifier
+        current_tool_id = target if target else exe_name
+        
+        # Check if tool changed
+        last_tool_id = self.last_detected_tools.get(config_key)
+        if last_tool_id == current_tool_id:
+            return # Tool hasn't changed, preserve customizations
+
+        # Update tracker
+        self.last_detected_tools[config_key] = current_tool_id
+
+        if target:
+            opts, args = self.options_args_map[target]
+                                 
+            # Update config if fields exist
+            config = self.main_window.config
+            opt_key = f"{config_key}_options"
+            arg_key = f"{config_key}_arguments"
+            
+            updated = False
+            if hasattr(config, opt_key) and getattr(config, opt_key) != opts:
+                setattr(config, opt_key, opts)
+                updated = True
+            if hasattr(config, arg_key) and getattr(config, arg_key) != args:
+                setattr(config, arg_key, args)
+                updated = True
+                
+            if updated:
+                logging.info(f"Applied default options/args for {exe_name} to {config_key}")
+                logging.info(f"Applied default options/args for {target} to {config_key}")
+
+                self.config_changed.emit()
+        
+        # Update dialog if open
+        if getattr(self, '_current_dialog_key', None) == config_key and getattr(self, '_current_dialog_updater', None) is not None:
             self._current_dialog_updater()

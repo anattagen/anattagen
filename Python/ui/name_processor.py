@@ -137,7 +137,6 @@ class NameProcessor:
                 # Ensure it's a complete word by checking for word boundaries
                 pattern = re.compile(re.escape(delimiter) + r'\b' + re.escape(group) + r'\b' + r'$', re.IGNORECASE)
                 if pattern.search(result):
-                    prev_result = result
                     # Replace only the group, keeping the delimiter
                     result = pattern.sub('', result)
 
@@ -158,7 +157,6 @@ class NameProcessor:
                 # Ensure it's a complete word by checking for word boundaries
                 pattern = re.compile(r'\b' + re.escape(group) + r'\b' + r'$', re.IGNORECASE)
                 if pattern.search(result):
-                    prev_result = result
                     # Remove only the group at the end
                     result = re.sub(pattern, '', result)
 
@@ -206,7 +204,6 @@ class NameProcessor:
             )
             match = pattern.search(result)
             if match:
-                prev_result = result
                 # Find where the version identifier starts
                 start_pos = match.start()
                 # Remove the version identifier and everything after it
@@ -229,7 +226,6 @@ class NameProcessor:
                 for delimiter in delimiters:
                     pattern = re.compile(re.escape(delimiter) + re.escape(phrase) + r'$', re.IGNORECASE)
                     if pattern.search(result):
-                        prev_result = result
                         result = pattern.sub('', result)
 
                         # Exit both loops after first match
@@ -344,7 +340,6 @@ class NameProcessor:
             # Ensure it's a complete word by checking for word boundaries
             pattern = re.compile(r'\b(' + re.escape(group) + r')\b$', re.IGNORECASE)
             if pattern.search(result):
-                prev_result = result
                 result = pattern.sub('', result)
 
                 # Clean up whitespace again
@@ -359,7 +354,6 @@ class NameProcessor:
         for phrase in specific_phrases:
             pattern = re.compile(r'\b(' + re.escape(phrase) + r')\b$', re.IGNORECASE)
             if pattern.search(result):
-                prev_result = result
                 result = pattern.sub('', result)
 
                 # Clean up whitespace again
@@ -375,7 +369,6 @@ class NameProcessor:
         for pattern in version_patterns:
             match = re.search(pattern, result, re.IGNORECASE)
             if match:
-                prev_result = result
                 result = result[:match.start()] + result[match.end():]
 
                 # Clean up whitespace again

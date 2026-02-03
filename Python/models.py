@@ -34,6 +34,8 @@ class AppConfig:
         # Just Before/After launch apps
         self.just_after_launch_path = ""
         self.just_before_exit_path = ""
+        self.disc_mount_path = ""
+        self.disc_unmount_path = ""
 
         # App Options & Arguments
         self.controller_mapper_path_options = ""
@@ -47,6 +49,10 @@ class AppConfig:
         self.just_after_launch_path_arguments = ""
         self.just_before_exit_path_options = ""
         self.just_before_exit_path_arguments = ""
+        self.disc_mount_path_options = ""
+        self.disc_mount_path_arguments = ""
+        self.disc_unmount_path_options = ""
+        self.disc_unmount_path_arguments = ""
         
         self.pre1_path_options = ""
         self.pre1_path_arguments = ""
@@ -78,7 +84,7 @@ class AppConfig:
         self.app_font = "System"
         self.app_theme = "Dark"
         self.font_size = 10
-        self.editor_page_size = 150
+        self.editor_page_size = 50
 
         # Setup Tab: Execution Sequences
         self.launch_sequence = []
@@ -86,7 +92,11 @@ class AppConfig:
 
         # Deployment Tab: General Options
         self.download_game_json = False
+        self.overwrite_game_json = False
         self.download_artwork = False
+        self.overwrite_artwork = False
+        self.download_pcgw_metadata = False
+        self.overwrite_pcgw_metadata = False
         self.hide_taskbar = False
         self.run_as_admin = False
         self.enable_name_matching = False

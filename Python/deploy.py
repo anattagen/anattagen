@@ -123,6 +123,7 @@ def run_gui(ini_path: Path) -> None:
     try:
         import tkinter as tk
         from tkinter import ttk
+        from tkinter import filedialog
     except Exception as e:
         print("Tkinter not available:", e)
         print("Use --apply or --init-ini instead.")
@@ -132,7 +133,7 @@ def run_gui(ini_path: Path) -> None:
     cfg = load_ini(ini_path, tags)
 
     root = tk.Tk()
-    root.title("Deploy: tag editor")
+    root.title("Deploy: tag editor & builder")
 
     frame = ttk.Frame(root, padding=10)
     frame.grid(row=0, column=0, sticky="nsew")
@@ -163,6 +164,97 @@ def run_gui(ini_path: Path) -> None:
             return cb
 
         sv.trace_add("write", make_callback(k))
+
+    # --- Build Section ---
+    last_row = len(tags)
+    ttk.Separator(frame, orient='horizontal').grid(row=last_row, column=0, columnspan=2, sticky="ew", pady=15)
+    
+    lbl_build = ttk.Label(frame, text="Build Portable Binary", font=("", 10, "bold"))
+    lbl_build.grid(row=last_row+1, column=0, columnspan=2, pady=(0, 5))
+    
+    build_vars = {
+        'onefile': tk.BooleanVar(value=False),
+        'dest': tk.StringVar(value=str(Path("dist").absolute()))
+    }
+    
+    ctl_frame = ttk.Frame(frame)
+    ctl_frame.grid(row=last_row+2, column=0, columnspan=2, sticky="ew")
+    
+    ttk.Checkbutton(ctl_frame, text="Onefile", variable=build_vars['onefile']).pack(side="left", padx=5)
+    ttk.Label(ctl_frame, text="Dest:").pack(side="left", padx=5)
+    ttk.Entry(ctl_frame, textvariable=build_vars['dest']).pack(side="left", fill="x", expand=True)
+    
+    def browse_dest():
+        d = filedialog.askdirectory()
+        if d: build_vars['dest'].set(d)
+    ttk.Button(ctl_frame, text="...", width=3, command=browse_dest).pack(side="left", padx=2)
+    
+    from tkinter import scrolledtext
+    log_widget = scrolledtext.ScrolledText(frame, height=8, state='disabled', font=("Consolas", 8))
+    log_widget.grid(row=last_row+3, column=0, columnspan=2, sticky="nsew", pady=5)
+    
+    def log(msg):
+        def _log():
+            log_widget.config(state='normal')
+            log_widget.insert("end", msg)
+            log_widget.see("end")
+            log_widget.config(state='disabled')
+        root.after(0, _log)
+
+    def run_build():
+        import threading
+        import subprocess
+        import platform
+        
+        onefile = build_vars['onefile'].get()
+        dest = build_vars['dest'].get()
+        
+        def worker():
+            sep = ';' if platform.system() == 'Windows' else ':'
+            script_dir = Path(__file__).parent.absolute()
+            project_root = script_dir.parent if script_dir.name == "Python" else script_dir
+            main_script = project_root / "Python" / "main.py"
+            icon_path = project_root / "assets" / "Joystick.ico"
+            
+            cmd = [
+                sys.executable, '-m', 'PyInstaller',
+                str(main_script),
+                '--name=anattagen',
+                '--noconfirm',
+                '--clean',
+                '--windowed',
+                f'--distpath={dest}',
+                f'--add-data={project_root / "site"}{sep}site',
+                f'--add-data={project_root / "assets"}{sep}assets',
+            ]
+            
+            if platform.system() == 'Windows' and icon_path.exists():
+                cmd.append(f'--icon={icon_path}')
+            if onefile:
+                cmd.append('--onefile')
+            else:
+                cmd.append('--onedir')
+                
+            log(f"Starting build...\nCommand: {' '.join(cmd)}\n")
+            
+            try:
+                process = subprocess.Popen(
+                    cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    text=True, bufsize=1, encoding='utf-8', cwd=str(project_root)
+                )
+                for line in process.stdout:
+                    log(line)
+                process.wait()
+                if process.returncode == 0:
+                    log("\nBuild SUCCESS!\n")
+                else:
+                    log(f"\nBuild FAILED with code {process.returncode}\n")
+            except Exception as e:
+                log(f"\nError: {e}\n")
+                
+        threading.Thread(target=worker, daemon=True).start()
+
+    ttk.Button(frame, text="Compile", command=run_build).grid(row=last_row+4, column=0, columnspan=2, pady=10)
 
     # Buttons
     btn_frame = ttk.Frame(root, padding=(10, 6))
@@ -199,201 +291,3 @@ def main(argv: List[str]) -> None:
 
 if __name__ == "__main__":
     main(sys.argv[1:])
-import os
-import re
-import fnmatch
-import configparser
-from pathlib import Path
-import argparse
-from typing import Set
-
-
-ROOT = Path(__file__).resolve().parent.parent
-
-
-def load_gitignore(path: Path):
-    gitignore = path / '.gitignore'
-    patterns = []
-    if not gitignore.exists():
-        return patterns
-    for line in gitignore.read_text(encoding='utf-8').splitlines():
-        line = line.strip()
-        if not line or line.startswith('#'):
-            continue
-        patterns.append(line)
-    return patterns
-
-
-def is_ignored(rel_path: str, patterns):
-    # rel_path uses forward slashes
-    for pat in patterns:
-        p = pat.strip()
-        if not p:
-            continue
-        # Normalize patterns and test with fnmatch first
-        try:
-            if fnmatch.fnmatch(rel_path, p):
-                return True
-        except Exception:
-            pass
-        # Directory pattern like "dir/" -> match prefix
-        if p.endswith('/'):
-            prefix = p.rstrip('/')
-            if rel_path == prefix or rel_path.startswith(prefix + '/'):
-                return True
-        # Pattern with trailing /* -> match directory prefix
-        if p.endswith('/*'):
-            prefix = p[:-2]
-            if rel_path == prefix or rel_path.startswith(prefix + '/'):
-                return True
-    return False
-
-
-def render_tree(root: Path, patterns):
-    lines = []
-    def walk(dir_path: Path, prefix=''):
-        entries = sorted([p for p in dir_path.iterdir()])
-        # filter ignored entries first so last-item detection is correct
-        visible = [p for p in entries if not is_ignored(p.relative_to(ROOT).as_posix(), patterns)]
-        for i, p in enumerate(visible):
-            rel = p.relative_to(ROOT).as_posix()
-            connector = '└──' if i == len(visible) - 1 else '├──'
-            if p.is_dir():
-                lines.append(f"{prefix}{connector} {p.name}/")
-                extension = '    ' if i == len(visible) - 1 else '│   '
-                walk(p, prefix + extension)
-            else:
-                lines.append(f"{prefix}{connector} {p.name}")
-    # root
-    lines.append(f"{ROOT.name}/")
-    walk(ROOT)
-    return '\n'.join(lines)
-
-
-def load_ini_values(ini_path: Path):
-    cfg = configparser.ConfigParser()
-    if not ini_path.exists():
-        return {}
-    cfg.read(ini_path, encoding='utf-8')
-    if 'values' in cfg:
-        return dict(cfg['values'])
-    return {}
-
-
-def find_tags_in_text(text: str) -> Set[str]:
-    # find tokens like [KEY]
-    tags = set(re.findall(r"\[([A-Za-z0-9_\-]+)\]", text))
-    # Filter out excluded tags
-    tags = tags - EXCLUDED_TAGS
-    return tags
-
-
-def create_ini_from_template(ini_path: Path, template_path: Path):
-    # If ini exists, do nothing
-    if ini_path.exists():
-        return False
-    if not template_path.exists():
-        # create empty ini
-        cfg = configparser.ConfigParser()
-        cfg['values'] = {}
-        with ini_path.open('w', encoding='utf-8') as f:
-            cfg.write(f)
-        return True
-
-    tpl = template_path.read_text(encoding='utf-8')
-    tags = find_tags_in_text(tpl)
-    cfg = configparser.ConfigParser()
-    cfg['values'] = {}
-    for t in sorted(tags):
-        # default to the literal tag so replacement is a no-op until user edits
-        cfg['values'][t] = f'[{t}]'
-    with ini_path.open('w', encoding='utf-8') as f:
-        cfg.write(f)
-    return True
-
-
-def replace_tags_in_text(text: str, values: dict):
-    out = text
-    for k, v in values.items():
-        tag = f'[{k}]'
-        out = out.replace(tag, v)
-    return out
-
-
-def update_readme_set(readme_set_path: Path, tree_text: str):
-    txt = readme_set_path.read_text(encoding='utf-8')
-    # Replace existing code block that starts with a line containing "anattagen/" under a code fence
-    # We'll find the first triple-backtick block that contains "anattagen/" and replace its contents with the new tree
-    lines = readme_set_path.read_text(encoding='utf-8').splitlines()
-    # Find the line index that contains the repo root folder as the tree header (e.g., 'anattagen/')
-    tree_idx = None
-    for i, ln in enumerate(lines):
-        if ln.strip().startswith(f"{ROOT.name}/"):
-            tree_idx = i
-            break
-
-    if tree_idx is not None:
-        # find preceding fence start (a line beginning with 3+ backticks)
-        start = None
-        for i in range(tree_idx, -1, -1):
-            if re.match(r"^`{3,}", lines[i].strip()):
-                start = i
-                break
-        # find fence end after tree_idx
-        end = None
-        for j in range(tree_idx, len(lines)):
-            if re.match(r"^`{3,}", lines[j].strip()) and j != start:
-                end = j
-                break
-
-        if start is not None and end is not None:
-            new_block = ["```", tree_text, "```"]
-            new_lines = lines[:start] + new_block + lines[end+1:]
-            readme_set_path.write_text('\n'.join(new_lines) + '\n', encoding='utf-8')
-            return True
-
-    # Fallback: append a fenced block with the tree at the end
-    with readme_set_path.open('a', encoding='utf-8') as f:
-        f.write('\n```\n' + tree_text + '\n```\n')
-    return True
-
-
-def main():
-    parser = argparse.ArgumentParser(description='Generate README.md and site/index.html from templates')
-    parser.add_argument('--init-ini', action='store_true', help='Create site_values.ini from site/index.set if missing')
-    args = parser.parse_args()
-
-    # Paths
-    root = ROOT
-    readme_set = root / 'README.set'
-    readme_md = root / 'README.md'
-    site_index_set = root / 'site' / 'index.set'
-    site_index_html = root / 'site' / 'index.html'
-    ini_path = root / 'site_values.ini'
-
-    # Optionally initialize ini from template (does not modify README.set)
-    if args.init_ini:
-        created = create_ini_from_template(ini_path, site_index_set)
-        if created:
-            print(f'Created {ini_path}')
-
-    # Load values from ini in project root
-    values = load_ini_values(ini_path)
-
-    # Replace tags in README.set and write README.md (do not change README.set itself)
-    if readme_set.exists():
-        input_text = readme_set.read_text(encoding='utf-8')
-        out_text = replace_tags_in_text(input_text, values)
-        readme_md.write_text(out_text, encoding='utf-8')
-
-    # Replace tags in site/index.set and write site/index.html
-    if site_index_set.exists():
-        tpl = site_index_set.read_text(encoding='utf-8')
-        out = replace_tags_in_text(tpl, values)
-        site_index_html.write_text(out, encoding='utf-8')
-
-    print('Updated README.md and site/index.html')
-
-
-if __name__ == '__main__':
-    main()

@@ -1,4 +1,4 @@
-[RJ_PROJ]
+anattagen
 
 A desktop application to create isolated environments for PC games. 
 
@@ -41,13 +41,13 @@ AntimicroX, keySticks, multimonitortool.
 
 
 ## Installation
-[CURV]
+0.98.42.52
 
-[VERSION]
+0.98.42.52
 
 Run the installer or extract the binary to a location of your choice, **or** download and build and run the source files and executables.
 ```
-[RJ_PROJ]/
+anattagen/
 ├── assets/
 │   ├── launcher/
 │   │      ├── launcher.c
@@ -142,7 +142,7 @@ Run the installer or extract the binary to a location of your choice, **or** dow
 ```
 # Documentation
 
-[RJ_PROJ]
+anattagen
 
 # Setup
 
@@ -153,8 +153,8 @@ Run the installer or extract the binary to a location of your choice, **or** dow
 ```
 		sudo apt install python3-venv python3-pip
 		cd ~
-		git clone --recursive https://[GIT_SRC]/[RJ_PROJ].git
-		cd [RJ_PROJ]
+		git clone --recursive https://github.com/anattagen/anattagen/anattagen.git
+		cd anattagen
 		python3 -m venv .venv
 		source .venv/bin/activate
 		python -m pip install -r requirements.txt
@@ -184,12 +184,12 @@ win
 ```
 ### Windows open a dev console:
 ```
-		pushd "%userprofile\Downloads\[RJ_PROJ]\assets"
+		pushd "%userprofile\Downloads\anattagen\assets"
 		build.bat
 ```
 #### or in Mingw64:
 ```
-		cd /c/Users/[USER]/Downloads/[RJ_PROJ]\assets
+		cd /c/Users/[USER]/Downloads/anattagen\assets
 		./build.sh --windows
 ```
 ### Build and Compile your own project:
@@ -203,5 +203,5 @@ win
 ```
 ## Apple Mac Users
 ```
-		  Upgrade your monitor-stand and update iTunes to enable auto-deduction from your ApplePay account. Do not look directly at [RJ_PROJ]. Carefully replace the stickers and reattatch any modification-detection components before initializing apology-procedures. Disconnect your keyboard and press the button to authorize Thought-Coin permissions.
+		  Upgrade your monitor-stand and update iTunes to enable auto-deduction from your ApplePay account. Do not look directly at anattagen. Carefully replace the stickers and reattatch any modification-detection components before initializing apology-procedures. Disconnect your keyboard and press the button to authorize Thought-Coin permissions.
 ```

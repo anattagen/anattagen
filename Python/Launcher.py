@@ -18,16 +18,19 @@ import signal
 import psutil
 import logging
 from pathlib import Path
-import winreg
-import win32gui
-import win32con
-import win32process
-import win32api
 import shlex
 from typing import Dict, List, Optional, Tuple, Union
 import platform
 import argparse
 import glob
+
+# Conditional imports for Windows
+if sys.platform == 'win32':
+    import winreg
+    import win32gui
+    import win32con
+    import win32process
+    import win32api
 
 # Import the new sequence executor
 try:

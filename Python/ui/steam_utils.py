@@ -54,7 +54,7 @@ def debug_steam_cache(main_window):
     # Check a few sample entries
     sample_count = min(5, len(main_window.steam_title_cache))
 
-    for i, (app_id, title) in enumerate(list(main_window.steam_title_cache.items())[:sample_count]):
+    for _ in list(main_window.steam_title_cache.items())[:sample_count]:
         # Add a pass statement for empty loops
         pass
 
@@ -66,12 +66,12 @@ def debug_steam_cache(main_window):
     # Check a few sample entries
     sample_count = min(5, len(main_window.normalized_steam_match_index))
 
-    for i, (norm_name, data) in enumerate(list(main_window.normalized_steam_match_index.items())[:sample_count]):
+    for _ in list(main_window.normalized_steam_match_index.items())[:sample_count]:
         # Add a pass statement for empty loops
         pass
     # Check for "game on" specifically
     if hasattr(main_window, 'normalized_steam_match_index'):
-        for norm_name, data in main_window.normalized_steam_match_index.items():
+        for _, data in main_window.normalized_steam_match_index.items():
             if data['name'].lower() == "game on":
                 pass # This line was likely a print statement that was removed
             
@@ -102,7 +102,7 @@ def debug_steam_cache_loading(main_window):
                     with open(main_window.filtered_steam_cache_file_path, 'r', encoding='utf-8') as f:
                         first_lines = [next(f) for _ in range(3)]
 
-                        for i, line in enumerate(first_lines):
+                        for _ in first_lines:
                             pass # This line was likely a print statement that was removed
                 except Exception as e:
                     pass
@@ -116,7 +116,7 @@ def debug_steam_cache_loading(main_window):
         # Show a few sample entries if any exist
         if main_window.steam_title_cache:
             print("Sample entries:")
-            for i, (app_id, app_name) in enumerate(list(main_window.steam_title_cache.items())[:3]):
+            for _ in list(main_window.steam_title_cache.items())[:3]:
                 pass # This line was likely a print statement that was removed
     # Try to find the file in common locations
     print("\nSearching for steam_filtered.txt in common locations:")
@@ -131,7 +131,6 @@ def debug_steam_cache_loading(main_window):
     
     for location in possible_locations:
         exists = os.path.exists(location)
-        status = "FOUND" if exists else "not found"
 
         if exists:
             file_size = os.path.getsize(location)

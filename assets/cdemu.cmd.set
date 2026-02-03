@@ -1,0 +1,33 @@
+@echo off
+setlocal enabledelayedexpansion
+REM cdemu.cmd.set - WinCDEmu Exclusive Mount Template
+set "DISCIMAGE=%~1"
+if "%DISCIMAGE%"=="" goto :eof
+
+if exist "drvltr" del /q "drvltr"
+
+REM Snapshot drives before mounting
+set "BEFORE_DRVS="
+for %%a in (a b c d e f g h i j k l m n o p q r s t u v w x y z) do (
+    if exist %%a:\nul set "BEFORE_DRVS=!BEFORE_DRVS!%%a"
+)
+
+REM Mount with WinCDEmu
+if exist "%~dp0WinCDEmu.exe" (
+    "%~dp0WinCDEmu.exe" /mount "%DISCIMAGE%"
+) else (
+    echo WinCDEmu not found.
+    exit /b 1
+)
+
+REM Find the new drive letter
+for %%a in (a b c d e f g h i j k l m n o p q r s t u v w x y z) do (
+    if exist %%a:\nul (
+        echo !BEFORE_DRVS! | findstr "%%a" >nul
+        if errorlevel 1 (
+            REM Found new drive, write to drvltr with prefix 2
+            echo 2%%a>drvltr
+            goto :eof
+        )
+    )
+)

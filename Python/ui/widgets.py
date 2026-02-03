@@ -67,7 +67,7 @@ class PathConfigRow(QWidget):
             for name, data in repo_items.items():
                 action = self.menu.addAction(name)
                 # Use default arguments to capture loop variables correctly
-                action.triggered.connect(lambda checked, n=name, d=data: self.downloadRequested.emit(n, d))
+                action.triggered.connect(lambda _, n=name, d=data: self.downloadRequested.emit(n, d))
             
             self.tool_btn.setMenu(self.menu)
             layout.addWidget(self.tool_btn)

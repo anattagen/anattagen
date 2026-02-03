@@ -6,3 +6,5 @@ beautifulsoup4
 configparser
 psutil
 pygame
+pyinstaller 
+cloudscraper 

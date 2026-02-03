@@ -67,6 +67,7 @@ class EditorTab(QWidget):
         self.current_page = 0
         self.page_size = self.main_window.config.editor_page_size
         self.undo_stack = []
+        self.is_dirty = False
         self.populate_ui()
 
     def populate_ui(self):
@@ -148,7 +149,6 @@ class EditorTab(QWidget):
 
         # --- Table ---
         self.table = QTableWidget()
-        # set column count based on EditorCols mapping
         self.table.setColumnCount(max(c.value for c in constants.EditorCols) + 1)
         
         headers = [
@@ -172,7 +172,9 @@ class EditorTab(QWidget):
             "Launcher Exe",
             "LE-Opts", "LE-Args",
             "Exec Order", "Term Order",
-            "ISO Path"
+            "ISO Path",
+            "Disc-Mount", "DM-Opts", "DM-Args", "DM-Wait",
+            "Disc-Unmount", "DU-Opts", "DU-Args", "DU-Wait"
         ]
         self.table.setHorizontalHeaderLabels(headers)
 
@@ -199,7 +201,9 @@ class EditorTab(QWidget):
             "Launcher Executable Arguments",
             "Execution Sequence Order",
             "Termination Sequence Order",
-            "Path to ISO file to mount before launch"
+            "Path to ISO file to mount before launch",
+            "Path to disc mounting script/executable", "Disc-Mount Options", "Disc-Mount Arguments", "Wait for Disc-Mount?",
+            "Path to disc unmounting script/executable", "Disc-Unmount Options", "Disc-Unmount Arguments", "Wait for Disc-Unmount?"
         ]
         for i, tooltip in enumerate(tooltips):
             item = self.table.horizontalHeaderItem(i)
@@ -216,7 +220,8 @@ class EditorTab(QWidget):
                           constants.EditorCols.JB_RUN_WAIT.value, constants.EditorCols.PRE1_RUN_WAIT.value,
                           constants.EditorCols.POST1_RUN_WAIT.value, constants.EditorCols.PRE2_RUN_WAIT.value,
                           constants.EditorCols.POST2_RUN_WAIT.value, constants.EditorCols.PRE3_RUN_WAIT.value,
-                          constants.EditorCols.POST3_RUN_WAIT.value]
+                          constants.EditorCols.POST3_RUN_WAIT.value, constants.EditorCols.DM_RUN_WAIT.value,
+                          constants.EditorCols.DU_RUN_WAIT.value]
 
             for col in rw_columns:
                 # Automatically resize Wait columns to fit content
@@ -298,6 +303,11 @@ class EditorTab(QWidget):
         self.table.customContextMenuRequested.connect(self.on_context_menu)
         self.table.cellClicked.connect(self.on_cell_clicked)
         self.table.itemChanged.connect(self.on_item_changed)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self.is_dirty:
+            self.refresh_view()
 
     def push_undo(self):
         """Save current state to undo stack."""
@@ -412,6 +422,13 @@ class EditorTab(QWidget):
 
     def refresh_view(self):
         """Refresh the table to show the current page of data."""
+        if not self.isVisible():
+            self.is_dirty = True
+            self.data_changed.emit()
+            return
+
+        self.is_dirty = False
+        self.table.setUpdatesEnabled(False)
         self.table.blockSignals(True)
         self.table.setRowCount(0)
         
@@ -429,6 +446,7 @@ class EditorTab(QWidget):
             self._populate_row(row_num, self.filtered_data[i], duplicates)
             
         self.table.blockSignals(False)
+        self.table.setUpdatesEnabled(True)
         
         # Update pagination controls
         total_pages = max(1, (len(self.filtered_data) + self.page_size - 1) // self.page_size)
@@ -1296,8 +1314,8 @@ class EditorTab(QWidget):
                             data = self.main_window.steam_cache_manager.normalized_steam_index[m]
                             combo.addItem(f"{data['name']}", data['id'])
                         
-                        combo.currentIndexChanged.connect(lambda idx, c=combo, r_idx=r: self._on_fuzzy_combo_changed(c, r_idx))
-                        combo.editTextChanged.connect(lambda text, c=combo, r_idx=r: self._on_fuzzy_combo_changed(c, r_idx))
+                        combo.currentIndexChanged.connect(lambda _, c=combo, r_idx=r: self._on_fuzzy_combo_changed(c, r_idx))
+                        combo.editTextChanged.connect(lambda _, c=combo, r_idx=r: self._on_fuzzy_combo_changed(c, r_idx))
                         self.table.setCellWidget(r, constants.EditorCols.NAME_OVERRIDE.value, combo)
                         fuzzy_count += 1
         
@@ -1548,7 +1566,7 @@ class EditorTab(QWidget):
         else:
             for proc in procs:
                 action = kp_menu.addAction(proc)
-                action.triggered.connect(lambda checked, p=proc, r=row: self.append_kill_proc(r, p))
+                action.triggered.connect(lambda _, p=proc, r=row: self.append_kill_proc(r, p))
 
         # Governed Executables
         gov_menu = menu.addMenu("Add Governed Executable")
@@ -1566,7 +1584,7 @@ class EditorTab(QWidget):
             gov_exes.sort()
             for exe in gov_exes:
                 action = gov_menu.addAction(exe)
-                action.triggered.connect(lambda checked, p=exe, r=row: self.append_kill_proc(r, p))
+                action.triggered.connect(lambda _, p=exe, r=row: self.append_kill_proc(r, p))
 
         # Add Game Executables from directory
         real_index = (self.current_page * self.page_size) + row
@@ -1592,7 +1610,7 @@ class EditorTab(QWidget):
                     found_exes.sort()
                     for exe in found_exes:
                         action = exe_menu.addAction(exe)
-                        action.triggered.connect(lambda checked, p=exe, r=row: self.append_kill_proc(r, p))
+                        action.triggered.connect(lambda _, p=exe, r=row: self.append_kill_proc(r, p))
         
         # Add Clear Kill List option
         menu.addSeparator()
@@ -1974,7 +1992,13 @@ class EditorTab(QWidget):
         elif col == constants.EditorCols.LAUNCHER_EXE_ARGUMENTS.value:
             game['launcher_executable_arguments'] = self.table.item(row, col).text()
         elif col == constants.EditorCols.ISO_PATH.value:
-            game['iso_path'] = self.table.item(row, col).text()
+            widget = self.table.cellWidget(row, col)
+            if widget:
+                le = widget.findChild(QLineEdit)
+                if le: game['iso_path'] = le.text()
+            else:
+                item = self.table.item(row, col)
+                if item: game['iso_path'] = item.text()
 
     def swap_lc_cen_selected(self):
         """Swap between LC (>) and CEN (<) for selected path cells."""
@@ -2338,7 +2362,23 @@ class EditorTab(QWidget):
         self.table.setItem(row_num, constants.EditorCols.TERM_ORDER.value, QTableWidgetItem(", ".join(self.main_window.config.exit_sequence)))
 
         # ISO Path
-        self.table.setItem(row_num, constants.EditorCols.ISO_PATH.value, QTableWidgetItem(game.get('iso_path', '')))
+        self.table.setCellWidget(row_num, constants.EditorCols.ISO_PATH.value, self._create_iso_path_widget(game.get('iso_path', ''), row_num, constants.EditorCols.ISO_PATH.value))
+
+        # Disc-Mount (CheckBox, Path with symbol, RunWait)
+        dm_symbol, dm_run_wait = self._get_propagation_symbol_and_run_wait('disc_mount_path')
+        dm_path = f"{dm_symbol} {game.get('disc_mount_path', '').lstrip('<> ')}"
+        self.table.setCellWidget(row_num, constants.EditorCols.DM_PATH.value, self._create_merged_path_widget(game.get('disc_mount_enabled', True), dm_path, game.get('disc_mount_overwrite', True), row_num, constants.EditorCols.DM_PATH.value))
+        self.table.setItem(row_num, constants.EditorCols.DM_OPTIONS.value, QTableWidgetItem(game.get('disc_mount_options', '')))
+        self.table.setItem(row_num, constants.EditorCols.DM_ARGUMENTS.value, QTableWidgetItem(game.get('disc_mount_arguments', '')))
+        self.table.setCellWidget(row_num, constants.EditorCols.DM_RUN_WAIT.value, self._create_checkbox_widget(game.get('disc_mount_run_wait', dm_run_wait), row_num, constants.EditorCols.DM_RUN_WAIT.value))
+
+        # Disc-Unmount (CheckBox, Path with symbol, RunWait)
+        du_symbol, du_run_wait = self._get_propagation_symbol_and_run_wait('disc_unmount_path')
+        du_path = f"{du_symbol} {game.get('disc_unmount_path', '').lstrip('<> ')}"
+        self.table.setCellWidget(row_num, constants.EditorCols.DU_PATH.value, self._create_merged_path_widget(game.get('disc_unmount_enabled', True), du_path, game.get('disc_unmount_overwrite', True), row_num, constants.EditorCols.DU_PATH.value))
+        self.table.setItem(row_num, constants.EditorCols.DU_OPTIONS.value, QTableWidgetItem(game.get('disc_unmount_options', '')))
+        self.table.setItem(row_num, constants.EditorCols.DU_ARGUMENTS.value, QTableWidgetItem(game.get('disc_unmount_arguments', '')))
+        self.table.setCellWidget(row_num, constants.EditorCols.DU_RUN_WAIT.value, self._create_checkbox_widget(game.get('disc_unmount_run_wait', du_run_wait), row_num, constants.EditorCols.DU_RUN_WAIT.value))
 
         # Apply styling
         self._apply_styling(row_num, game, duplicates)
@@ -2394,6 +2434,7 @@ class EditorTab(QWidget):
             constants.EditorCols.PRE2_PATH, constants.EditorCols.POST2_PATH,
             constants.EditorCols.PRE3_PATH, constants.EditorCols.POST3_PATH,
             constants.EditorCols.LAUNCHER_EXE,
+            constants.EditorCols.DM_PATH, constants.EditorCols.DU_PATH,
             constants.EditorCols.ISO_PATH
         ]
         
@@ -2505,14 +2546,37 @@ class EditorTab(QWidget):
                 item = QTableWidgetItem()
                 self.table.setItem(row, col, item)
             item.setText(state['text'])
-            item.setCheckState(Qt.CheckState.Checked if state.get('checked', False) else Qt.CheckState.Unchecked)
+    def _create_iso_path_widget(self, path_text, row, col):
+        """Create a widget with line edit and browse button for ISO path."""
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(4, 0, 4, 0)
+        layout.setSpacing(2)
+        
+        line_edit = QLineEdit(path_text)
+        line_edit.setToolTip(path_text)
+        line_edit.textChanged.connect(lambda: self._sync_cell_to_data(row, col))
+        
+        browse_btn = QPushButton("...")
+        browse_btn.setMaximumWidth(30)
+        browse_btn.clicked.connect(lambda: self._browse_iso_path(line_edit))
+        
+        layout.addWidget(line_edit)
+        layout.addWidget(browse_btn)
+        return widget
 
-        elif state['type'] == 'text':
-            item = self.table.item(row, col)
-            if not item:
-                item = QTableWidgetItem()
-                self.table.setItem(row, col, item)
-            item.setText(state['text'])
+    def _browse_iso_path(self, line_edit):
+        current_path = line_edit.text()
+        start_dir = os.path.dirname(current_path) if current_path and os.path.exists(current_path) else ""
+        
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select Disc Image", start_dir, 
+            "Disc Images (*.iso *.cue *.bin *.img *.mdf *.nrg *.gdi *.cdi *.vhd *.vhdx *.vmdk *.wbfs *.cso *.chd);;All Files (*.*)"
+        )
+        
+        if file_path:
+            self.push_undo()
+            line_edit.setText(file_path)
 
     def clear_table(self):
         """Clear the table and reset original data."""

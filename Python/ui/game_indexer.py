@@ -18,7 +18,9 @@ def get_filtered_directory_name(exec_full_path: str, folder_exclude_set: set) ->
     current_path = dir_path
     while True:
         dir_name = os.path.basename(current_path)
-        if dir_name.lower() not in folder_exclude_set:
+        # Transform dir_name by removing all non-alphanumeric characters
+        transformed_dir_name = re.sub(r'[^a-zA-Z0-9]', '', dir_name).lower()
+        if transformed_dir_name not in folder_exclude_set:
             return dir_name
 
         parent_path = os.path.dirname(current_path)
@@ -107,7 +109,6 @@ def _process_executable(
     try:
         filename = os.path.basename(exec_full_path)
         exec_name_no_ext = os.path.splitext(filename)[0]
-        clean_exec_name = re.sub(r'[^a-zA-Z0-9]', '', exec_name_no_ext).lower()
 
         # Check exclusion (substring match)
         for exclude_str in main_window.exclude_exe_set:
@@ -172,6 +173,7 @@ def _process_executable(
             'just_before_exit_path': config.just_before_exit_path,
             'pre1_path': config.pre1_path, 'pre2_path': config.pre2_path, 'pre3_path': config.pre3_path,
             'post1_path': config.post1_path, 'post2_path': config.post2_path, 'post3_path': config.post3_path,
+            'disc_mount_path': config.disc_mount_path, 'disc_unmount_path': config.disc_unmount_path,
             'launcher_executable': config.launcher_executable,
 
             # Enabled states from setup tab (defaults)
@@ -182,6 +184,7 @@ def _process_executable(
             'just_before_exit_enabled': config.defaults.get('just_before_exit_path_enabled', True),
             'pre_1_enabled': config.defaults.get('pre1_path_enabled', True), 'pre_2_enabled': config.defaults.get('pre2_path_enabled', True), 'pre_3_enabled': config.defaults.get('pre3_path_enabled', True),
             'post_1_enabled': config.defaults.get('post1_path_enabled', True), 'post_2_enabled': config.defaults.get('post2_path_enabled', True), 'post_3_enabled': config.defaults.get('post3_path_enabled', True),
+            'disc_mount_enabled': config.defaults.get('disc_mount_path_enabled', True), 'disc_unmount_enabled': config.defaults.get('disc_unmount_path_enabled', True),
             'launcher_executable_enabled': config.defaults.get('launcher_executable_enabled', True),
 
             # Profile enabled states
@@ -203,6 +206,8 @@ def _process_executable(
             'post_1_overwrite': config.overwrite_states.get('post1_path', True),
             'post_2_overwrite': config.overwrite_states.get('post2_path', True),
             'post_3_overwrite': config.overwrite_states.get('post3_path', True),
+            'disc_mount_overwrite': config.overwrite_states.get('disc_mount_path', True),
+            'disc_unmount_overwrite': config.overwrite_states.get('disc_unmount_path', True),
             'player1_profile_overwrite': config.overwrite_states.get('p1_profile_path', True),
             'player2_profile_overwrite': config.overwrite_states.get('p2_profile_path', True),
             'mediacenter_profile_overwrite': config.overwrite_states.get('mediacenter_profile_path', True),
@@ -218,6 +223,7 @@ def _process_executable(
             'just_before_exit_run_wait': config.run_wait_states.get('just_before_exit_path_run_wait', False),
             'pre_1_run_wait': config.run_wait_states.get('pre1_path_run_wait', False), 'pre_2_run_wait': config.run_wait_states.get('pre2_path_run_wait', False), 'pre_3_run_wait': config.run_wait_states.get('pre3_path_run_wait', False),
             'post_1_run_wait': config.run_wait_states.get('post1_path_run_wait', False), 'post_2_run_wait': config.run_wait_states.get('post2_path_run_wait', False), 'post_3_run_wait': config.run_wait_states.get('post3_path_run_wait', False),
+            'disc_mount_run_wait': config.run_wait_states.get('disc_mount_path_run_wait', False), 'disc_unmount_run_wait': config.run_wait_states.get('disc_unmount_path_run_wait', False),
         }
         return game_data
     except PermissionError:

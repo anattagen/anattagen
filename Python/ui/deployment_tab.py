@@ -20,6 +20,7 @@ PATH_KEYS = [
     "profiles_dir", "launchers_dir", "launcher_executable",
     "controller_mapper_path", "borderless_gaming_path", "multi_monitor_tool_path",
     "just_after_launch_path", "just_before_exit_path",
+    "disc_mount_path", "disc_unmount_path",
     "p1_profile_path", "p2_profile_path", "mediacenter_profile_path",
     "multimonitor_gaming_path", "multimonitor_media_path",
     "pre1_path", "post1_path", "pre2_path", "post2_path", "pre3_path", 
@@ -35,6 +36,8 @@ PATH_LABELS = {
     "multi_monitor_tool_path": "Overwrite Multi-Monitor Tool",
     "just_after_launch_path": "Overwrite Just After Launch",
     "just_before_exit_path": "Overwrite Just Before Exit",
+    "disc_mount_path": "Overwrite Disc-Mount",
+    "disc_unmount_path": "Overwrite Disc-Unmount",
     "p1_profile_path": "Overwrite Player 1 Profile",
     "p2_profile_path": "Overwrite Player 2 Profile",
     "mediacenter_profile_path": "Overwrite Media Center Profile",
@@ -220,11 +223,28 @@ class DeploymentTab(QWidget):
         creation_options_widget = QWidget()
         creation_options_layout = QVBoxLayout(creation_options_widget)
         
+        # Metadata & Artwork Options
+        meta_group = QGroupBox("Metadata & Artwork")
+        meta_layout = QGridLayout(meta_group)
+
         self.download_game_json_checkbox = QCheckBox("Download Steam's Game.json")
         self.download_game_json_checkbox.setToolTip("If checked, attempts to download game metadata from Steam using the Steam ID during creation.")
+        self.overwrite_game_json_checkbox = QCheckBox("Overwrite Game.json")
+
+        self.download_pcgw_checkbox = QCheckBox("Download PcGamingWiki")
+        self.overwrite_pcgw_checkbox = QCheckBox("Overwrite PcGamingWiki")
         
         self.download_artwork_checkbox = QCheckBox("Download Artwork")
         self.download_artwork_checkbox.setToolTip("Downloads header and background images to the profile folder.")
+        self.overwrite_artwork_checkbox = QCheckBox("Overwrite Artwork")
+
+        # Layout the checkboxes
+        meta_layout.addWidget(self.download_game_json_checkbox, 0, 0)
+        meta_layout.addWidget(self.overwrite_game_json_checkbox, 0, 1)
+        meta_layout.addWidget(self.download_pcgw_checkbox, 1, 0)
+        meta_layout.addWidget(self.overwrite_pcgw_checkbox, 1, 1)
+        meta_layout.addWidget(self.download_artwork_checkbox, 2, 0)
+        meta_layout.addWidget(self.overwrite_artwork_checkbox, 2, 1)
 
         # Create button shows dynamic count of selected items
         self.create_button = QPushButton()
@@ -253,9 +273,7 @@ class DeploymentTab(QWidget):
 
         # Bottom controls
         bottom_controls = QHBoxLayout()
-        bottom_controls.addWidget(self.download_game_json_checkbox)
-        bottom_controls.addWidget(self.download_artwork_checkbox)
-        bottom_controls.addStretch(1)
+        bottom_controls.addWidget(meta_group)
         bottom_controls.addWidget(self.create_button)
         
         creation_content_layout.addLayout(bottom_controls)
@@ -277,7 +295,11 @@ class DeploymentTab(QWidget):
         self.name_check_checkbox.stateChanged.connect(self.config_changed.emit)
         self.steam_version_group.buttonClicked.connect(lambda: self.config_changed.emit())
         self.download_game_json_checkbox.stateChanged.connect(self.config_changed.emit)
+        self.overwrite_game_json_checkbox.stateChanged.connect(self.config_changed.emit)
+        self.download_pcgw_checkbox.stateChanged.connect(self.config_changed.emit)
+        self.overwrite_pcgw_checkbox.stateChanged.connect(self.config_changed.emit)
         self.download_artwork_checkbox.stateChanged.connect(self.config_changed.emit)
+        self.overwrite_artwork_checkbox.stateChanged.connect(self.config_changed.emit)
 
         self.create_button.clicked.connect(self.create_selected_requested.emit)
         self.download_steam_json_button.clicked.connect(self._on_download_clicked)
@@ -423,7 +445,11 @@ class DeploymentTab(QWidget):
             self.steam_json_v2_radio.setChecked(True)
 
         self.download_game_json_checkbox.setChecked(config.download_game_json)
+        self.overwrite_game_json_checkbox.setChecked(config.overwrite_game_json)
+        self.download_pcgw_checkbox.setChecked(config.download_pcgw_metadata)
+        self.overwrite_pcgw_checkbox.setChecked(config.overwrite_pcgw_metadata)
         self.download_artwork_checkbox.setChecked(config.download_artwork)
+        self.overwrite_artwork_checkbox.setChecked(config.overwrite_artwork)
         
         # Sync overwrite checkboxes
         for key, cb in self.overwrite_checkboxes.items():
@@ -437,7 +463,11 @@ class DeploymentTab(QWidget):
         config.steam_json_version = 1 if self.steam_json_v1_radio.isChecked() else 2
 
         config.download_game_json = self.download_game_json_checkbox.isChecked()
+        config.overwrite_game_json = self.overwrite_game_json_checkbox.isChecked()
+        config.download_pcgw_metadata = self.download_pcgw_checkbox.isChecked()
+        config.overwrite_pcgw_metadata = self.overwrite_pcgw_checkbox.isChecked()
         config.download_artwork = self.download_artwork_checkbox.isChecked()
+        config.overwrite_artwork = self.overwrite_artwork_checkbox.isChecked()
         
         # Sync overwrite states
         for key, cb in self.overwrite_checkboxes.items():

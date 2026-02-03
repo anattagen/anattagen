@@ -94,3 +94,11 @@ class EditorCols(Enum):
     EXEC_ORDER = 63
     TERM_ORDER = 64
     ISO_PATH = 65
+    DM_PATH = 66
+    DM_OPTIONS = 67
+    DM_ARGUMENTS = 68
+    DM_RUN_WAIT = 69
+    DU_PATH = 70
+    DU_OPTIONS = 71
+    DU_ARGUMENTS = 72
+    DU_RUN_WAIT = 73
