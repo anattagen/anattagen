@@ -414,6 +414,16 @@ class GameLauncher:
             self.cloud_app = config.get('Paths', 'CloudApp', fallback='')
             self.cloud_app_options = config.get('Paths', 'CloudAppOptions', fallback='')
             self.cloud_app_arguments = config.get('Paths', 'CloudAppArguments', fallback='')
+            
+            self.disc_mount_app = config.get('Paths', 'DiscMountApp', fallback='')
+            self.disc_mount_options = config.get('Paths', 'DiscMountOptions', fallback='')
+            self.disc_mount_arguments = config.get('Paths', 'DiscMountArguments', fallback='')
+            self.disc_mount_wait = config.getboolean('Paths', 'DiscMountWait', fallback=False)
+            
+            self.disc_unmount_app = config.get('Paths', 'DiscUnmountApp', fallback='')
+            self.disc_unmount_options = config.get('Paths', 'DiscUnmountOptions', fallback='')
+            self.disc_unmount_arguments = config.get('Paths', 'DiscUnmountArguments', fallback='')
+            self.disc_unmount_wait = config.getboolean('Paths', 'DiscUnmountWait', fallback=False)
         
         # Load options
         if 'Options' in config:
@@ -550,7 +560,8 @@ class GameLauncher:
             '$GAMEDIR': self.game_dir,
             '$GAMEEXE': self.game_path,
             '$GAMENAME': self.game_name,
-            '$HOME': self.home
+            '$HOME': self.home,
+            '$ISO': self.iso_path
         }
         
         # Simple replacement
@@ -617,35 +628,6 @@ class GameLauncher:
         except Exception as e:
             self.show_message(f"Backup failed: {e}")
 
-    def mount_iso(self):
-        """Mounts the configured ISO file."""
-        iso_resolved = self.resolve_path(self.iso_path)
-        if iso_resolved and os.path.exists(iso_resolved):
-            self.show_message(f"Mounting ISO: {iso_resolved}")
-            if platform.system() == 'Windows':
-                cmd = f'powershell -Command "Mount-DiskImage -ImagePath \'{iso_resolved}\'"'
-                self.run_process(cmd, wait=True)
-            elif platform.system() == 'Darwin':
-                self.run_process(f'hdiutil mount "{iso_resolved}"', wait=True)
-            elif platform.system() == 'Linux':
-                self.run_process(f'udisksctl loop-setup -f "{iso_resolved}"', wait=True)
-                
-            time.sleep(2) # Allow time for the drive to mount
-
-    def unmount_iso(self):
-        """Unmounts the configured ISO file."""
-        iso_resolved = self.resolve_path(self.iso_path)
-        if iso_resolved:
-            self.show_message(f"Unmounting ISO: {iso_resolved}")
-            if platform.system() == 'Windows':
-                cmd = f'powershell -Command "Dismount-DiskImage -ImagePath \'{iso_resolved}\'"'
-                self.run_process(cmd, wait=True)
-            elif platform.system() == 'Darwin':
-                # Attempt to detach; note that hdiutil usually requires the device node or mount point
-                pass 
-            elif platform.system() == 'Linux':
-                pass
-
     def run_game(self):
         """Run the main game executable"""
         self.show_message(f"Launching game: {self.game_name}")
@@ -657,7 +639,7 @@ class GameLauncher:
         # Get the game directory
         if not self.game_dir:
             self.game_dir = os.path.dirname(self.game_path)
-        
+    
         # Close dynamic splash before launching the game
         if self.dynamic_splash:
             self.dynamic_splash.close()
@@ -684,9 +666,6 @@ class GameLauncher:
             # Backup saves if enabled
             self.backup_save_files()
 
-            # Mount ISO if configured
-            self.mount_iso()
-
             # Execute launch sequence
             self.executor.execute('launch_sequence')
             
@@ -701,7 +680,6 @@ class GameLauncher:
         finally:
             # Final cleanup to ensure system state is restored
             self.executor.ensure_cleanup()
-            self.unmount_iso()
             if self.use_kill_list:
                 self.kill_processes_in_list()
             self.show_message("Exiting launcher")

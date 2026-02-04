@@ -129,8 +129,8 @@ class SetupTab(QWidget):
     SEQUENCE_TOOLTIPS = {
         "Kill-Game": "Terminates the game process if it's running.",
         "Kill-List": "Terminates processes specified in the Kill List.",
-        "Mount-Iso": "Mounts the game ISO if configured.",
-        "Unmount-Iso": "Unmounts the game ISO.",
+        "mount-disc": "Mounts the game ISO if configured.",
+        "Unmount-disc": "Unmounts the game ISO.",
         "Controller-Mapper": "Starts/Stops the controller mapper (e.g. AntimicroX).",
         "Monitor-Config": "Applies monitor configuration (Game/Desktop).",
         "No-TB": "Hides the Windows Taskbar.",
@@ -860,59 +860,42 @@ class SetupTab(QWidget):
     def _generate_mount_scripts_files(self, bin_dir, tool_type):
         """Generate the appropriate mount/unmount scripts based on tool type."""
         assets_dir = constants.ASSETS_DIR
-        
+        template_path = os.path.join(assets_dir, "combined.cmd.set")
+        if not os.path.exists(template_path):
+            logging.warning(f"Mount script template 'combined.cmd.set' not found: {template_path}")
+            return
+
+        script_name = ""
         if tool_type == "native":
-            # Copy nativeMount.cmd.set to nativemount.cmd
-            template_path = os.path.join(assets_dir, "nativeMount.cmd.set")
-            dest_path = os.path.join(bin_dir, "nativemount.cmd")
-            self._copy_template_file(template_path, dest_path)
-            
-            # Copy _unmount.cmd.set to _unmount.cmd
-            template_path = os.path.join(assets_dir, "_unmount.cmd.set")
-            dest_path = os.path.join(bin_dir, "_unmount.cmd")
-            self._copy_template_file(template_path, dest_path)
-            
+            script_name = "nativemount.cmd"
         elif tool_type == "wincdemu":
-            # Copy cdemu.cmd.set to cdemu.cmd
-            template_path = os.path.join(assets_dir, "cdemu.cmd.set")
-            dest_path = os.path.join(bin_dir, "cdemu.cmd")
-            self._copy_template_file(template_path, dest_path)
-            
-            # Copy _unmount.cmd.set to _unmount.cmd
-            template_path = os.path.join(assets_dir, "_unmount.cmd.set")
-            dest_path = os.path.join(bin_dir, "_unmount.cmd")
-            self._copy_template_file(template_path, dest_path)
-            
+            script_name = "cdemu.cmd"
         elif tool_type == "imount":
-            # Copy imount.cmd.set to imount.cmd
-            template_path = os.path.join(assets_dir, "imount.cmd.set")
-            dest_path = os.path.join(bin_dir, "imount.cmd")
+            script_name = "imount.cmd"
+
+        if script_name:
+            dest_path = os.path.join(bin_dir, script_name)
             self._copy_template_file(template_path, dest_path)
-            
-            # Copy _unmount.cmd.set to _unmount.cmd
-            template_path = os.path.join(assets_dir, "_unmount.cmd.set")
-            dest_path = os.path.join(bin_dir, "_unmount.cmd")
-            self._copy_template_file(template_path, dest_path)
-            
+
     def _copy_template_file(self, template_path, dest_path):
         """Copy a template file to destination with variable replacement."""
         try:
             if os.path.exists(template_path):
                 with open(template_path, 'r', encoding='utf-8') as f:
                     content = f.read()
-                
+
                 # Replace variables in brackets with config values
                 def replace_var(match):
                     var_name = match.group(1)
-                    # Remove the $_$ prefix and _PATH suffix to get the config key
-                    if var_name.startswith('$_$') and var_name.endswith('_PATH'):
-                        config_key = var_name[3:-5].lower() + '_exe_path'
-                        if self.main_window and hasattr(self.main_window, 'config'):
-                            return getattr(self.main_window.config, config_key, match.group(0))
-                    return match.group(0)
-                
-                content = re.sub(r'\[\$_\$(.*?)\]', replace_var, content)
-                
+                    # Convert to a config key, e.g., 'WINCDEMU_EXE_PATH' -> 'wincdemu_exe_path'
+                    config_key = var_name.lower()
+                    if self.main_window and hasattr(self.main_window, 'config'):
+                        # Return the value if found, otherwise return an empty string to remove the tag
+                        return getattr(self.main_window.config, config_key, "")
+                    return ""
+
+                content = re.sub(r'\[\$\_\$(.*?)\]', replace_var, content)
+
                 with open(dest_path, 'w', encoding='utf-8') as f:
                     f.write(content)
                     
@@ -924,68 +907,6 @@ class SetupTab(QWidget):
                 logging.warning(f"Template not found: {template_path}")
         except Exception as e:
             logging.error(f"Error copying template {template_path} to {dest_path}: {e}")
-
-    def _generate_mount_scripts(self):
-        """Generates batch and bash scripts for mounting disc images."""
-        bin_dir = os.path.join(constants.APP_ROOT_DIR, "bin")
-        os.makedirs(bin_dir, exist_ok=True)
-        
-        cmd_path = os.path.join(bin_dir, "MountDisc.cmd")
-        sh_path = os.path.join(bin_dir, "MountDisc.sh")
-        
-        # Generate CMD
-        with open(cmd_path, 'w') as f:
-            f.write("""@echo off
-setlocal enabledelayedexpansion
-REM Mount Disc Script generated by Anattagen
-REM Arguments: %1 = Disc Image Path
-
-set "DISCIMAGE=%~1"
-if "%DISCIMAGE%"=="" goto :eof
-
-REM Try WinCDEmu if available in bin
-if exist "%~dp0WinCDEmu.exe" (
-    "%~dp0WinCDEmu.exe" /mount "%DISCIMAGE%"
-    goto :eof
-)
-
-REM Try PowerShell Mount-DiskImage (Windows 8+)
-powershell -Command "Mount-DiskImage -ImagePath '%DISCIMAGE%'"
-if %errorlevel% equ 0 goto :eof
-
-echo Could not mount disc image.
-""")
-
-        # Generate SH
-        with open(sh_path, 'w') as f:
-            f.write("""#!/bin/bash
-# Mount Disc Script generated by Anattagen
-DISCIMAGE="$1"
-if [ -z "$DISCIMAGE" ]; then exit 1; fi
-
-# Try cdemu
-if command -v cdemu &> /dev/null; then
-    cdemu load 0 "$DISCIMAGE"
-    exit 0
-fi
-
-# Try udisksctl
-if command -v udisksctl &> /dev/null; then
-    udisksctl loop-setup -f "$DISCIMAGE"
-    exit 0
-fi
-
-echo "Could not mount disc image."
-exit 1
-""")
-        
-        # Make sh executable
-        try:
-            os.chmod(sh_path, 0o755)
-        except:
-            pass
-            
-        QMessageBox.information(self, "Scripts Generated", f"Mount scripts generated in:\n{bin_dir}")
 
     def _on_download_finished_slot(self, success, message, result_path):
         if hasattr(self, 'progress_dialog'):
@@ -1058,13 +979,13 @@ exit 1
 
     def _reset_launch_sequence(self):
         self.launch_sequence_list.clear()
-        self.launch_sequence_list.addItems(["Kill-Game", "Kill-List", "Mount-Iso", "Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Borderless", "Pre2", "Pre3"])
+        self.launch_sequence_list.addItems(["Kill-Game", "Kill-List", "mount-disc", "Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Borderless", "Pre2", "Pre3"])
         self.config_changed.emit()
         self._update_list_tooltips(self.launch_sequence_list)
 
     def _reset_exit_sequence(self):
         self.exit_sequence_list.clear()
-        self.exit_sequence_list.addItems(["Kill-Game", "Kill-List", "Unmount-Iso", "Monitor-Config", "Taskbar", "Post1", "Post2", "Post3", "Controller-Mapper", "Borderless"])
+        self.exit_sequence_list.addItems(["Kill-Game", "Kill-List", "Unmount-disc", "Monitor-Config", "Taskbar", "Post1", "Post2", "Post3", "Controller-Mapper", "Borderless"])
         self.config_changed.emit()
         self._update_list_tooltips(self.exit_sequence_list)
 
@@ -1075,9 +996,9 @@ exit 1
         
         # Define full sets
         if sequence_type == "launch":
-            full_set = ["Kill-Game", "Kill-List", "Mount-Iso", "Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Borderless", "Pre2", "Pre3"]
+            full_set = ["Kill-Game", "Kill-List", "mount-disc", "Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Borderless", "Pre2", "Pre3"]
         else:
-            full_set = ["Kill-Game", "Kill-List", "Unmount-Iso", "Monitor-Config", "Taskbar", "Post1", "Post2", "Post3", "Controller-Mapper", "Borderless"]
+            full_set = ["Kill-Game", "Kill-List", "Unmount-disc", "Monitor-Config", "Taskbar", "Post1", "Post2", "Post3", "Controller-Mapper", "Borderless"]
             
         current_items = [list_widget.item(i).text() for i in range(list_widget.count())]
         removed_items = [x for x in full_set if x not in current_items]

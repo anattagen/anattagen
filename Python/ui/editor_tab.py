@@ -690,6 +690,14 @@ class EditorTab(QWidget):
             # Launcher Executable
             'launcher_executable': config.launcher_executable if config.launcher_executable else constants.LAUNCHER_EXECUTABLE, 'launcher_executable_enabled': config.defaults.get('launcher_executable_enabled', True), 'launcher_executable_overwrite': config.overwrite_states.get('launcher_executable', True),
             'launcher_executable_options': config.launcher_executable_options, 'launcher_executable_arguments': config.launcher_executable_arguments,
+
+            # Disc Mount
+            'disc_mount_path': config.disc_mount_path, 'disc_mount_enabled': config.defaults.get('disc_mount_path_enabled', True), 'disc_mount_overwrite': config.overwrite_states.get('disc_mount_path', True),
+            'disc_mount_options': config.disc_mount_options, 'disc_mount_arguments': config.disc_mount_arguments, 'disc_mount_run_wait': config.run_wait_states.get('disc_mount_path_run_wait', False),
+
+            # Disc Unmount
+            'disc_unmount_path': config.disc_unmount_path, 'disc_unmount_enabled': config.defaults.get('disc_unmount_path_enabled', True), 'disc_unmount_overwrite': config.overwrite_states.get('disc_unmount_path', True),
+            'disc_unmount_options': config.disc_unmount_options, 'disc_unmount_arguments': config.disc_unmount_arguments, 'disc_unmount_run_wait': config.run_wait_states.get('disc_unmount_path_run_wait', False),
         }
         
         self.original_data.append(copy.deepcopy(game_data))
@@ -1209,7 +1217,6 @@ class EditorTab(QWidget):
 
     def _on_fuzzy_combo_changed(self, combo, row):
         steam_id = combo.currentData()
-        text = combo.currentText()
         
         # Update Steam ID if valid ID selected
         if steam_id:
@@ -1224,13 +1231,6 @@ class EditorTab(QWidget):
             item_id.setData(Qt.ItemDataRole.ForegroundRole, None)
             self._sync_cell_to_data(row, constants.EditorCols.STEAMID.value)
 
-        # Update Name Override underlying item
-        item_name = self.table.item(row, constants.EditorCols.NAME_OVERRIDE.value)
-        if not item_name:
-            item_name = QTableWidgetItem()
-            self.table.setItem(row, constants.EditorCols.NAME_OVERRIDE.value, item_name)
-        
-        item_name.setText(text)
         self._sync_cell_to_data(row, constants.EditorCols.NAME_OVERRIDE.value)
         
         self.main_window._on_editor_table_edited(None)
@@ -1869,8 +1869,12 @@ class EditorTab(QWidget):
             item = self.table.item(row, col)
             game['steam_id'] = item.text() if item else ""
         elif col == constants.EditorCols.NAME_OVERRIDE.value:
-            item = self.table.item(row, col)
-            game['name_override'] = item.text() if item else ""
+            widget = self.table.cellWidget(row, col)
+            if isinstance(widget, QComboBox):
+                game['name_override'] = widget.currentText()
+            else:
+                item = self.table.item(row, col)
+                game['name_override'] = item.text() if item else ""
         elif col == constants.EditorCols.OPTIONS.value:
             item = self.table.item(row, col)
             game['options'] = item.text() if item else ""
@@ -2281,7 +2285,27 @@ class EditorTab(QWidget):
         self.table.setItem(row_num, constants.EditorCols.STEAMID.value, QTableWidgetItem(str(steam_id_value)))
 
         # NameOverride - col NAME_OVERRIDE
-        self.table.setItem(row_num, constants.EditorCols.NAME_OVERRIDE.value, QTableWidgetItem(game.get('name_override', '')))
+        fuzzy_matches = game.get('_fuzzy_matches')
+        if fuzzy_matches:
+            combo = QComboBox()
+            combo.setEditable(True)
+            combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+            
+            # Add original name as first item
+            original_name = game.get('name_override', '')
+            combo.addItem(original_name, None)
+            
+            # Add fuzzy matches
+            for match_key in fuzzy_matches:
+                match_data = self.main_window.steam_cache_manager.normalized_steam_index.get(match_key)
+                if match_data:
+                    combo.addItem(f"{match_data['name']}", data=match_data.get('id'))
+            
+            combo.currentIndexChanged.connect(lambda _, c=combo, r_idx=row_num: self._on_fuzzy_combo_changed(c, r_idx))
+            combo.editTextChanged.connect(lambda _, c=combo, r_idx=row_num: self._on_fuzzy_combo_changed(c, r_idx))
+            self.table.setCellWidget(row_num, constants.EditorCols.NAME_OVERRIDE.value, combo)
+        else:
+            self.table.setItem(row_num, constants.EditorCols.NAME_OVERRIDE.value, QTableWidgetItem(game.get('name_override', '')))
 
         # Options - col OPTIONS
         self.table.setItem(row_num, constants.EditorCols.OPTIONS.value, QTableWidgetItem(game.get('options', '')))
@@ -2992,6 +3016,18 @@ class EditorTab(QWidget):
         game_data['launcher_executable'] = config.get('Paths', 'LauncherExecutable', fallback='')
         game_data['launcher_executable_enabled'] = bool(game_data['launcher_executable'])
         
+        game_data['disc_mount_path'] = get_path('Paths', 'DiscMountApp', 'DiscMountApp')
+        game_data['disc_mount_options'] = config.get('Paths', 'DiscMountOptions', fallback='')
+        game_data['disc_mount_arguments'] = config.get('Paths', 'DiscMountArguments', fallback='')
+        game_data['disc_mount_enabled'] = bool(game_data['disc_mount_path'])
+        game_data['disc_mount_run_wait'] = config.getboolean('Paths', 'DiscMountWait', fallback=False)
+        
+        game_data['disc_unmount_path'] = get_path('Paths', 'DiscUnmountApp', 'DiscUnmountApp')
+        game_data['disc_unmount_options'] = config.get('Paths', 'DiscUnmountOptions', fallback='')
+        game_data['disc_unmount_arguments'] = config.get('Paths', 'DiscUnmountArguments', fallback='')
+        game_data['disc_unmount_enabled'] = bool(game_data['disc_unmount_path'])
+        game_data['disc_unmount_run_wait'] = config.getboolean('Paths', 'DiscUnmountWait', fallback=False)
+
         # [PreLaunch]
         for i in range(1, 4):
             app_key = f'App{i}'

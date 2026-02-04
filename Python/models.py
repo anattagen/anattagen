@@ -34,7 +34,12 @@ class AppConfig:
         # Just Before/After launch apps
         self.just_after_launch_path = ""
         self.just_before_exit_path = ""
-        self.disc_mount_path = ""
+        # Disc mount/unmount tools
+        self.native_mount_path = ""
+        self.wincdemu_exe_path = ""
+        self.imount_exe_path = ""
+        self.daemontools_exe_path = ""
+        self.custom_mount_path = ""
         self.disc_unmount_path = ""
 
         # App Options & Arguments

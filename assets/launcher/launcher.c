@@ -867,9 +867,9 @@ void execute_action(const char* action, int is_exit_sequence) {
         }
     } else if (strcmp(action, "Cloud-Sync") == 0) {
         action_run_cloud_sync();
-    } else if (strcmp(action, "Mount-Iso") == 0) {
+    } else if (strcmp(action, "mount-disc") == 0) {
         if (!is_exit_sequence) action_mount_iso();
-    } else if (strcmp(action, "Unmount-Iso") == 0) {
+    } else if (strcmp(action, "Unmount-disc") == 0) {
         if (is_exit_sequence) action_unmount_iso();
     } else if (strcmp(action, "Pre1") == 0) {
         action_run_generic_app(G_CONFIG.pre_launch_app_1, G_CONFIG.pre_launch_app_1_wait);

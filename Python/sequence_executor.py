@@ -40,7 +40,8 @@ class SequenceExecutor:
             'Post3': lambda: self.run_generic_app('post_launch_app_3', 'post_launch_app_3_wait', 'post_launch_app_3_options', 'post_launch_app_3_arguments'),
             'Taskbar': self.show_taskbar,
             'Cloud-Sync': self.run_cloud_sync,
-            'Mount-Iso': self.launcher.mount_iso,
+            'mount-disc': lambda: self.run_generic_app('disc_mount_app', 'disc_mount_wait', 'disc_mount_options', 'disc_mount_arguments'),
+            'Unmount-disc': lambda: self.run_generic_app('disc_unmount_app', 'disc_unmount_wait', 'disc_unmount_options', 'disc_unmount_arguments'),
         }
 
         # Define explicit "off" or "restore" actions for the exit sequence
@@ -51,7 +52,7 @@ class SequenceExecutor:
             'Monitor-Config': self.run_monitor_config_desktop,
             'Borderless': self.kill_borderless,
             'Cloud-Sync': self.run_cloud_sync,
-            'Unmount-Iso': self.launcher.unmount_iso,
+            'Unmount-disc': lambda: self.run_generic_app('disc_unmount_app', 'disc_unmount_wait', 'disc_unmount_options', 'disc_unmount_arguments'),
         }
 
     def execute(self, sequence_name):

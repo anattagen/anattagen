@@ -1,12 +1,14 @@
 import os
 import json
 import logging
+import difflib
 from PyQt6.QtCore import QObject, pyqtSignal, Qt
 from PyQt6.QtWidgets import QProgressDialog, QApplication
 
 from .. import constants
 from ..models import AppConfig
 from ..managers.game_indexer import GameIndexer
+from ..ui.name_processor import NameProcessor
 
 
 class DataManager(QObject):
@@ -35,6 +37,39 @@ class DataManager(QObject):
         except Exception as e:
             logging.error(f"Failed to load set file {filename}: {e}")
         return result
+
+    def _perform_fuzzy_steam_matching(self, games):
+        """
+        Performs fuzzy matching for games without a valid Steam ID and stores the results.
+        """
+        if not self.config.enable_name_matching:
+            return
+
+        logging.info("Performing fuzzy Steam ID matching for entries without an AppID...")
+        steam_index = self.main_window.steam_cache_manager.normalized_steam_index
+        if not steam_index:
+            logging.warning("Normalized Steam index not available for fuzzy matching.")
+            return
+
+        # Initialize NameProcessor
+        release_groups = getattr(self.main_window, 'release_groups_set', set())
+        exclude_exe = getattr(self.main_window, 'exclude_exe_set', set())
+        name_processor = NameProcessor(release_groups, exclude_exe)
+        
+        all_keys = list(steam_index.keys())
+        
+        for game in games:
+            steam_id = str(game.get('steam_id', ''))
+            if not steam_id or steam_id == 'NOT_FOUND_IN_DATA':
+                name_to_use = game.get('name_override') or game.get('name')
+                if not name_to_use:
+                    continue
+                
+                match_name = name_processor.get_match_name(name_to_use)
+                matches = difflib.get_close_matches(match_name, all_keys, n=5, cutoff=0.6)
+                if matches:
+                    game['_fuzzy_matches'] = matches
+                    logging.debug(f"Found fuzzy matches for '{name_to_use}': {matches}")
 
     def index_sources(self):
         """
@@ -80,6 +115,10 @@ class DataManager(QObject):
                 # Emit empty list to clear the view if cancelled
                 self.index_data_loaded.emit([])
             else:
+                # After indexing, perform fuzzy matching for games without a Steam ID
+                if found_games:
+                    self._perform_fuzzy_steam_matching(found_games)
+
                 logging.info(f"Indexing complete. Found {len(found_games)} games.")
                 self.status_updated.emit(f"Found {len(found_games)} games.", 3000)
                 self.index_data_loaded.emit(found_games)
