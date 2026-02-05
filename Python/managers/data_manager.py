@@ -66,7 +66,8 @@ class DataManager(QObject):
                     continue
                 
                 match_name = name_processor.get_match_name(name_to_use)
-                matches = difflib.get_close_matches(match_name, all_keys, n=5, cutoff=0.6)
+                cutoff = getattr(self.config, 'fuzzy_match_cutoff', 0.6)
+                matches = difflib.get_close_matches(match_name, all_keys, n=5, cutoff=cutoff)
                 if matches:
                     game['_fuzzy_matches'] = matches
                     logging.debug(f"Found fuzzy matches for '{name_to_use}': {matches}")

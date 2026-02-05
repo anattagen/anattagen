@@ -37,9 +37,11 @@ class AppConfig:
         # Disc mount/unmount tools
         self.native_mount_path = ""
         self.wincdemu_exe_path = ""
+        self.cdmage_exe_path = ""
+        self.osf_exe_path = ""
         self.imount_exe_path = ""
-        self.daemontools_exe_path = ""
         self.custom_mount_path = ""
+        self.disc_mount_path = ""
         self.disc_unmount_path = ""
 
         # App Options & Arguments
@@ -105,6 +107,7 @@ class AppConfig:
         self.hide_taskbar = False
         self.run_as_admin = False
         self.enable_name_matching = False
+        self.fuzzy_match_cutoff = 0.6
         self.steam_json_version = 2
         self.use_kill_list = False
         self.terminate_borderless_on_exit = False

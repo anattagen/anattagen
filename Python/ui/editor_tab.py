@@ -173,8 +173,8 @@ class EditorTab(QWidget):
             "LE-Opts", "LE-Args",
             "Exec Order", "Term Order",
             "ISO Path",
-            "Disc-Mount", "DM-Opts", "DM-Args", "DM-Wait",
-            "Disc-Unmount", "DU-Opts", "DU-Args", "DU-Wait"
+            "Disc-Mount", "DM-Opts", "DM-Args", "Wait",
+            "Disc-Unmount", "DU-Opts", "DU-Args", "Wait"
         ]
         self.table.setHorizontalHeaderLabels(headers)
 
@@ -1306,7 +1306,8 @@ class EditorTab(QWidget):
                         matched_count += 1
                 elif all_keys:
                     # Fuzzy match
-                    matches = difflib.get_close_matches(match_name, all_keys, n=5, cutoff=0.6)
+                    cutoff = getattr(self.main_window.config, 'fuzzy_match_cutoff', 0.6)
+                    matches = difflib.get_close_matches(match_name, all_keys, n=5, cutoff=cutoff)
                     if matches:
                         combo = QComboBox()
                         combo.setEditable(True)

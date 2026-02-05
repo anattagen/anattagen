@@ -49,4 +49,6 @@ swre = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLO
 
 [DISCS]
 WinCDEmu = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+osf = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAMEMount.exe
+cdmage = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 imount = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe

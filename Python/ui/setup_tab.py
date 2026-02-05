@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QGroupBox, QLabel, QFormLayout, QPushButton,
     QComboBox, QHBoxLayout, QCheckBox, QTabWidget,
     QFileDialog, QApplication, QSpinBox, QMessageBox, QMenu, QInputDialog,
-    QDialog, QDialogButtonBox, QLineEdit, QProgressDialog, QGridLayout
+    QDialog, QDialogButtonBox, QLineEdit, QProgressDialog, QGridLayout, QDoubleSpinBox
 )
 from PyQt6.QtGui import QFontDatabase, QFont, QPalette, QColor
 import re
@@ -151,21 +151,28 @@ class SetupTab(QWidget):
         self.repos = self._parse_repos_set()
         self.last_detected_tools = {}
         self.options_args_map = self._parse_options_arguments_set()
+        
         self.mounting_tools = {
-            "Native (Windows 8+)": {"special": "mount_native"},
-            "WinCDEmu": {
-                "url": "https://github.com/sysprogs/WinCDEmu/releases/download/v4.1/PortableWinCDEmu-4.1.exe",
-                "extract_dir": "bin",
-                "exe_name": "PortableWinCDEmu-4.1.exe",
-                "special": "mount_wincdemu"
-            },
-            "imount": {
-                "url": "https://github.com/anattagen/imount/releases/download/latest/imount.exe",
-                "extract_dir": "bin",
-                "exe_name": "imount.exe",
-                "special": "mount_imount"
-            }
+            "Native (Windows 8+)": {"special": "mount_native"}
         }
+        
+        # Populate mounting tools from repos.set
+        if "DISCS" in self.repos:
+            for key, data in self.repos["DISCS"].items():
+                tool_data = data.copy()
+                if key.lower() == "wincdemu":
+                    tool_data["special"] = "mount_wincdemu"
+                    self.mounting_tools["WinCDEmu"] = tool_data
+                elif key.lower() == "wincdemu":
+                    tool_data["special"] = "mount_osf"
+                    self.mounting_tools["osf"] = tool_data
+                elif key.lower() == "cdmage":
+                    tool_data["special"] = "mount_cdmage"
+                    self.mounting_tools["cdmage"] = tool_data
+                elif key.lower() == "imount":
+                    tool_data["special"] = "mount_imount"
+                    self.mounting_tools["imount"] = tool_data
+
         self.download_thread = None
         self._setup_ui()
 
@@ -408,6 +415,14 @@ class SetupTab(QWidget):
         self.logging_verbosity_combo = QComboBox()
         self.logging_verbosity_combo.addItems(["None", "Low", "Medium", "High", "Debug"])
         appearance_layout.addRow("LOGGING VERBOSITY:", self.logging_verbosity_combo)
+        
+        # Fuzzy Match Cutoff
+        self.fuzzy_match_spin = QDoubleSpinBox()
+        self.fuzzy_match_spin.setRange(0.1, 1.0)
+        self.fuzzy_match_spin.setSingleStep(0.05)
+        self.fuzzy_match_spin.setToolTip("Sensitivity for fuzzy name matching (0.1 = loose, 1.0 = exact). Default: 0.6")
+        appearance_layout.addRow("Fuzzy Match Sensitivity:", self.fuzzy_match_spin)
+
         # Editor Page Size
         self.page_size_spin = QSpinBox()
         self.page_size_spin.setRange(25, 2000)
@@ -562,6 +577,7 @@ class SetupTab(QWidget):
 
         # Logging
         self.logging_verbosity_combo.currentTextChanged.connect(self.main_window._on_logging_verbosity_changed)
+        self.fuzzy_match_spin.valueChanged.connect(self.config_changed.emit)
         
         # Appearance
         self.page_size_spin.valueChanged.connect(self.config_changed.emit)
@@ -574,6 +590,7 @@ class SetupTab(QWidget):
             return repos
 
         config = configparser.ConfigParser()
+        config.optionxform = str
         config.read(constants.REPOS_SET)
 
         global_vars = {}
@@ -639,7 +656,7 @@ class SetupTab(QWidget):
                 sender_row.line_edit.setText(script_path)
             return
         
-        if tool_data.get("special") in ["mount_native", "mount_wincdemu", "mount_imount"]:
+        if tool_data.get("special") in ["mount_native", "mount_wincdemu", "mount_imount", "mount_cdmage", "mount_osf"]:
             self._handle_mount_tool_setup(tool_name, tool_data)
             return
 
@@ -755,6 +772,80 @@ class SetupTab(QWidget):
                     mount_script = "cdemu.cmd" if os.name == 'nt' else "cdemu.sh"
                     self.path_rows["disc_mount_path"].line_edit.setText(os.path.join(bin_dir, mount_script))
                     self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
+        
+        elif special_type == "mount_cdmage":
+            # Check if already downloaded
+            exe_path = os.path.join(bin_dir, tool_data['exe_name'])
+            if not os.path.exists(exe_path):
+                # Trigger download
+                self.active_download_row = sender_row
+                self.progress_dialog = QProgressDialog(f"Downloading {tool_name}...", "Cancel", 0, 100, self)
+                self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+                self.progress_dialog.setMinimumDuration(0)
+                self.progress_dialog.setAutoClose(False)
+                self.progress_dialog.show()
+
+                self.download_thread = DownloadThread(tool_data['url'], bin_dir, tool_data['exe_name'])
+                self.download_thread.progress.connect(self.progress_dialog.setValue)
+                
+                # Connect finished signal to a lambda that also generates scripts
+                self.download_thread.finished.connect(lambda s, m, p: self._on_cdmage_download_finished(s, m, p, bin_dir))
+                self.download_thread.start()
+            else:
+                # Just   scripts and set path
+                self._generate_mount_scripts_files(bin_dir, "cdmage")
+                if sender_row:
+                    script_name = "cdmage.cmd" if os.name == 'nt' else "cdmage.sh"
+                    sender_row.line_edit.setText(os.path.join(bin_dir, script_name))
+                    # Write exe path to config
+                    self._write_exe_path_to_config("cdmage", exe_path)
+                    # Auto-populate complementary field
+                    if sender_row.config_key == "disc_mount_path":
+                        unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
+                        self.path_rows["disc_unmount_path"].line_edit.setText(os.path.join(bin_dir, unmount_script))
+                        self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
+                    elif sender_row.config_key == "disc_unmount_path":
+                        mount_script = "cdmage.cmd" if os.name == 'nt' else "cdmage.sh"
+                        self.path_rows["disc_mount_path"].line_edit.setText(os.path.join(bin_dir, mount_script))
+                        self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
+
+
+        elif special_type == "mount_osf":
+            # Check if already downloaded
+            exe_path = os.path.join(bin_dir, tool_data['exe_name'])
+            if not os.path.exists(exe_path):
+                # Trigger download
+                self.active_download_row = sender_row
+                self.progress_dialog = QProgressDialog(f"Downloading {tool_name}...", "Cancel", 0, 100, self)
+                self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+                self.progress_dialog.setMinimumDuration(0)
+                self.progress_dialog.setAutoClose(False)
+                self.progress_dialog.show()
+
+                self.download_thread = DownloadThread(tool_data['url'], bin_dir, tool_data['exe_name'])
+                self.download_thread.progress.connect(self.progress_dialog.setValue)
+                
+                # Connect finished signal to a lambda that also generates scripts
+                self.download_thread.finished.connect(lambda s, m, p: self._on_osf_download_finished(s, m, p, bin_dir))
+                self.download_thread.start()
+            else:
+                # Just generate scripts and set path
+                self._generate_mount_scripts_files(bin_dir, "osf")
+                if sender_row:
+                    script_name = "osf.cmd" if os.name == 'nt' else "osf.sh"
+                    sender_row.line_edit.setText(os.path.join(bin_dir, script_name))
+                    # Write exe path to config
+                    self._write_exe_path_to_config("osf", exe_path)
+                    # Auto-populate complementary field
+                    if sender_row.config_key == "disc_mount_path":
+                        unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
+                        self.path_rows["disc_unmount_path"].line_edit.setText(os.path.join(bin_dir, unmount_script))
+                        self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
+                    elif sender_row.config_key == "disc_unmount_path":
+                        mount_script = "osf.cmd" if os.name == 'nt' else "osf.sh"
+                        self.path_rows["disc_mount_path"].line_edit.setText(os.path.join(bin_dir, mount_script))
+                        self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
+
 
         elif special_type == "mount_imount":
             # Check if already downloaded
@@ -846,11 +937,40 @@ class SetupTab(QWidget):
 
         self.active_download_row = None
         self._current_download_tool_name = None
+    def _on_cdmage_download_finished(self, success, message, result_path, bin_dir):
+        if hasattr(self, 'progress_dialog'):
+            self.progress_dialog.close()
+
+        if success:
+            self._generate_mount_scripts_files(bin_dir, "cdmage")
+            if getattr(self, 'active_download_row', None):
+                script_name = "cdmage.cmd" if os.name == 'nt' else "cdmage.sh"
+                self.active_download_row.line_edit.setText(os.path.join(bin_dir, script_name))
+                # Write exe path to config
+                exe_path = os.path.join(bin_dir, "cdmage.exe")
+                self._write_exe_path_to_config("cdmage", exe_path)
+                # Auto-populate complementary field
+                if getattr(self.active_download_row, 'config_key', None) == "disc_mount_path":
+                    unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
+                    self.path_rows["disc_unmount_path"].line_edit.setText(os.path.join(bin_dir, unmount_script))
+                    self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
+                elif getattr(self.active_download_row, 'config_key', None) == "disc_unmount_path":
+                    mount_script = "cdmage.cmd" if os.name == 'nt' else "cdmage.sh"
+                    self.path_rows["disc_mount_path"].line_edit.setText(os.path.join(bin_dir, mount_script))
+                    self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
+            
+            QMessageBox.information(self, "Download Complete", f"Successfully downloaded to:\n{result_path}")
+        else:
+            QMessageBox.critical(self, "Download Failed", f"Error: {message}")
+
+        self.active_download_row = None
+        self._current_download_tool_name = None
+        self.progress_dialog.close()
 
     def _write_exe_path_to_config(self, exe_name, exe_path):
         """Write the executable path to config.json with the format {exe_name}_exe_path."""
         # Remove .exe extension if present for the config key
-        tool_name_no_ext = exe_name.replace('.exe', '')
+        tool_name_no_ext = exe_name.replace('.exe', '').lower()
         config_key = f"{tool_name_no_ext}_exe_path"
         if self.main_window and hasattr(self.main_window, 'config'):
             setattr(self.main_window.config, config_key, exe_path)
@@ -872,6 +992,10 @@ class SetupTab(QWidget):
             script_name = "cdemu.cmd"
         elif tool_type == "imount":
             script_name = "imount.cmd"
+        elif tool_type == "cdmage":
+            script_name = "cdmage.cmd"
+        elif tool_type == "osf":
+            script_name = "osf.cmd"
 
         if script_name:
             dest_path = os.path.join(bin_dir, script_name)
@@ -924,7 +1048,7 @@ class SetupTab(QWidget):
                     exe_dir = os.path.dirname(result_path)
                     exe_name = os.path.basename(result_path)
                     # Remove .exe extension for the config key
-                    tool_name_no_ext = tool_name.replace('.exe', '')
+                    tool_name_no_ext = tool_name.replace('.exe', '').lower()
                     config_key = f"{tool_name_no_ext}_exe_path"
                     # Store the full path to the executable
                     if self.main_window and hasattr(self.main_window, 'config'):
@@ -1112,6 +1236,7 @@ class SetupTab(QWidget):
         self.other_managers_combo.setCurrentText(config.game_managers_present)
         self.exclude_manager_checkbox.setChecked(config.exclude_selected_manager_games)
         self.logging_verbosity_combo.setCurrentText(config.logging_verbosity)
+        self.fuzzy_match_spin.setValue(getattr(config, 'fuzzy_match_cutoff', 0.6))
         
         self.run_as_admin_checkbox.setChecked(config.run_as_admin)
         self.use_kill_list_checkbox.setChecked(config.use_kill_list)
@@ -1163,6 +1288,7 @@ class SetupTab(QWidget):
         config.game_managers_present = self.other_managers_combo.currentText()
         config.exclude_selected_manager_games = self.exclude_manager_checkbox.isChecked()
         config.logging_verbosity = self.logging_verbosity_combo.currentText()
+        config.fuzzy_match_cutoff = self.fuzzy_match_spin.value()
         config.editor_page_size = self.page_size_spin.value()
 
         config.run_as_admin = self.run_as_admin_checkbox.isChecked()
