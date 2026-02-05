@@ -112,15 +112,15 @@ set "UNMOUNT_RESULT=%ERRORLEVEL%"
 exit /b %UNMOUNT_RESULT%
 
 :unmount_cdemu
-REM WinCDEmu Unmount
+REM wincdemu Unmount
 set "WCDU=[$_$WINCDEMU_EXE_PATH]"
-if "%WCDU%"=="" set "WCDU=%~dp0WinCDEmu.exe"
+if "%WCDU%"=="" set "WCDU=%~dp0wincdemu.exe"
 if exist "%WCDU%" (
     "%WCDU%" /unmount "%DRIVELETTER%:" 2>> "%ERROR_LOG%"
     set "UNMOUNT_RESULT=%ERRORLEVEL%"
     if "%UNMOUNT_RESULT%"=="0" exit /b 0
 )
-REM Fallback to native if WinCDEmu fails
+REM Fallback to native if wincdemu fails
 call :unmount_native
 set "UNMOUNT_RESULT=%ERRORLEVEL%"
 exit /b %UNMOUNT_RESULT%

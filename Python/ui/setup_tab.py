@@ -162,7 +162,7 @@ class SetupTab(QWidget):
                 tool_data = data.copy()
                 if key.lower() == "wincdemu":
                     tool_data["special"] = "mount_wincdemu"
-                    self.mounting_tools["WinCDEmu"] = tool_data
+                    self.mounting_tools["wincdemu"] = tool_data
                 elif key.lower() == "wincdemu":
                     tool_data["special"] = "mount_osf"
                     self.mounting_tools["osf"] = tool_data
@@ -287,10 +287,10 @@ class SetupTab(QWidget):
         # Directories Group
         directories_group = QGroupBox("Directories")
         directories_layout = QFormLayout(directories_group)
-        self.path_rows["profiles_dir"] = PathConfigRow("profiles_dir", is_directory=True, add_enabled=True, add_cen_lc=True)
+        self.path_rows["profiles_dir"] = PathConfigRow("profiles_dir", is_directory=True, add_enabled=True, add_cen_lc=True, use_combobox=False)
         self.path_rows["profiles_dir"].enabled_cb.setToolTip("Create Profile Folders")
         directories_layout.addRow("Profiles Directory:", self.path_rows["profiles_dir"]) # No options/args for dirs
-        self.path_rows["launchers_dir"] = PathConfigRow("launchers_dir", is_directory=True, add_enabled=True, add_cen_lc=True)
+        self.path_rows["launchers_dir"] = PathConfigRow("launchers_dir", is_directory=True, add_enabled=True, add_cen_lc=True, use_combobox=False)
         self.path_rows["launchers_dir"].enabled_cb.setToolTip("Create Launcher")
         directories_layout.addRow("Launchers Directory:", self.path_rows["launchers_dir"]) # No options/args for dirs
         core_paths_layout.addWidget(directories_group)
@@ -298,7 +298,7 @@ class SetupTab(QWidget):
         # Launcher Configuration Group
         launcher_group = QGroupBox("Launcher Configuration")
         launcher_layout = QFormLayout(launcher_group)
-        self.path_rows["launcher_executable"] = PathConfigRow("launcher_executable", is_directory=False, add_enabled=False, add_cen_lc=True)
+        self.path_rows["launcher_executable"] = PathConfigRow("launcher_executable", is_directory=False, add_enabled=False, add_cen_lc=True, use_combobox=False)
         self.path_rows["launcher_executable"].line_edit.setPlaceholderText(constants.LAUNCHER_EXECUTABLE)
         self._add_path_row(launcher_layout, "Launcher Executable:", "launcher_executable", self.path_rows["launcher_executable"])
 
@@ -441,6 +441,24 @@ class SetupTab(QWidget):
         main_layout.addWidget(appearance_section)
         main_layout.addStretch()
         self._connect_signals()
+        
+        # Populate Launcher Executable Combobox
+        self._populate_launcher_combo()
+
+    def _populate_launcher_combo(self):
+        """Populate the launcher executable combobox with valid files from bin."""
+        # If launcher_executable is not a combobox, skip population
+        if not self.path_rows["launcher_executable"].use_combobox:
+            return
+            
+        bin_dir = os.path.join(constants.APP_ROOT_DIR, "bin")
+        if os.path.exists(bin_dir):
+            valid_extensions = {'.exe', '.7zx', '.bat', '.cmd', '.ps1', '.jar', '.wsc', '.wsf', '.wsh'}
+            for f in os.listdir(bin_dir):
+                name, ext = os.path.splitext(f)
+                if "launcher" in name.lower() and ext.lower() in valid_extensions:
+                    full_path = os.path.join(bin_dir, f)
+                    self.path_rows["launcher_executable"].combo.addItem(full_path)
 
     def _show_options_args_dialog(self, pos, config_key, label_text):
         """Show a modal dialog to edit options and arguments for the selected app."""
@@ -511,7 +529,7 @@ class SetupTab(QWidget):
         # Function to update defaults if path changes while dialog is open
         def update_defaults_from_path():
             if config_key in self.path_rows:
-                curr_path = self.path_rows[config_key].line_edit.text()
+                curr_path = self.path_rows[config_key].path
             else:
                 curr_path = ""
             
@@ -569,7 +587,10 @@ class SetupTab(QWidget):
             row.downloadRequested.connect(self._on_download_requested)
         
         for key, row in self.path_rows.items():
-            row.line_edit.textChanged.connect(lambda text, k=key: self._on_path_text_changed(k, text))
+            if row.use_combobox:
+                row.combo.lineEdit().textChanged.connect(lambda text, k=key: self._on_path_text_changed(k, text))
+            else:
+                row.line_edit.textChanged.connect(lambda text, k=key: self._on_path_text_changed(k, text))
 
         # Sequences
         self.launch_sequence_list.model().layoutChanged.connect(self.config_changed.emit)
@@ -653,7 +674,7 @@ class SetupTab(QWidget):
             if sender_row:
                 script_name = "MountDisc.cmd" if os.name == 'nt' else "MountDisc.sh"
                 script_path = os.path.join(constants.APP_ROOT_DIR, "bin", script_name)
-                sender_row.line_edit.setText(script_path)
+                sender_row.path = script_path
             return
         
         if tool_data.get("special") in ["mount_native", "mount_wincdemu", "mount_imount", "mount_cdmage", "mount_osf"]:
@@ -711,15 +732,15 @@ class SetupTab(QWidget):
             self._generate_mount_scripts_files(bin_dir, "native")
             if sender_row:
                 script_name = "nativemount.cmd" if os.name == 'nt' else "nativemount.sh"
-                sender_row.line_edit.setText(os.path.join(bin_dir, script_name))
+                sender_row.path = os.path.join(bin_dir, script_name)
                 # Auto-populate complementary field
                 if sender_row.config_key == "disc_mount_path":
                     unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
-                    self.path_rows["disc_unmount_path"].line_edit.setText(os.path.join(bin_dir, unmount_script))
+                    self.path_rows["disc_unmount_path"].path = os.path.join(bin_dir, unmount_script)
                     self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
                 elif sender_row.config_key == "disc_unmount_path":
                     mount_script = "nativemount.cmd" if os.name == 'nt' else "nativemount.sh"
-                    self.path_rows["disc_mount_path"].line_edit.setText(os.path.join(bin_dir, mount_script))
+                    self.path_rows["disc_mount_path"].path = os.path.join(bin_dir, mount_script)
                     self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
                 
         elif special_type == "mount_wincdemu":
@@ -745,15 +766,17 @@ class SetupTab(QWidget):
                 self._generate_mount_scripts_files(bin_dir, "wincdemu")
                 if sender_row:
                     script_name = "cdemu.cmd" if os.name == 'nt' else "cdemu.sh"
-                    sender_row.line_edit.setText(os.path.join(bin_dir, script_name))
+                    sender_row.path = os.path.join(bin_dir, script_name)
+                    # Write exe path to config
+                    self._write_exe_path_to_config("wincdemu", exe_path)
                     # Auto-populate complementary field
                     if sender_row.config_key == "disc_mount_path":
                         unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
-                        self.path_rows["disc_unmount_path"].line_edit.setText(os.path.join(bin_dir, unmount_script))
+                        self.path_rows["disc_unmount_path"].path = os.path.join(bin_dir, unmount_script)
                         self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
                     elif sender_row.config_key == "disc_unmount_path":
                         mount_script = "cdemu.cmd" if os.name == 'nt' else "cdemu.sh"
-                        self.path_rows["disc_mount_path"].line_edit.setText(os.path.join(bin_dir, mount_script))
+                        self.path_rows["disc_mount_path"].path = os.path.join(bin_dir, mount_script)
                         self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
 
     def _on_wincdemu_download_finished(self, success, message, result_path, bin_dir):
@@ -762,15 +785,17 @@ class SetupTab(QWidget):
             self._generate_mount_scripts_files(bin_dir, "wincdemu")
             if getattr(self, 'active_download_row', None):
                 script_name = "cdemu.cmd" if os.name == 'nt' else "cdemu.sh"
-                self.active_download_row.line_edit.setText(os.path.join(bin_dir, script_name))
+                self.active_download_row.path = os.path.join(bin_dir, script_name)
+                # Write exe path to config
+                self._write_exe_path_to_config("wincdemu", result_path)
                 # Auto-populate complementary field
                 if getattr(self.active_download_row, 'config_key', None) == "disc_mount_path":
                     unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
-                    self.path_rows["disc_unmount_path"].line_edit.setText(os.path.join(bin_dir, unmount_script))
+                    self.path_rows["disc_unmount_path"].path = os.path.join(bin_dir, unmount_script)
                     self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
                 elif getattr(self.active_download_row, 'config_key', None) == "disc_unmount_path":
                     mount_script = "cdemu.cmd" if os.name == 'nt' else "cdemu.sh"
-                    self.path_rows["disc_mount_path"].line_edit.setText(os.path.join(bin_dir, mount_script))
+                    self.path_rows["disc_mount_path"].path = os.path.join(bin_dir, mount_script)
                     self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
         
         elif special_type == "mount_cdmage":
@@ -796,17 +821,17 @@ class SetupTab(QWidget):
                 self._generate_mount_scripts_files(bin_dir, "cdmage")
                 if sender_row:
                     script_name = "cdmage.cmd" if os.name == 'nt' else "cdmage.sh"
-                    sender_row.line_edit.setText(os.path.join(bin_dir, script_name))
+                    sender_row.path = os.path.join(bin_dir, script_name)
                     # Write exe path to config
                     self._write_exe_path_to_config("cdmage", exe_path)
                     # Auto-populate complementary field
                     if sender_row.config_key == "disc_mount_path":
                         unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
-                        self.path_rows["disc_unmount_path"].line_edit.setText(os.path.join(bin_dir, unmount_script))
+                        self.path_rows["disc_unmount_path"].path = os.path.join(bin_dir, unmount_script)
                         self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
                     elif sender_row.config_key == "disc_unmount_path":
                         mount_script = "cdmage.cmd" if os.name == 'nt' else "cdmage.sh"
-                        self.path_rows["disc_mount_path"].line_edit.setText(os.path.join(bin_dir, mount_script))
+                        self.path_rows["disc_mount_path"].path = os.path.join(bin_dir, mount_script)
                         self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
 
 
@@ -833,17 +858,17 @@ class SetupTab(QWidget):
                 self._generate_mount_scripts_files(bin_dir, "osf")
                 if sender_row:
                     script_name = "osf.cmd" if os.name == 'nt' else "osf.sh"
-                    sender_row.line_edit.setText(os.path.join(bin_dir, script_name))
+                    sender_row.path = os.path.join(bin_dir, script_name)
                     # Write exe path to config
                     self._write_exe_path_to_config("osf", exe_path)
                     # Auto-populate complementary field
                     if sender_row.config_key == "disc_mount_path":
                         unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
-                        self.path_rows["disc_unmount_path"].line_edit.setText(os.path.join(bin_dir, unmount_script))
+                        self.path_rows["disc_unmount_path"].path = os.path.join(bin_dir, unmount_script)
                         self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
                     elif sender_row.config_key == "disc_unmount_path":
                         mount_script = "osf.cmd" if os.name == 'nt' else "osf.sh"
-                        self.path_rows["disc_mount_path"].line_edit.setText(os.path.join(bin_dir, mount_script))
+                        self.path_rows["disc_mount_path"].path = os.path.join(bin_dir, mount_script)
                         self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
 
 
@@ -870,17 +895,17 @@ class SetupTab(QWidget):
                 self._generate_mount_scripts_files(bin_dir, "imount")
                 if sender_row:
                     script_name = "imount.cmd" if os.name == 'nt' else "imount.sh"
-                    sender_row.line_edit.setText(os.path.join(bin_dir, script_name))
+                    sender_row.path = os.path.join(bin_dir, script_name)
                     # Write exe path to config
                     self._write_exe_path_to_config("imount", exe_path)
                     # Auto-populate complementary field
                     if sender_row.config_key == "disc_mount_path":
                         unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
-                        self.path_rows["disc_unmount_path"].line_edit.setText(os.path.join(bin_dir, unmount_script))
+                        self.path_rows["disc_unmount_path"].path = os.path.join(bin_dir, unmount_script)
                         self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
                     elif sender_row.config_key == "disc_unmount_path":
                         mount_script = "imount.cmd" if os.name == 'nt' else "imount.sh"
-                        self.path_rows["disc_mount_path"].line_edit.setText(os.path.join(bin_dir, mount_script))
+                        self.path_rows["disc_mount_path"].path = os.path.join(bin_dir, mount_script)
                         self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
 
     def _on_wincdemu_download_finished(self, success, message, result_path, bin_dir):
@@ -891,7 +916,7 @@ class SetupTab(QWidget):
             self._generate_mount_scripts_files(bin_dir, "wincdemu")
             if getattr(self, 'active_download_row', None):
                 script_name = "cdemu.cmd" if os.name == 'nt' else "cdemu.sh"
-                self.active_download_row.line_edit.setText(os.path.join(bin_dir, script_name))
+                self.active_download_row.path = os.path.join(bin_dir, script_name)
                 # Auto-populate complementary field
                 if getattr(self.active_download_row, 'config_key', None) == "disc_mount_path":
                     unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
@@ -917,18 +942,18 @@ class SetupTab(QWidget):
             self._generate_mount_scripts_files(bin_dir, "imount")
             if getattr(self, 'active_download_row', None):
                 script_name = "imount.cmd" if os.name == 'nt' else "imount.sh"
-                self.active_download_row.line_edit.setText(os.path.join(bin_dir, script_name))
+                self.active_download_row.path = os.path.join(bin_dir, script_name)
                 # Write exe path to config
                 exe_path = os.path.join(bin_dir, "imount.exe")
                 self._write_exe_path_to_config("imount", exe_path)
                 # Auto-populate complementary field
                 if getattr(self.active_download_row, 'config_key', None) == "disc_mount_path":
                     unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
-                    self.path_rows["disc_unmount_path"].line_edit.setText(os.path.join(bin_dir, unmount_script))
+                    self.path_rows["disc_unmount_path"].path = os.path.join(bin_dir, unmount_script)
                     self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
                 elif getattr(self.active_download_row, 'config_key', None) == "disc_unmount_path":
                     mount_script = "imount.cmd" if os.name == 'nt' else "imount.sh"
-                    self.path_rows["disc_mount_path"].line_edit.setText(os.path.join(bin_dir, mount_script))
+                    self.path_rows["disc_mount_path"].path = os.path.join(bin_dir, mount_script)
                     self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
             
             QMessageBox.information(self, "Download Complete", f"Successfully downloaded to:\n{result_path}")
@@ -945,18 +970,18 @@ class SetupTab(QWidget):
             self._generate_mount_scripts_files(bin_dir, "cdmage")
             if getattr(self, 'active_download_row', None):
                 script_name = "cdmage.cmd" if os.name == 'nt' else "cdmage.sh"
-                self.active_download_row.line_edit.setText(os.path.join(bin_dir, script_name))
+                self.active_download_row.path = os.path.join(bin_dir, script_name)
                 # Write exe path to config
                 exe_path = os.path.join(bin_dir, "cdmage.exe")
                 self._write_exe_path_to_config("cdmage", exe_path)
                 # Auto-populate complementary field
                 if getattr(self.active_download_row, 'config_key', None) == "disc_mount_path":
                     unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
-                    self.path_rows["disc_unmount_path"].line_edit.setText(os.path.join(bin_dir, unmount_script))
+                    self.path_rows["disc_unmount_path"].path = os.path.join(bin_dir, unmount_script)
                     self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
                 elif getattr(self.active_download_row, 'config_key', None) == "disc_unmount_path":
                     mount_script = "cdmage.cmd" if os.name == 'nt' else "cdmage.sh"
-                    self.path_rows["disc_mount_path"].line_edit.setText(os.path.join(bin_dir, mount_script))
+                    self.path_rows["disc_mount_path"].path = os.path.join(bin_dir, mount_script)
                     self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
             
             QMessageBox.information(self, "Download Complete", f"Successfully downloaded to:\n{result_path}")
@@ -972,10 +997,13 @@ class SetupTab(QWidget):
         # Remove .exe extension if present for the config key
         tool_name_no_ext = exe_name.replace('.exe', '').lower()
         config_key = f"{tool_name_no_ext}_exe_path"
-        if self.main_window and hasattr(self.main_window, 'config'):
+        
+        if self.main_window and hasattr(self.main_window, 'config') and self.main_window.config:
             setattr(self.main_window.config, config_key, exe_path)
             self.config_changed.emit()
             logging.info(f"Wrote executable path to config: {config_key} = {exe_path}")
+        else:
+            logging.warning(f"Failed to write {config_key} to config: Configuration object is not initialized.")
 
     def _generate_mount_scripts_files(self, bin_dir, tool_type):
         """Generate the appropriate mount/unmount scripts based on tool type."""
@@ -1038,24 +1066,14 @@ class SetupTab(QWidget):
             
         if success:
             if hasattr(self, 'active_download_row') and self.active_download_row:
-                self.active_download_row.line_edit.setText(result_path)
+                self.active_download_row.path = result_path
                 
                 # Write the executable path to config.json
                 # Format: "{$flyout_app_name}_exe_path": "{$flyout_app_name_Extraction_path}\\{$flyout_app_name}.exe"
                 if hasattr(self, '_current_download_tool_name') and self._current_download_tool_name:
                     tool_name = self._current_download_tool_name
-                    # Get the directory and exe name from the result path
-                    exe_dir = os.path.dirname(result_path)
-                    exe_name = os.path.basename(result_path)
-                    # Remove .exe extension for the config key
-                    tool_name_no_ext = tool_name.replace('.exe', '').lower()
-                    config_key = f"{tool_name_no_ext}_exe_path"
-                    # Store the full path to the executable
-                    if self.main_window and hasattr(self.main_window, 'config'):
-                        setattr(self.main_window.config, config_key, result_path)
-                        # Emit config changed signal to trigger save
-                        self.config_changed.emit()
-                        logging.info(f"Wrote executable path to config: {config_key} = {result_path}")
+                    # Use the helper method to ensure consistent config writing and safety checks
+                    self._write_exe_path_to_config(tool_name, result_path)
                 
             QMessageBox.information(self, "Download Complete", f"Successfully downloaded to:\n{result_path}")
         else:

@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (QListWidget, QAbstractItemView, QWidget, QHBoxLayout,
-                             QCheckBox, QLineEdit, QPushButton, QRadioButton,
-                             QButtonGroup, QFileDialog, QToolButton, QMenu)
+                             QCheckBox, QLineEdit, QPushButton, QRadioButton, QComboBox,
+                             QButtonGroup, QFileDialog, QToolButton, QMenu, QSizePolicy)
 from PyQt6.QtCore import Qt, pyqtSignal
 import os
 
@@ -28,13 +28,14 @@ class PathConfigRow(QWidget):
     downloadRequested = pyqtSignal(str, dict)  # tool_name, tool_data
 
     def __init__(self, config_key, is_directory=False, add_enabled=True,
-                 add_run_wait=False, add_cen_lc=True, repo_items=None, parent=None):
+                 add_run_wait=False, add_cen_lc=True, repo_items=None, use_combobox=True, parent=None):
         super().__init__(parent)
         self.config_key = config_key
         self.is_directory = is_directory
         self.add_enabled = add_enabled
         self.add_run_wait = add_run_wait
         self._overwrite = True
+        self.use_combobox = use_combobox
         
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -49,11 +50,24 @@ class PathConfigRow(QWidget):
         else:
             self.enabled_cb = None
 
-        # Line Edit
-        self.line_edit = QLineEdit()
-        self.line_edit.editingFinished.connect(self.valueChanged.emit)
-        self.line_edit.textChanged.connect(self._check_styling)
-        layout.addWidget(self.line_edit)
+        if self.use_combobox:
+            # ComboBox
+            self.combo = QComboBox()
+            self.combo.setEditable(True)
+            self.combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+            self.combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            self.combo.lineEdit().editingFinished.connect(self._on_editing_finished)
+            self.combo.lineEdit().textChanged.connect(self._check_styling)
+            self.combo.currentIndexChanged.connect(self.valueChanged.emit)
+            layout.addWidget(self.combo)
+            self.line_edit = None
+        else:
+            # Line Edit
+            self.line_edit = QLineEdit()
+            self.line_edit.editingFinished.connect(self.valueChanged.emit)
+            self.line_edit.textChanged.connect(self._check_styling)
+            layout.addWidget(self.line_edit)
+            self.combo = None
 
         # Repo Flyout Button
         self.tool_btn = None
@@ -93,6 +107,15 @@ class PathConfigRow(QWidget):
         else:
             self.cen_radio = self.lc_radio = self.mode_group = None
 
+        # Populate from repo_items if available
+        if repo_items and self.use_combobox:
+            for name, data in repo_items.items():
+                if 'extract_dir' in data and 'exe_name' in data:
+                    exe_path = os.path.join(data['extract_dir'], data['exe_name'])
+                    if os.path.exists(exe_path):
+                        if self.combo.findText(exe_path) == -1:
+                            self.combo.addItem(exe_path)
+
         # Run Wait Checkbox
         if self.add_run_wait:
             self.run_wait_cb = QCheckBox("Wait")
@@ -109,9 +132,24 @@ class PathConfigRow(QWidget):
             self.enabled_cb.stateChanged.connect(self._update_ui_state)
             self._update_ui_state()
 
+    def _on_editing_finished(self):
+        """Handle editing finished to manage history."""
+        text = self.combo.currentText().strip()
+        if text:
+            # If path exists and not in list, add it
+            if os.path.exists(text):
+                if self.combo.findText(text) == -1:
+                    self.combo.addItem(text)
+        else:
+            # If text is empty, remove the current item if it exists
+            idx = self.combo.currentIndex()
+            if idx >= 0:
+                self.combo.removeItem(idx)
+        self.valueChanged.emit()
+
     def _check_styling(self):
         """Apply styling if LC is enabled and file > 10MB."""
-        path = self.line_edit.text()
+        path = self.path
         style = ""
          
         if self.mode == "LC" and not self.overwrite:
@@ -124,7 +162,10 @@ class PathConfigRow(QWidget):
                     style = "QLineEdit { font-weight: bold; text-decoration: underline; color: red; }"
             except Exception:
                 pass
-        self.line_edit.setStyleSheet(style)
+        if self.use_combobox:
+            self.combo.lineEdit().setStyleSheet(style)
+        else:
+            self.line_edit.setStyleSheet(style)
 
     def _update_ui_state(self):
         """Enable or disable widgets based on the enabled checkbox."""
@@ -133,7 +174,10 @@ class PathConfigRow(QWidget):
             
         is_enabled = self.enabled_cb.isChecked()
         
-        self.line_edit.setEnabled(is_enabled)
+        if self.use_combobox:
+            self.combo.setEnabled(is_enabled)
+        else:
+            self.line_edit.setEnabled(is_enabled)
         self.browse_btn.setEnabled(is_enabled)
         
         if self.tool_btn:
@@ -148,23 +192,32 @@ class PathConfigRow(QWidget):
             self.run_wait_cb.setEnabled(is_enabled)
 
     def _on_browse(self):
-        current_path = self.line_edit.text()
+        current_path = self.path
         if self.is_directory:
             directory = QFileDialog.getExistingDirectory(self, "Select Directory", current_path)
             if directory:
-                self.line_edit.setText(directory)
+                self.path = directory
         else:
             file, _ = QFileDialog.getOpenFileName(self, "Select File", current_path)
             if file:
-                self.line_edit.setText(file)
+                self.path = file
 
     @property
     def path(self):
-        return self.line_edit.text()
+        if self.use_combobox:
+            return self.combo.currentText()
+        else:
+            return self.line_edit.text()
 
     @path.setter
     def path(self, value):
-        self.line_edit.setText(value)
+        if self.use_combobox:
+            self.combo.setCurrentText(value)
+            self._on_editing_finished() # Ensure it's added to history if valid
+        else:
+            self.line_edit.setText(value)
+            # For line edit, we might want to trigger styling check manually if needed
+            self._check_styling()
 
     @property
     def mode(self):

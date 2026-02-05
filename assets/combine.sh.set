@@ -1,0 +1,38 @@
+#!/bin/bash
+ISO="$1"
+SCRIPT_NAME=$(basename "$0")
+SCRIPT_NAME="${SCRIPT_NAME%.*}"
+
+# Unmount Logic
+if [ "$SCRIPT_NAME" = "_unmount" ]; then
+    # Native/UDisks
+    if command -v udisksctl &> /dev/null; then
+        # Attempt to find loop device associated with ISO
+        LOOP_DEV=$(losetup -j "$ISO" | cut -d: -f1)
+        if [ -n "$LOOP_DEV" ]; then
+             udisksctl loop-delete -b "$LOOP_DEV"
+        fi
+    fi
+    
+    # CDemu
+    if command -v cdemu &> /dev/null; then
+        cdemu unload 0
+    fi
+    
+    exit 0
+fi
+
+# Mount Logic
+if [ "$SCRIPT_NAME" = "nativemount" ]; then
+    if command -v udisksctl &> /dev/null; then
+        udisksctl loop-setup -f "$ISO"
+    fi
+    exit 0
+fi
+
+if [ "$SCRIPT_NAME" = "cdemu" ]; then
+    if command -v cdemu &> /dev/null; then
+        cdemu load 0 "$ISO"
+    fi
+    exit 0
+fi

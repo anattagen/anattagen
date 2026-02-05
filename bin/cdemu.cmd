@@ -8,18 +8,18 @@ if /I "%SCRIPT_NAME%"=="_unmount" (
     powershell -command "Dismount-DiskImage -ImagePath '%ISO%'" >nul 2>&1
     
     :: Try WinCDEmu
-    if not "[$_$(WINCDEMU_EXE_PATH)]"=="" (
-        "[$_$(WINCDEMU_EXE_PATH)]" /unmount "%ISO%" >nul 2>&1
+    if not ""=="" (
+        "" /unmount "%ISO%" >nul 2>&1
     )
     
     :: Try iMount
-    if not "[$_$(IMOUNT_EXE_PATH)]"=="" (
-        "[$_$(IMOUNT_EXE_PATH)]" -unmount "%ISO%" >nul 2>&1
+    if not ""=="" (
+        "" -unmount "%ISO%" >nul 2>&1
     )
     
     :: Try OSF
-    if not "[$_$(OSF_EXE_PATH)]"=="" (
-        "[$_$(OSF_EXE_PATH)]" -unmount "%ISO%" >nul 2>&1
+    if not ""=="" (
+        "" -unmount "%ISO%" >nul 2>&1
     )
     
     goto :eof
@@ -32,21 +32,21 @@ if /I "%SCRIPT_NAME%"=="nativemount" (
 )
 
 if /I "%SCRIPT_NAME%"=="cdemu" (
-    "[$_$(WINCDEMU_EXE_PATH)]" /mount "%ISO%"
+    "" /mount "%ISO%"
     goto :eof
 )
 
 if /I "%SCRIPT_NAME%"=="imount" (
-    "[$_$(IMOUNT_EXE_PATH)]" -mount "%ISO%"
+    "" -mount "%ISO%"
     goto :eof
 )
 
 if /I "%SCRIPT_NAME%"=="osf" (
-    "[$_$(OSF_EXE_PATH)]" -mount "%ISO%"
+    "" -mount "%ISO%"
     goto :eof
 )
 
 if /I "%SCRIPT_NAME%"=="cdmage" (
-    "[$_$(CDMAGE_EXE_PATH)]" /mount "%ISO%"
+    "" /mount "%ISO%"
     goto :eof
 )
