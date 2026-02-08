@@ -1,10 +1,20 @@
-@echo off
+REM @echo off
 setlocal
 
 if not defined VSCMD_VER (
-    call "%ProgramFiles%\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" || exit /b 1
+	for /f "delims=" %%a in ('dir /b/a-d/s "%programfiles%\Microsoft Visual Studio\*vcvars64.bat"') do (
+		set VSCMD_VER=%%~a
+		break
+	)
 )
-
+if not defined VSCMD_VER (
+	for /f "delims=" %%a in ('dir /b/a-d/s "%programfiles% (x86)\Microsoft Visual Studio\*vcvars64.bat"') do (
+		set VSCMD_VER=%%~a
+		break
+	)
+					
+)
+    call "%VSCMD_VER%" || exit /b 1
 set CLFLAGS=/std:c11 /O2 /W4 /nologo /D_CRT_SECURE_NO_WARNINGS
 set LIBS=user32.lib shell32.lib shlwapi.lib ole32.lib psapi.lib
 
@@ -17,5 +27,4 @@ if errorlevel 1 (
 
 echo Build succeeded
 
-rename ..\..\bin\Launcher.exe Launcher.old||move /y ..\..\bin\Launcher.exe ..\..\bin\Launcher.old
-move Launcher.exe ..\..\bin\Launcher.exe
+move /y Launcher.exe ..\..\bin\Launcher.exe

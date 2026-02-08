@@ -15,6 +15,8 @@ import time
 import ctypes
 import psutil
 import logging
+import shutil
+import datetime
 from pathlib import Path
 import winreg
 import win32gui
@@ -31,6 +33,7 @@ BORDERLESS_PROCESS: Optional[subprocess.Popen] = None
 
 TASKBAR_HWND = None
 TASKBAR_WAS_HIDDEN = False
+DYNAMIC_SPLASH_HWND = None
 
 # --- Core Functions ---
 
@@ -126,6 +129,100 @@ def load_configuration(plink_path: str):
             else:
                 CONFIG[key.lower()] = value
     return True
+
+def check_instances():
+    """Checks for running instances and handles single-instance logic."""
+    # In C, this would use CreateMutex or a lock file.
+    pid_file = Path(sys.argv[0]).parent / "rjpids.ini"
+    current_pid = os.getpid()
+    
+    if pid_file.exists():
+        try:
+            parser = configparser.ConfigParser()
+            parser.read(pid_file)
+            if parser.has_section('Instance'):
+                old_pid = parser.getint('Instance', 'pid', fallback=0)
+                multi = parser.getint('Instance', 'multi_instance', fallback=0)
+                
+                if multi == 1:
+                    return True
+                
+                if old_pid != 0 and old_pid != current_pid:
+                    if psutil.pid_exists(old_pid):
+                        # In C, we would show a MessageBox here
+                        print(f"Another instance (PID {old_pid}) is running.")
+                        # Logic to ask user to kill it would go here
+        except Exception:
+            pass
+            
+    # Write current PID
+    with open(pid_file, 'w') as f:
+        f.write(f"[Instance]\npid={current_pid}\nmulti_instance=0\n")
+    return True
+
+def backup_save_files():
+    """Backs up save files if configured."""
+    if not CONFIG.get('backupsaves', False):
+        return
+        
+    home = Path(sys.argv[0]).parent
+    save_dir = home / "Saves"
+    if not save_dir.exists():
+        return
+        
+    backup_root = home / "Backups"
+    backup_root.mkdir(exist_ok=True)
+    
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    backup_name = f"SaveBackup_{timestamp}"
+    backup_path = backup_root / backup_name
+    
+    try:
+        shutil.make_archive(str(backup_path), 'zip', str(save_dir))
+        show_message(f"Backed up saves to {backup_name}.zip")
+        
+        # Rotate
+        max_backups = CONFIG.get('maxbackups', 5)
+        backups = sorted(list(backup_root.glob("SaveBackup_*.zip")))
+        while len(backups) > max_backups:
+            oldest = backups.pop(0)
+            oldest.unlink()
+            show_message(f"Removed old backup: {oldest.name}")
+    except Exception as e:
+        show_message(f"Backup failed: {e}")
+
+def show_dynamic_splash(base_dir):
+    """
+    Displays a splash screen.
+    In C, this would use CreateWindowEx with WS_EX_LAYERED and UpdateLayeredWindow.
+    """
+    global DYNAMIC_SPLASH_HWND
+    # Simplified logic to find image
+    extensions = ['jpg', 'png', 'gif']
+    names = ['Backdrop', 'background', 'fanart', 'box-art', 'coverart']
+    image_path = None
+    
+    for name in names:
+        for ext in extensions:
+            p = Path(base_dir) / f"{name}.{ext}"
+            if p.exists():
+                image_path = p
+                break
+        if image_path: break
+    
+    if image_path:
+        show_message(f"Showing splash image: {image_path}")
+        # In C, load image (GDI+ or stb_image), create window, fade in.
+        # Here we just simulate the state.
+        DYNAMIC_SPLASH_HWND = 1 # Fake handle
+
+def close_dynamic_splash():
+    """Closes the splash screen."""
+    global DYNAMIC_SPLASH_HWND
+    if DYNAMIC_SPLASH_HWND:
+        show_message("Closing splash screen")
+        # In C, fade out and DestroyWindow
+        DYNAMIC_SPLASH_HWND = None
 
 # --- Action Functions (from SequenceExecutor) ---
 
@@ -277,12 +374,18 @@ def main():
     if not load_configuration(plink):
         sys.exit(1)
 
+    if not check_instances():
+        sys.exit(0)
+
     try:
         # Execute launch sequence
         execute_sequence('launchsequence')
 
         # Run the game and wait for it to close
         run_game_process()
+
+        # Backup saves
+        backup_save_files()
 
         # Execute exit sequence
         execute_sequence('exitsequence')

@@ -15,7 +15,9 @@ from __future__ import annotations
 import configparser
 import hashlib
 import os
+import datetime
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Dict, List, Set
@@ -167,6 +169,9 @@ def run_gui(ini_path: Path) -> None:
             cfg["build"]["dest"] = build_vars['dest'].get()
             cfg["build"]["workpath"] = build_vars['workpath'].get()
             cfg["build"]["commit_msg"] = build_vars['commit_msg'].get()
+            cfg["build"]["skip_python"] = str(build_vars['skip_python'].get())
+            cfg["build"]["skip_c"] = str(build_vars['skip_c'].get())
+            cfg["build"]["skip_anattagen"] = str(build_vars['skip_anattagen'].get())
             
         save_ini(ini_path, cfg)
         apply_replacements({k: cfg["values"].get(k, "") for k in tags})
@@ -190,6 +195,10 @@ def run_gui(ini_path: Path) -> None:
 
         sv.trace_add("write", make_callback(k))
 
+    if "RDATE" in vars:
+        now = datetime.datetime.now()
+        vars["RDATE"].set(now.strftime("%m-%d-%Y"))
+
     # --- Build Section ---
     last_row = len(tags)
     ttk.Separator(frame, orient='horizontal').grid(row=last_row, column=0, columnspan=2, sticky="ew", pady=15)
@@ -201,7 +210,10 @@ def run_gui(ini_path: Path) -> None:
         'onefile': tk.BooleanVar(value=cfg.getboolean('build', 'onefile', fallback=False)),
         'dest': tk.StringVar(value=cfg.get('build', 'dest', fallback=str(Path("dist").absolute()))),
         'workpath': tk.StringVar(value=cfg.get('build', 'workpath', fallback=str(Path("build").absolute()))),
-        'commit_msg': tk.StringVar(value=cfg.get('build', 'commit_msg', fallback="Update"))
+        'commit_msg': tk.StringVar(value=cfg.get('build', 'commit_msg', fallback="Update")),
+        'skip_python': tk.BooleanVar(value=cfg.getboolean('build', 'skip_python', fallback=False)),
+        'skip_c': tk.BooleanVar(value=cfg.getboolean('build', 'skip_c', fallback=False)),
+        'skip_anattagen': tk.BooleanVar(value=cfg.getboolean('build', 'skip_anattagen', fallback=False))
     }
     
     ctl_frame = ttk.Frame(frame)
@@ -229,17 +241,42 @@ def run_gui(ini_path: Path) -> None:
     git_frame.grid(row=last_row+4, column=0, columnspan=2, sticky="ew", pady=(5, 0))
     ttk.Label(git_frame, text="Commit Msg:").pack(side="left", padx=5)
     ttk.Entry(git_frame, textvariable=build_vars['commit_msg']).pack(side="left", fill="x", expand=True)
+
+    skip_frame = ttk.Frame(frame)
+    skip_frame.grid(row=last_row+5, column=0, columnspan=2, sticky="ew")
+    ttk.Checkbutton(skip_frame, text="Skip Python Build", variable=build_vars['skip_python']).pack(side="left", padx=5)
+    ttk.Checkbutton(skip_frame, text="Skip Anattagen Build", variable=build_vars['skip_anattagen']).pack(side="left", padx=5)
+    ttk.Checkbutton(skip_frame, text="Skip C Launcher Build", variable=build_vars['skip_c']).pack(side="left", padx=5)
     
     from tkinter import scrolledtext
-    log_widget = scrolledtext.ScrolledText(frame, height=8, state='disabled', font=("Consolas", 8))
-    log_widget.grid(row=last_row+6, column=0, columnspan=2, sticky="nsew", pady=5)
+    
+    # Global reference for the log window and widget
+    log_window_ref = {'win': None, 'widget': None}
+
+    def open_log_window(title="Process Log"):
+        if log_window_ref['win'] is not None and log_window_ref['win'].winfo_exists():
+            log_window_ref['win'].lift()
+            return
+        
+        log_win = tk.Toplevel(root)
+        log_win.title(title)
+        log_win.geometry("700x500")
+        log_win.transient(root)
+        log_win.grab_set()
+        
+        txt = scrolledtext.ScrolledText(log_win, state='disabled', font=("Consolas", 9))
+        txt.pack(fill='both', expand=True)
+        
+        log_window_ref['win'] = log_win
+        log_window_ref['widget'] = txt
     
     def log(msg):
         def _log():
-            log_widget.config(state='normal')
-            log_widget.insert("end", msg)
-            log_widget.see("end")
-            log_widget.config(state='disabled')
+            if log_window_ref['widget'] and log_window_ref['widget'].winfo_exists():
+                log_window_ref['widget'].config(state='normal')
+                log_window_ref['widget'].insert("end", msg)
+                log_window_ref['widget'].see("end")
+                log_window_ref['widget'].config(state='disabled')
         root.after(0, _log)
         
     # Process state management
@@ -293,10 +330,14 @@ def run_gui(ini_path: Path) -> None:
         import threading
         import subprocess
         import platform
+        import shutil
         
         onefile = build_vars['onefile'].get()
         dest = build_vars['dest'].get()
         workpath = build_vars['workpath'].get()
+        skip_python = build_vars['skip_python'].get()
+        skip_c = build_vars['skip_c'].get()
+        skip_anattagen = build_vars['skip_anattagen'].get()
         
         def worker():
             set_ui_busy(True)
@@ -304,10 +345,17 @@ def run_gui(ini_path: Path) -> None:
             sep = ';' if platform.system() == 'Windows' else ':'
             script_dir = Path(__file__).parent.absolute()
             project_root = script_dir.parent if script_dir.name == "Python" else script_dir
+            
+            if skip_python and skip_c:
+                log("Skipping all builds as requested.\n")
+                set_ui_busy(False)
+                return
+
+            # 1. Main Application Build
             main_script = project_root / "Python" / "main.py"
             icon_path = project_root / "assets" / "Joystick.ico"
             
-            cmd = [
+            cmd_main = [
                 sys.executable, '-m', 'PyInstaller',
                 str(main_script),
                 '--name=anattagen',
@@ -321,33 +369,97 @@ def run_gui(ini_path: Path) -> None:
             ]
             
             if platform.system() == 'Windows' and icon_path.exists():
-                cmd.append(f'--icon={icon_path}')
-            if onefile:
-                cmd.append('--onefile')
-            else:
-                cmd.append('--onedir')
-                
-            log(f"Starting build...\nCommand: {' '.join(cmd)}\n")
+                cmd_main.append(f'--icon={icon_path}')
             
-            try:
-                process = subprocess.Popen(
-                    cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                    text=True, bufsize=1, encoding='utf-8', cwd=str(project_root)
-                )
-                proc_state['proc'] = process
-                for line in process.stdout:
-                    log(line)
-                process.wait()
-                if process.returncode == 0:
-                    log("\nBuild SUCCESS!\n")
+            if onefile:
+                cmd_main.append('--onefile')
+            else:
+                cmd_main.append('--onedir')
+                
+            if not skip_python:
+                if not skip_anattagen:
+                    log(f"Starting Main Build (anattagen)...\n")
+                    if not run_cmd_sequence([cmd_main], cwd=project_root):
+                        set_ui_busy(False)
+                        proc_state['proc'] = None
+                        return
                 else:
-                    log(f"\nBuild FAILED with code {process.returncode}\n")
-            except Exception as e:
-                log(f"\nError: {e}\n")
-            finally:
+                    log("Skipping Main Build (anattagen).\n")
+
+                # 2. Launcher Build
+                if proc_state['cancelled']:
+                    set_ui_busy(False)
+                    return
+
+                launcher_script = project_root / "Python" / "Launcher.py"
+                cmd_launcher = [
+                    sys.executable, '-m', 'PyInstaller',
+                    str(launcher_script),
+                    '--name=Launcher',
+                    '--noconfirm',
+                    '--clean',
+                    '--windowed',
+                    '--onefile',
+                    f'--distpath={dest}',
+                    f'--workpath={workpath}',
+                ]
+                
+                if platform.system() == 'Windows' and icon_path.exists():
+                    cmd_launcher.append(f'--icon={icon_path}')
+
+                log(f"\nStarting Launcher Build...\n")
+                if not run_cmd_sequence([cmd_launcher], cwd=project_root):
+                    set_ui_busy(False)
+                    proc_state['proc'] = None
+                    return
+
+                # 3. Copy Launcher
+                try:
+                    src = Path(dest) / "Launcher.exe"
+                    dst_dir = project_root / "bin"
+                    dst = dst_dir / "Launcher.python.exe"
+                    
+                    if src.exists():
+                        dst_dir.mkdir(exist_ok=True)
+                        shutil.copy2(src, dst)
+                        log(f"\nCopied Launcher.exe to {dst}\n")
+                    else:
+                        log(f"\nError: Launcher.exe not found in {dest}\n")
+                except Exception as e:
+                    log(f"\nError copying launcher: {e}\n")
+
+            # 4. Compile C Launcher
+            if skip_c:
+                log("Skipping C Launcher Build.\n")
                 set_ui_busy(False)
                 proc_state['proc'] = None
+                return
 
+            if proc_state['cancelled']:
+                set_ui_busy(False)
+                return
+
+            log(f"\nStarting C Launcher Build...\n")
+            launcher_src_dir = project_root / "assets" / "launcher"
+            
+            if platform.system() == 'Windows':
+                build_script = launcher_src_dir / "Build.bat"
+                cmd_c_build = ["cmd", "/c", str(build_script)]
+            else:
+                build_script = launcher_src_dir / "build.sh"
+                cmd_c_build = ["sh", str(build_script), "--linux"]
+
+            if build_script.exists():
+                if run_cmd_sequence([cmd_c_build], cwd=launcher_src_dir):
+                    log("C Launcher Build Completed.\n")
+            else:
+                log(f"Build script not found: {build_script}\n")
+
+            log("Build Sequence Completed Successfully.\n")
+            set_ui_busy(False)
+            proc_state['proc'] = None
+
+        open_log_window("Build Log")
         threading.Thread(target=worker, daemon=True).start()
 
     def run_git():
@@ -371,6 +483,7 @@ def run_gui(ini_path: Path) -> None:
             set_ui_busy(False)
             proc_state['proc'] = None
             
+        open_log_window("Git Push Log")
         threading.Thread(target=worker, daemon=True).start()
 
     def run_release():
@@ -506,11 +619,12 @@ def run_gui(ini_path: Path) -> None:
                 set_ui_busy(False)
                 proc_state['proc'] = None
 
+        open_log_window("Release Log")
         threading.Thread(target=worker, daemon=True).start()
 
     # Consolidated Button Row
-    btn_row = ttk.Frame(frame)
-    btn_row.grid(row=last_row+5, column=0, columnspan=2, sticky="ew", pady=10)
+    btn_row = ttk.Frame(frame, padding=(0, 10))
+    btn_row.grid(row=last_row+6, column=0, columnspan=2, sticky="ew")
     
     ttk.Button(btn_row, text="Apply & Save", command=save_all).pack(side="left", padx=5)
     ttk.Button(btn_row, text="Compile", command=run_build).pack(side="left", padx=5)

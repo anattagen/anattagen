@@ -9,12 +9,20 @@ elif [ "${1:-}" = "--windows" ]; then
     MODE="windows"
 fi
 
+# Detect OS for auto mode or cross-compilation hints
+OS_NAME=$(uname -s)
+
 # ---------- toolchain selection ----------
 
 if [ "$MODE" = "windows" ]; then
-    CC=${CC:-x86_64-w64-mingw32-gcc}
     OUT=launcher.exe
     LDFLAGS="-luser32 -lshlwapi -lole32 -lpsapi"
+    # If on Linux, use cross-compiler
+    if [ "$OS_NAME" = "Linux" ]; then
+        CC=${CC:-x86_64-w64-mingw32-gcc}
+    else
+        CC=${CC:-gcc}
+    fi
 elif [ "$MODE" = "linux" ]; then
     CC=${CC:-gcc}
     OUT=launcher
@@ -52,13 +60,9 @@ $CC $CFLAGS \
 
 echo "Built $OUT"
 if [ "$MODE" = "windows" ]; then
-    rm -rf ../../bin/launcher.old
-    mv ../../bin/launcher.exe ../../bin/launcher.old
-    mv launcher.exe ../../bin/launcher.exe
+    mv -f launcher.exe ../../bin/Launcher.exe
 elif [ "$MODE" = "linux" ]; then
-    rm -rf ../../bin/launcher.old
-    mv ../../bin/launcher ../../bin/launcher.old
-    mv launcher ../../bin/launcher
+    mv -f launcher ../../bin/Launcher
 else
     # auto
     echo "Move the launcher into the /../bin directory"
