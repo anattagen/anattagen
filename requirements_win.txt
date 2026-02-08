@@ -10,3 +10,4 @@ psutil
 pygame
 pyinstaller 
 cloudscraper 
+pyqtdarktheme

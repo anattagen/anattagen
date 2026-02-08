@@ -9,7 +9,8 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QGroupBox, QLabel, QFormLayout, QPushButton,
     QComboBox, QHBoxLayout, QCheckBox, QTabWidget,
     QFileDialog, QApplication, QSpinBox, QMessageBox, QMenu, QInputDialog,
-    QDialog, QDialogButtonBox, QLineEdit, QProgressDialog, QGridLayout, QDoubleSpinBox
+    QDialog, QDialogButtonBox, QLineEdit, QProgressDialog, QGridLayout, QDoubleSpinBox,
+    QFontComboBox, QStyle
 )
 from PyQt6.QtGui import QFontDatabase, QFont, QPalette, QColor
 import re
@@ -163,15 +164,15 @@ class SetupTab(QWidget):
                 if key.lower() == "wincdemu":
                     tool_data["special"] = "mount_wincdemu"
                     self.mounting_tools["wincdemu"] = tool_data
-                elif key.lower() == "wincdemu":
+                elif key.lower() == "osf":
                     tool_data["special"] = "mount_osf"
                     self.mounting_tools["osf"] = tool_data
                 elif key.lower() == "cdmage":
                     tool_data["special"] = "mount_cdmage"
                     self.mounting_tools["cdmage"] = tool_data
-                elif key.lower() == "imount":
-                    tool_data["special"] = "mount_imount"
-                    self.mounting_tools["imount"] = tool_data
+                elif key.lower() == "imgdrive":
+                    tool_data["special"] = "mount_imgdrive"
+                    self.mounting_tools["imgdrive"] = tool_data
 
         self.download_thread = None
         self._setup_ui()
@@ -195,56 +196,77 @@ class SetupTab(QWidget):
         source_config_widget = QWidget()
         source_config_layout = QGridLayout(source_config_widget)
         source_config_layout.setSpacing(10)
+        
+        # --- Sources Group (Top-Left) ---
+        sources_group_widget = QWidget()
+        sources_layout = QVBoxLayout(sources_group_widget)
+        sources_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Sources
-        self.source_dirs_list = DragDropListWidget()
-        self.source_dirs_list.setMaximumHeight(100)
-        
-        source_label = QLabel("Source Directories:")
-        add_source_button = QPushButton("Add...")
+        source_label = QLabel("<b>Source Directories</b>")
+        source_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        source_buttons_widget = QWidget()
+        source_buttons_layout = QHBoxLayout(source_buttons_widget)
+        source_buttons_layout.setContentsMargins(0, 0, 0, 0)
+        add_source_button = QPushButton("+")
         add_source_button.setToolTip("Add a directory to scan for games.")
-        remove_source_button = QPushButton("Remove")
+        add_source_button.setFixedWidth(30)
+        add_source_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogNewFolder))
+        remove_source_button = QPushButton("-")
         remove_source_button.setToolTip("Remove the selected directory from scanning.")
-        
-        # Left side: Label + Buttons
-        source_left_container = QWidget()
-        source_left_layout = QVBoxLayout(source_left_container)
-        source_left_layout.setContentsMargins(0, 0, 0, 0)
-        source_left_layout.addWidget(source_label)
-        source_left_layout.addWidget(add_source_button)
-        source_left_layout.addWidget(remove_source_button)
-        source_left_layout.addStretch()
-        
-        source_config_layout.addWidget(source_left_container, 0, 0)
-        source_config_layout.addWidget(self.source_dirs_list, 0, 1)
-        
+        remove_source_button.setFixedWidth(30)
+        remove_source_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogDiscardButton))
+        source_buttons_layout.addWidget(add_source_button)
+        source_buttons_layout.addWidget(remove_source_button)
+        source_buttons_layout.addStretch()
+
+        self.source_dirs_list = DragDropListWidget()
+        self.source_dirs_list.setMinimumHeight(40)
+        self.source_dirs_list.setMaximumHeight(200)
+
+        sources_layout.addWidget(source_label)
+        sources_layout.addWidget(source_buttons_widget)
+        sources_layout.addWidget(self.source_dirs_list)
+
         self.add_source_dir_button = add_source_button
         self.remove_source_dir_button = remove_source_button
 
-        # Excluded Items
-        self.excluded_dirs_list = DragDropListWidget()
-        self.excluded_dirs_list.setMaximumHeight(25)
-        
-        excluded_label = QLabel("Excluded Directories:")
-        add_excluded_button = QPushButton("Add...")
+        # --- Excluded Group (Bottom-Right) ---
+        excluded_group_widget = QWidget()
+        excluded_layout = QVBoxLayout(excluded_group_widget)
+        excluded_layout.setContentsMargins(0, 0, 0, 0)
+
+        excluded_label = QLabel("<b>Excluded Directories</b>")
+        excluded_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        excluded_buttons_widget = QWidget()
+        excluded_buttons_layout = QHBoxLayout(excluded_buttons_widget)
+        excluded_buttons_layout.setContentsMargins(0, 1, 0, 1)
+        add_excluded_button = QPushButton("+")
         add_excluded_button.setToolTip("Add a directory to exclude from scanning.")
-        remove_excluded_button = QPushButton("Remove")
+        add_excluded_button.setFixedWidth(30)
+        add_excluded_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogNewFolder))
+        remove_excluded_button = QPushButton("-")
         remove_excluded_button.setToolTip("Remove the selected directory from exclusion.")
-        
-        # Right side: Label + Buttons
-        excluded_right_container = QWidget()
-        excluded_right_layout = QVBoxLayout(excluded_right_container)
-        excluded_right_layout.setContentsMargins(0, 0, 0, 0)
-        excluded_right_layout.addWidget(excluded_label)
-        excluded_right_layout.addWidget(add_excluded_button)
-        excluded_right_layout.addWidget(remove_excluded_button)
-        excluded_right_layout.addStretch()
-        
-        source_config_layout.addWidget(self.excluded_dirs_list, 1, 0)
-        source_config_layout.addWidget(excluded_right_container, 1, 1)
-        
+        remove_excluded_button.setFixedWidth(30)
+        remove_excluded_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogDiscardButton))
+        excluded_buttons_layout.addStretch()
+        excluded_buttons_layout.addWidget(add_excluded_button)
+        excluded_buttons_layout.addWidget(remove_excluded_button)
+
+        self.excluded_dirs_list = DragDropListWidget()
+        self.excluded_dirs_list.setMaximumHeight(70)
+
+        excluded_layout.addWidget(excluded_label)
+        excluded_layout.addWidget(excluded_buttons_widget)
+        excluded_layout.addWidget(self.excluded_dirs_list)
+
         self.add_excluded_dir_button = add_excluded_button
         self.remove_excluded_dir_button = remove_excluded_button
+
+        # --- Add groups to main grid layout ---
+        source_config_layout.addWidget(sources_group_widget, 0, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        source_config_layout.addWidget(excluded_group_widget, 0, 1, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignRight)
 
         # Game managers
         self.other_managers_combo = QComboBox()
@@ -422,6 +444,26 @@ class SetupTab(QWidget):
         self.fuzzy_match_spin.setSingleStep(0.05)
         self.fuzzy_match_spin.setToolTip("Sensitivity for fuzzy name matching (0.1 = loose, 1.0 = exact). Default: 0.6")
         appearance_layout.addRow("Fuzzy Match Sensitivity:", self.fuzzy_match_spin)
+
+        # Theme
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItems(["System", "Dark", "Light"])
+        appearance_layout.addRow("Theme:", self.theme_combo)
+
+        # Font Settings
+        self.font_combo = QFontComboBox()
+        appearance_layout.addRow("Font Family:", self.font_combo)
+        self.font_size_spin = QSpinBox()
+        self.font_size_spin.setRange(8, 32)
+        appearance_layout.addRow("Font Size:", self.font_size_spin)
+        self.section_combo = QComboBox()
+        self.section_combo.addItems(["Global", "Editor", "Setup", "Deployment"])
+        appearance_layout.addRow("Apply Font To:", self.section_combo)
+
+        # Window Effect
+        self.effect_combo = QComboBox()
+        self.effect_combo.addItems(["Opaque", "Transparent", "Acrylic (Simulated)"])
+        appearance_layout.addRow("Window Effect:", self.effect_combo)
 
         # Editor Page Size
         self.page_size_spin = QSpinBox()
@@ -601,6 +643,13 @@ class SetupTab(QWidget):
         self.fuzzy_match_spin.valueChanged.connect(self.config_changed.emit)
         
         # Appearance
+        self.theme_combo.currentTextChanged.connect(self.config_changed.emit)
+        self.font_combo.currentFontChanged.connect(self.config_changed.emit)
+        self.font_size_spin.valueChanged.connect(self.config_changed.emit)
+        self.section_combo.currentTextChanged.connect(self.config_changed.emit)
+        self.effect_combo.currentTextChanged.connect(self.config_changed.emit)
+        
+        # Appearance
         self.page_size_spin.valueChanged.connect(self.config_changed.emit)
         self.restart_btn.clicked.connect(self._reset_to_defaults)
 
@@ -677,7 +726,7 @@ class SetupTab(QWidget):
                 sender_row.path = script_path
             return
         
-        if tool_data.get("special") in ["mount_native", "mount_wincdemu", "mount_imount", "mount_cdmage", "mount_osf"]:
+        if tool_data.get("special") in ["mount_native", "mount_wincdemu", "mount_imgdrive", "mount_cdmage", "mount_osf"]:
             self._handle_mount_tool_setup(tool_name, tool_data)
             return
 
@@ -763,12 +812,12 @@ class SetupTab(QWidget):
                 self.download_thread.start()
             else:
                 # Just generate scripts and set path
+                self._write_exe_path_to_config("wincdemu", exe_path)
                 self._generate_mount_scripts_files(bin_dir, "wincdemu")
                 if sender_row:
                     script_name = "cdemu.cmd" if os.name == 'nt' else "cdemu.sh"
                     sender_row.path = os.path.join(bin_dir, script_name)
                     # Write exe path to config
-                    self._write_exe_path_to_config("wincdemu", exe_path)
                     # Auto-populate complementary field
                     if sender_row.config_key == "disc_mount_path":
                         unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
@@ -782,12 +831,12 @@ class SetupTab(QWidget):
     def _on_wincdemu_download_finished(self, success, message, result_path, bin_dir):
         self._on_download_finished_slot(success, message, result_path)
         if success:
+            self._write_exe_path_to_config("wincdemu", result_path)
             self._generate_mount_scripts_files(bin_dir, "wincdemu")
             if getattr(self, 'active_download_row', None):
                 script_name = "cdemu.cmd" if os.name == 'nt' else "cdemu.sh"
                 self.active_download_row.path = os.path.join(bin_dir, script_name)
                 # Write exe path to config
-                self._write_exe_path_to_config("wincdemu", result_path)
                 # Auto-populate complementary field
                 if getattr(self.active_download_row, 'config_key', None) == "disc_mount_path":
                     unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
@@ -818,12 +867,12 @@ class SetupTab(QWidget):
                 self.download_thread.start()
             else:
                 # Just   scripts and set path
+                self._write_exe_path_to_config("cdmage", exe_path)
                 self._generate_mount_scripts_files(bin_dir, "cdmage")
                 if sender_row:
                     script_name = "cdmage.cmd" if os.name == 'nt' else "cdmage.sh"
                     sender_row.path = os.path.join(bin_dir, script_name)
                     # Write exe path to config
-                    self._write_exe_path_to_config("cdmage", exe_path)
                     # Auto-populate complementary field
                     if sender_row.config_key == "disc_mount_path":
                         unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
@@ -851,23 +900,23 @@ class SetupTab(QWidget):
                 self.download_thread.progress.connect(self.progress_dialog.setValue)
                 
                 # Connect finished signal to a lambda that also generates scripts
-                self.download_thread.finished.connect(lambda s, m, p: self._on_osf_download_finished(s, m, p, bin_dir))
+                self.download_thread.finished.connect(lambda s, m, p: self._on_imgdrive_download_finished(s, m, p, bin_dir))
                 self.download_thread.start()
             else:
                 # Just generate scripts and set path
-                self._generate_mount_scripts_files(bin_dir, "osf")
+                self._write_exe_path_to_config("imgdrive", exe_path)
+                self._generate_mount_scripts_files(bin_dir, "imgdrive")
                 if sender_row:
-                    script_name = "osf.cmd" if os.name == 'nt' else "osf.sh"
+                    script_name = "imgdrive.cmd" if os.name == 'nt' else "imgdrive.sh"
                     sender_row.path = os.path.join(bin_dir, script_name)
                     # Write exe path to config
-                    self._write_exe_path_to_config("osf", exe_path)
                     # Auto-populate complementary field
                     if sender_row.config_key == "disc_mount_path":
                         unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
                         self.path_rows["disc_unmount_path"].path = os.path.join(bin_dir, unmount_script)
                         self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
                     elif sender_row.config_key == "disc_unmount_path":
-                        mount_script = "osf.cmd" if os.name == 'nt' else "osf.sh"
+                        mount_script = "imgdrive.cmd" if os.name == 'nt' else "imgdrive.sh"
                         self.path_rows["disc_mount_path"].path = os.path.join(bin_dir, mount_script)
                         self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
 
@@ -888,23 +937,23 @@ class SetupTab(QWidget):
                 self.download_thread.progress.connect(self.progress_dialog.setValue)
                 
                 # Connect finished signal to a lambda that also generates scripts
-                self.download_thread.finished.connect(lambda s, m, p: self._on_imount_download_finished(s, m, p, bin_dir))
+                self.download_thread.finished.connect(lambda s, m, p: self._on_imgdrive_download_finished(s, m, p, bin_dir))
                 self.download_thread.start()
             else:
                 # Just generate scripts and set path
-                self._generate_mount_scripts_files(bin_dir, "imount")
+                self._write_exe_path_to_config("imgdrive", exe_path)
+                self._generate_mount_scripts_files(bin_dir, "imgdrive")
                 if sender_row:
-                    script_name = "imount.cmd" if os.name == 'nt' else "imount.sh"
+                    script_name = "imgdrive.cmd" if os.name == 'nt' else "imgdrive.sh"
                     sender_row.path = os.path.join(bin_dir, script_name)
                     # Write exe path to config
-                    self._write_exe_path_to_config("imount", exe_path)
                     # Auto-populate complementary field
                     if sender_row.config_key == "disc_mount_path":
                         unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
                         self.path_rows["disc_unmount_path"].path = os.path.join(bin_dir, unmount_script)
                         self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
                     elif sender_row.config_key == "disc_unmount_path":
-                        mount_script = "imount.cmd" if os.name == 'nt' else "imount.sh"
+                        mount_script = "imgdrive.cmd" if os.name == 'nt' else "imgdrive.sh"
                         self.path_rows["disc_mount_path"].path = os.path.join(bin_dir, mount_script)
                         self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
 
@@ -934,25 +983,25 @@ class SetupTab(QWidget):
         self.active_download_row = None
         self._current_download_tool_name = None
 
-    def _on_imount_download_finished(self, success, message, result_path, bin_dir):
+    def _on_imgdrive_download_finished(self, success, message, result_path, bin_dir):
         if hasattr(self, 'progress_dialog'):
             self.progress_dialog.close()
 
         if success:
-            self._generate_mount_scripts_files(bin_dir, "imount")
+            exe_path = os.path.join(bin_dir, "imgdrive.exe")
+            self._write_exe_path_to_config("imgdrive", exe_path)
+            self._generate_mount_scripts_files(bin_dir, "imgdrive")
             if getattr(self, 'active_download_row', None):
-                script_name = "imount.cmd" if os.name == 'nt' else "imount.sh"
+                script_name = "imgdrive.cmd" if os.name == 'nt' else "imgdrive.sh"
                 self.active_download_row.path = os.path.join(bin_dir, script_name)
                 # Write exe path to config
-                exe_path = os.path.join(bin_dir, "imount.exe")
-                self._write_exe_path_to_config("imount", exe_path)
                 # Auto-populate complementary field
                 if getattr(self.active_download_row, 'config_key', None) == "disc_mount_path":
                     unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
                     self.path_rows["disc_unmount_path"].path = os.path.join(bin_dir, unmount_script)
                     self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
                 elif getattr(self.active_download_row, 'config_key', None) == "disc_unmount_path":
-                    mount_script = "imount.cmd" if os.name == 'nt' else "imount.sh"
+                    mount_script = "imgdrive.cmd" if os.name == 'nt' else "imgdrive.sh"
                     self.path_rows["disc_mount_path"].path = os.path.join(bin_dir, mount_script)
                     self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
             
@@ -967,13 +1016,13 @@ class SetupTab(QWidget):
             self.progress_dialog.close()
 
         if success:
+            exe_path = os.path.join(bin_dir, "cdmage.exe")
+            self._write_exe_path_to_config("cdmage", exe_path)
             self._generate_mount_scripts_files(bin_dir, "cdmage")
             if getattr(self, 'active_download_row', None):
                 script_name = "cdmage.cmd" if os.name == 'nt' else "cdmage.sh"
                 self.active_download_row.path = os.path.join(bin_dir, script_name)
                 # Write exe path to config
-                exe_path = os.path.join(bin_dir, "cdmage.exe")
-                self._write_exe_path_to_config("cdmage", exe_path)
                 # Auto-populate complementary field
                 if getattr(self.active_download_row, 'config_key', None) == "disc_mount_path":
                     unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
@@ -1018,8 +1067,8 @@ class SetupTab(QWidget):
             script_name = "nativemount.cmd"
         elif tool_type == "wincdemu":
             script_name = "cdemu.cmd"
-        elif tool_type == "imount":
-            script_name = "imount.cmd"
+        elif tool_type == "imgdrive":
+            script_name = "imgdrive.cmd"
         elif tool_type == "cdmage":
             script_name = "cdmage.cmd"
         elif tool_type == "osf":
@@ -1256,6 +1305,14 @@ class SetupTab(QWidget):
         self.logging_verbosity_combo.setCurrentText(config.logging_verbosity)
         self.fuzzy_match_spin.setValue(getattr(config, 'fuzzy_match_cutoff', 0.6))
         
+        self.theme_combo.setCurrentText(getattr(config, 'theme', 'System'))
+        font_family = getattr(config, 'font_family', '')
+        if font_family:
+            self.font_combo.setCurrentFont(QFont(font_family))
+        self.font_size_spin.setValue(getattr(config, 'font_size', 9))
+        self.section_combo.setCurrentText(getattr(config, 'font_section', 'Global'))
+        self.effect_combo.setCurrentText(getattr(config, 'window_effect', 'Opaque'))
+
         self.run_as_admin_checkbox.setChecked(config.run_as_admin)
         self.use_kill_list_checkbox.setChecked(config.use_kill_list)
         self.hide_taskbar_checkbox.setChecked(config.hide_taskbar)
@@ -1308,6 +1365,12 @@ class SetupTab(QWidget):
         config.logging_verbosity = self.logging_verbosity_combo.currentText()
         config.fuzzy_match_cutoff = self.fuzzy_match_spin.value()
         config.editor_page_size = self.page_size_spin.value()
+        
+        config.theme = self.theme_combo.currentText()
+        config.font_family = self.font_combo.currentFont().family()
+        config.font_size = self.font_size_spin.value()
+        config.font_section = self.section_combo.currentText()
+        config.window_effect = self.effect_combo.currentText()
 
         config.run_as_admin = self.run_as_admin_checkbox.isChecked()
         config.use_kill_list = self.use_kill_list_checkbox.isChecked()
@@ -1331,96 +1394,3 @@ class SetupTab(QWidget):
         """Updates options and arguments if the new path matches a known tool."""
         if not new_path:
             return
-            
-        exe_name = os.path.basename(new_path).lower()
-        exe_no_ext = os.path.splitext(exe_name)[0]
-        
-        target = None
-        if exe_name in self.options_args_map:
-            target = exe_name
-        elif exe_no_ext in self.options_args_map:
-            target = exe_no_ext
-            
-        # Determine current tool identifier
-        current_tool_id = target if target else exe_name
-        
-        # Check if tool changed
-        last_tool_id = self.last_detected_tools.get(config_key)
-        if last_tool_id == current_tool_id:
-            return # Tool hasn't changed, preserve customizations
-
-        # Update tracker
-        self.last_detected_tools[config_key] = current_tool_id
-
-        if target:
-            opts, args = self.options_args_map[target]
-                                 
-            # Update config if fields exist
-            config = self.main_window.config
-            opt_key = f"{config_key}_options"
-            arg_key = f"{config_key}_arguments"
-            
-            updated = False
-            if hasattr(config, opt_key) and getattr(config, opt_key) != opts:
-                setattr(config, opt_key, opts)
-                updated = True
-            if hasattr(config, arg_key) and getattr(config, arg_key) != args:
-                setattr(config, arg_key, args)
-                updated = True
-                
-            if updated:
-                logging.info(f"Applied default options/args for {exe_name} to {config_key}")
-                logging.info(f"Applied default options/args for {target} to {config_key}")
-
-                self.config_changed.emit()
-        
-        # Update dialog if open
-        if getattr(self, '_current_dialog_key', None) == config_key and getattr(self, '_current_dialog_updater', None) is not None:
-            self._current_dialog_updater()
-            return
-            
-        exe_name = os.path.basename(new_path).lower()
-        exe_no_ext = os.path.splitext(exe_name)[0]
-        
-        target = None
-        if exe_name in self.options_args_map:
-            target = exe_name
-        elif exe_no_ext in self.options_args_map:
-            target = exe_no_ext
-            
-        # Determine current tool identifier
-        current_tool_id = target if target else exe_name
-        
-        # Check if tool changed
-        last_tool_id = self.last_detected_tools.get(config_key)
-        if last_tool_id == current_tool_id:
-            return # Tool hasn't changed, preserve customizations
-
-        # Update tracker
-        self.last_detected_tools[config_key] = current_tool_id
-
-        if target:
-            opts, args = self.options_args_map[target]
-                                 
-            # Update config if fields exist
-            config = self.main_window.config
-            opt_key = f"{config_key}_options"
-            arg_key = f"{config_key}_arguments"
-            
-            updated = False
-            if hasattr(config, opt_key) and getattr(config, opt_key) != opts:
-                setattr(config, opt_key, opts)
-                updated = True
-            if hasattr(config, arg_key) and getattr(config, arg_key) != args:
-                setattr(config, arg_key, args)
-                updated = True
-                
-            if updated:
-                logging.info(f"Applied default options/args for {exe_name} to {config_key}")
-                logging.info(f"Applied default options/args for {target} to {config_key}")
-
-                self.config_changed.emit()
-        
-        # Update dialog if open
-        if getattr(self, '_current_dialog_key', None) == config_key and getattr(self, '_current_dialog_updater', None) is not None:
-            self._current_dialog_updater()

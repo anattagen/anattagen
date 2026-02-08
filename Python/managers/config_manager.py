@@ -47,8 +47,7 @@ class ConfigManager(QObject):
             # Create an AppConfig instance and update it with loaded data
             config = AppConfig()
             for key, value in config_data.items():
-                if hasattr(config, key):
-                    setattr(config, key, value)
+                setattr(config, key, value)
 
             self.status_updated.emit("Configuration loaded.", 3000)
             return config

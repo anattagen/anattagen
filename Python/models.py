@@ -39,7 +39,7 @@ class AppConfig:
         self.wincdemu_exe_path = ""
         self.cdmage_exe_path = ""
         self.osf_exe_path = ""
-        self.imount_exe_path = ""
+        self.imgdrive_exe_path = ""
         self.custom_mount_path = ""
         self.disc_mount_path = ""
         self.disc_unmount_path = ""
