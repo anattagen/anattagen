@@ -682,7 +682,11 @@
                         <br>
                         <ul>
                             <li>
-                                <h2><a href="[REVISION]">Installer �</a></h2>
+                                <h2><a href="[VERSION]">Installer </a></h2>
+                            </li>
+                        </ul>
+                        Installer<br> (recommended)<br>
+                        <strong>size:</strong>VERSION]">Installer </a></h2>
                             </li>
                         </ul>
                         Installer<br> (recommended)<br>

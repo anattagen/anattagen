@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 
 import configparser
+import hashlib
 import os
 import re
 import sys
@@ -108,6 +109,19 @@ def init_ini(ini_path: Path, keys: List[str]) -> None:
     print(f"Created/updated INI: {ini_path}")
 
 
+def increment_version(v: str) -> str:
+    prefix = ""
+    if v.lower().startswith("v"):
+        prefix = v[0]
+        v = v[1:]
+    
+    parts = v.split('.')
+    try:
+        parts[-1] = str(int(parts[-1]) + 1)
+        return prefix + ".".join(parts)
+    except (ValueError, IndexError):
+        return prefix + v
+
 def run_cli_apply(ini_path: Path) -> None:
     cfg = configparser.ConfigParser()
     cfg.read(ini_path, encoding="utf-8")
@@ -132,6 +146,9 @@ def run_gui(ini_path: Path) -> None:
     tags = find_tags([README_SET, SITE_SET])
     cfg = load_ini(ini_path, tags)
 
+    if not cfg.has_section("build"):
+        cfg.add_section("build")
+
     root = tk.Tk()
     root.title("Deploy: tag editor & builder")
 
@@ -143,6 +160,14 @@ def run_gui(ini_path: Path) -> None:
     def save_all(_=None):
         for k, sv in vars.items():
             cfg["values"][k] = sv.get()
+        
+        # Save build vars
+        if 'onefile' in build_vars:
+            cfg["build"]["onefile"] = str(build_vars['onefile'].get())
+            cfg["build"]["dest"] = build_vars['dest'].get()
+            cfg["build"]["workpath"] = build_vars['workpath'].get()
+            cfg["build"]["commit_msg"] = build_vars['commit_msg'].get()
+            
         save_ini(ini_path, cfg)
         apply_replacements({k: cfg["values"].get(k, "") for k in tags})
 
@@ -173,8 +198,10 @@ def run_gui(ini_path: Path) -> None:
     lbl_build.grid(row=last_row+1, column=0, columnspan=2, pady=(0, 5))
     
     build_vars = {
-        'onefile': tk.BooleanVar(value=False),
-        'dest': tk.StringVar(value=str(Path("dist").absolute()))
+        'onefile': tk.BooleanVar(value=cfg.getboolean('build', 'onefile', fallback=False)),
+        'dest': tk.StringVar(value=cfg.get('build', 'dest', fallback=str(Path("dist").absolute()))),
+        'workpath': tk.StringVar(value=cfg.get('build', 'workpath', fallback=str(Path("build").absolute()))),
+        'commit_msg': tk.StringVar(value=cfg.get('build', 'commit_msg', fallback="Update"))
     }
     
     ctl_frame = ttk.Frame(frame)
@@ -188,10 +215,24 @@ def run_gui(ini_path: Path) -> None:
         d = filedialog.askdirectory()
         if d: build_vars['dest'].set(d)
     ttk.Button(ctl_frame, text="...", width=3, command=browse_dest).pack(side="left", padx=2)
+
+    wp_frame = ttk.Frame(frame)
+    wp_frame.grid(row=last_row+3, column=0, columnspan=2, sticky="ew")
+    ttk.Label(wp_frame, text="Workpath:").pack(side="left", padx=5)
+    ttk.Entry(wp_frame, textvariable=build_vars['workpath']).pack(side="left", fill="x", expand=True)
+    def browse_workpath():
+        d = filedialog.askdirectory()
+        if d: build_vars['workpath'].set(d)
+    ttk.Button(wp_frame, text="...", width=3, command=browse_workpath).pack(side="left", padx=2)
+
+    git_frame = ttk.Frame(frame)
+    git_frame.grid(row=last_row+4, column=0, columnspan=2, sticky="ew", pady=(5, 0))
+    ttk.Label(git_frame, text="Commit Msg:").pack(side="left", padx=5)
+    ttk.Entry(git_frame, textvariable=build_vars['commit_msg']).pack(side="left", fill="x", expand=True)
     
     from tkinter import scrolledtext
     log_widget = scrolledtext.ScrolledText(frame, height=8, state='disabled', font=("Consolas", 8))
-    log_widget.grid(row=last_row+3, column=0, columnspan=2, sticky="nsew", pady=5)
+    log_widget.grid(row=last_row+6, column=0, columnspan=2, sticky="nsew", pady=5)
     
     def log(msg):
         def _log():
@@ -200,6 +241,53 @@ def run_gui(ini_path: Path) -> None:
             log_widget.see("end")
             log_widget.config(state='disabled')
         root.after(0, _log)
+        
+    # Process state management
+    proc_state = {'proc': None, 'cancelled': False}
+    
+    def set_ui_busy(busy):
+        state = 'disabled' if busy else 'normal'
+        
+        def _recursive_set_state(widget):
+            for child in widget.winfo_children():
+                if isinstance(child, (ttk.Button, ttk.Entry, ttk.Checkbutton, ttk.Radiobutton)):
+                    if child != btn_cancel:
+                        child.configure(state=state)
+                if isinstance(child, (ttk.Frame, tk.Frame, ttk.LabelFrame)):
+                    _recursive_set_state(child)
+        
+        _recursive_set_state(frame)
+        btn_cancel.configure(state='normal' if busy else 'disabled')
+
+    def cancel_process():
+        proc_state['cancelled'] = True
+        if proc_state['proc']:
+            try:
+                proc_state['proc'].kill()
+            except:
+                pass
+        log("\n>>> Operation Cancelled by User <<<\n")
+
+    def run_cmd_sequence(commands, cwd=None):
+        for cmd in commands:
+            if proc_state['cancelled']: return False
+            log(f"> {' '.join(cmd)}\n")
+            try:
+                process = subprocess.Popen(
+                    cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    text=True, bufsize=1, encoding='utf-8', cwd=str(cwd) if cwd else None
+                )
+                proc_state['proc'] = process
+                for line in process.stdout:
+                    log(line)
+                process.wait()
+                if process.returncode != 0:
+                    log(f"Command failed with code {process.returncode}\n")
+                    return False
+            except Exception as e:
+                log(f"Error executing {cmd[0]}: {e}\n")
+                return False
+        return True
 
     def run_build():
         import threading
@@ -208,8 +296,11 @@ def run_gui(ini_path: Path) -> None:
         
         onefile = build_vars['onefile'].get()
         dest = build_vars['dest'].get()
+        workpath = build_vars['workpath'].get()
         
         def worker():
+            set_ui_busy(True)
+            proc_state['cancelled'] = False
             sep = ';' if platform.system() == 'Windows' else ':'
             script_dir = Path(__file__).parent.absolute()
             project_root = script_dir.parent if script_dir.name == "Python" else script_dir
@@ -224,6 +315,7 @@ def run_gui(ini_path: Path) -> None:
                 '--clean',
                 '--windowed',
                 f'--distpath={dest}',
+                f'--workpath={workpath}',
                 f'--add-data={project_root / "site"}{sep}site',
                 f'--add-data={project_root / "assets"}{sep}assets',
             ]
@@ -242,6 +334,7 @@ def run_gui(ini_path: Path) -> None:
                     cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                     text=True, bufsize=1, encoding='utf-8', cwd=str(project_root)
                 )
+                proc_state['proc'] = process
                 for line in process.stdout:
                     log(line)
                 process.wait()
@@ -251,16 +344,182 @@ def run_gui(ini_path: Path) -> None:
                     log(f"\nBuild FAILED with code {process.returncode}\n")
             except Exception as e:
                 log(f"\nError: {e}\n")
-                
+            finally:
+                set_ui_busy(False)
+                proc_state['proc'] = None
+
         threading.Thread(target=worker, daemon=True).start()
 
-    ttk.Button(frame, text="Compile", command=run_build).grid(row=last_row+4, column=0, columnspan=2, pady=10)
+    def run_git():
+        import threading
+        
+        msg = build_vars['commit_msg'].get()
+        
+        def worker():
+            set_ui_busy(True)
+            proc_state['cancelled'] = False
+            commands = [
+                ["git", "add", "."],
+                ["git", "commit", "-m", msg],
+                ["git", "push", "-f", "-u", "origin", "main"]
+            ]
+            
+            log(f"\nStarting Git Push sequence...\n")
+            if run_cmd_sequence(commands, cwd=Path.cwd()):
+                log("Git sequence completed successfully.\n")
+            
+            set_ui_busy(False)
+            proc_state['proc'] = None
+            
+        threading.Thread(target=worker, daemon=True).start()
 
-    # Buttons
-    btn_frame = ttk.Frame(root, padding=(10, 6))
-    btn_frame.grid(row=1, column=0, sticky="ew")
-    apply_btn = ttk.Button(btn_frame, text="Apply & Save", command=save_all)
-    apply_btn.pack(side="left")
+    def run_release():
+        import threading
+        import subprocess
+        import shutil
+        
+        version = vars.get('VERSION', tk.StringVar(value="")).get()
+        git_user = vars.get('GITUSER', tk.StringVar(value="")).get()
+        rj_proj = vars.get('RJ_PROJ', tk.StringVar(value="")).get()
+        dest_dir = Path(build_vars['dest'].get())
+        msg = build_vars['commit_msg'].get()
+        
+        def worker():
+            set_ui_busy(True)
+            proc_state['cancelled'] = False
+            log("\nStarting Release sequence...\n")
+            
+            # 1. Compress
+            if proc_state['cancelled']: 
+                set_ui_busy(False)
+                return
+
+            archive_name = "portable.7z"
+            archive_path = Path.cwd() / archive_name
+            
+            # Find 7z.exe
+            script_dir = Path(__file__).parent.absolute()
+            project_root = script_dir.parent if script_dir.name == "Python" else script_dir
+            seven_z = project_root / "bin" / "7z.exe"
+            
+            if seven_z.exists() and dest_dir.exists():
+                log(f"Compressing {dest_dir} to {archive_name}...\n")
+                # Remove existing
+                if archive_path.exists():
+                    archive_path.unlink()
+                    
+                cmd = [str(seven_z), "a", str(archive_path), f"{dest_dir}\\*"]
+                try:
+                    # Use Popen to allow cancellation
+                    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    proc_state['proc'] = proc
+                    proc.wait()
+                    if proc.returncode != 0: raise Exception("7z returned non-zero")
+                    log("Compression complete.\n")
+                except Exception as e:
+                    log(f"Compression failed: {e}\n")
+                    set_ui_busy(False)
+                    return
+            else:
+                log("7z.exe or dist directory not found.\n")
+                set_ui_busy(False)
+                return
+
+            # 2. Calculate SHA1
+            if proc_state['cancelled']: 
+                set_ui_busy(False)
+                return
+
+            log("Calculating SHA1...\n")
+            sha1 = hashlib.sha1()
+            with open(archive_path, 'rb') as f:
+                while True:
+                    data = f.read(65536)
+                    if not data: break
+                    sha1.update(data)
+            sha1_hash = sha1.hexdigest()
+            log(f"SHA1: {sha1_hash}\n")
+            
+            size_mb = os.path.getsize(archive_path) / (1024 * 1024)
+            
+            # 3. Update GUI vars (thread-safe update)
+            def update_ui():
+                if 'RSHA1' in vars: vars['RSHA1'].set(sha1_hash)
+                if 'RSIZE' in vars: vars['RSIZE'].set(f"{size_mb:.2f}")
+                if 'PORTABLE' in vars and git_user and rj_proj and version:
+                    url = f"https://github.com/{git_user}/{rj_proj}/releases/download/Portable/{archive_name}"
+                    vars['PORTABLE'].set(url)
+                save_all() # Save INI and apply replacements
+            root.after(0, update_ui)
+            
+            # 4. Git Push & Release
+            # We wait a bit for UI update to save files
+            import time
+            time.sleep(1)
+            
+            # Trigger existing git push logic
+            if proc_state['cancelled']: 
+                set_ui_busy(False)
+                return
+
+            commands = [
+                ["git", "add", "."],
+                ["git", "commit", "-m", msg],
+                ["git", "push", "-f", "-u", "origin", "main"]
+            ]
+            if not run_cmd_sequence(commands, cwd=Path.cwd()):
+                set_ui_busy(False)
+                return
+            
+            log("Replacing GitHub Release...\n")
+            try:
+                if proc_state['cancelled']: raise Exception("Cancelled")
+                
+                # Check if release exists
+                check_cmd = ["gh", "release", "view", version]
+                check_proc = subprocess.run(check_cmd, cwd=str(Path.cwd()), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                
+                if check_proc.returncode == 0:
+                    log(f"Release {version} exists. Deleting...\n")
+                    subprocess.run(["gh", "release", "delete", version, "-y"], cwd=str(Path.cwd()), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                else:
+                    log(f"Release {version} does not exist. Creating new...\n")
+                
+                # Create new release
+                subprocess.run(["gh", "release", "create", version, str(archive_path), "--title", version, "--notes", "Automated release"], cwd=str(Path.cwd()), check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                log(f"Release {version} uploaded successfully.\n")
+                
+                # Auto-increment version
+                new_ver = increment_version(version)
+                if new_ver != version:
+                    def update_ver():
+                        if 'VERSION' in vars:
+                            vars['VERSION'].set(new_ver)
+                            save_all()
+                            log(f"Version auto-incremented to {new_ver}\n")
+                    root.after(0, update_ver)
+            except FileNotFoundError:
+                log("GH CLI not found. Skipping upload.\n")
+            except Exception as e:
+                log(f"Release upload failed: {e}\n")
+            finally:
+                set_ui_busy(False)
+                proc_state['proc'] = None
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    # Consolidated Button Row
+    btn_row = ttk.Frame(frame)
+    btn_row.grid(row=last_row+5, column=0, columnspan=2, sticky="ew", pady=10)
+    
+    ttk.Button(btn_row, text="Apply & Save", command=save_all).pack(side="left", padx=5)
+    ttk.Button(btn_row, text="Compile", command=run_build).pack(side="left", padx=5)
+    ttk.Button(btn_row, text="Compress & Release", command=run_release).pack(side="left", padx=5)
+    
+    btn_cancel = ttk.Button(btn_row, text="Cancel", command=cancel_process, state='disabled')
+    btn_cancel.pack(side="left", padx=5)
+    
+    ttk.Button(btn_row, text="Push to GitHub", command=run_git).pack(side="right", padx=5)
 
     def on_close():
         save_all()

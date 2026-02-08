@@ -5,6 +5,7 @@ echo "Installing dependencies..."
 sudo apt-get update -y
 sudo apt-get install -y xvfb x11vnc fluxbox websockify novnc  libegl1 libxcb-xinerama0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-render-util0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libx11-xcb1 libxcb1 libxcb-glx0 libxcb-shm0 libxcb-sync1 libxcb-xfixes0 libxcb-shape0 libxcb-randr0 libxcb-render-util0 libxcb-render0 libxcb-xkb1 libxkbcommon-x11-0
 
+pip uninstall -y PyQt5 PyQt5-sip PySide2
 pip install PyQt6 nltk requests beautifulsoup4 configparser psutil pygame
 
 echo "Starting virtual display..."
