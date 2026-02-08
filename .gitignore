@@ -7,7 +7,6 @@ site_values.ini
 *.spec
 *.cache
 *.code-workspace
-codespaces-start-gui.sh
 clean.bat
 python.lnk
 steam_filtered.txt
