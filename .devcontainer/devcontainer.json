@@ -6,20 +6,17 @@
   },
 
   "forwardPorts": [5901, 6080],
-  "openPorts": [6080],
   "portsAttributes": {
     "5901": { "label": "VNC", "visibility": "public" },
     "6080": { "label": "noVNC", "visibility": "public" }
   },
-
-  "postCreateCommand": [
+"postCreateCommand": [
     "apt-get update",
     "apt-get install -y --no-install-recommends \\",
     "  tigervnc-standalone-server \\",
     "  tigervnc-common \\",
     "  xfce4 \\",
     "  xfce4-goodies \\",
-    "  novnc \\",
     "  websockify \\",
     "  xterm \\",
     "  libegl1 \\",
@@ -36,6 +33,10 @@
     "  libglib2.0-0 \\",
     "  libdbus-1-3 \\",
     "  libfontconfig1",
+    "",
+    "git clone --depth 1 https://github.com/novnc/noVNC.git /opt/novnc",
+    "",
+    "ln -s /opt/novnc/vnc.html /opt/novnc/index.html",
     "",
     "apt-get clean",
     "rm -rf /var/lib/apt/lists/*",
@@ -58,7 +59,7 @@
 
   "pkill -f websockify || true",
   "sleep 1",
-  "websockify --web=/usr/share/novnc/ 0.0.0.0:6080 localhost:5901 &"
+  "websockify --web=/opt/novnc 0.0.0.0:6080 localhost:5901 &"
 ]
-  "remoteUser": "vscode"
 }
+
