@@ -1,0 +1,26 @@
+{
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "features": {
+    "ghcr.io/bascodes/devcontainer-features/desktop-novnc:0": {
+      "noVNCVersion": "1.6.0",
+      "password": "noPassword",
+      "webPort": "6080",
+      "vncPort": "5901"
+    }
+  },
+  "onCreateCommand": "rm -f /etc/apt/sources.list.d/yarn.list",
+  "postCreateCommand": "sudo apt-get update -y && sudo apt-get install -y x11vnc xterm novnc websockify xvfb fluxbox libegl1 libxcb-xinerama0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-render-util0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libx11-xcb1 libxcb1 libxcb-glx0 libxcb-shm0 libxcb-sync1 libxcb-xfixes0 libxcb-shape0 libxcb-randr0 libxcb-render-util0 libxcb-render0 libxcb-xkb1 libxkbcommon-x11-0 & /bin/bash ./.devcontainer/change_port_visibility.sh",
+  "forwardPorts": [6080, 5901],
+  "portsAttributes": {
+    "5901": {
+      "label": "VNC Desktop",
+      "onAutoForward": "openBrowser",
+      "visibility": "public"
+    },
+    "6080": {
+      "label": "noVNC Viewer",
+      "onAutoForward": "openBrowser",
+      "visibility": "public"
+    }
+  }
+}
