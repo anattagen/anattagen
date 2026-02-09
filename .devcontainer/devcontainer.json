@@ -45,16 +45,20 @@
     ". .venv/bin/activate && pip install --no-cache-dir -r requirements.txt"
   ],
 
-  "postStartCommand": [
-    "mkdir -p ~/.vnc",
-    "echo '#!/bin/sh\nunset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS\nexec startxfce4 &' > ~/.vnc/xstartup",
-    "chmod +x ~/.vnc/xstartup",
-    "",
-    "vncserver -kill :1 || true",
-    "vncserver :1 -geometry 1280x800 -localhost no",
-    "",
-    "websockify --web=/usr/share/novnc/ 6080 localhost:5901 &"
-  ],
+ "postStartCommand": [
+  "mkdir -p ~/.vnc",
+  "echo '#!/bin/sh\nunset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS\nexec startxfce4 &' > ~/.vnc/xstartup",
+  "chmod +x ~/.vnc/xstartup",
 
+  "vncserver -kill :1 >/dev/null 2>&1 || true",
+  "rm -rf /tmp/.X1-lock /tmp/.X11-unix/X1 || true",
+
+  "sleep 1",
+  "vncserver :1 -geometry 1280x800 -localhost no",
+
+  "pkill -f websockify || true",
+  "sleep 1",
+  "websockify --web=/usr/share/novnc/ 0.0.0.0:6080 localhost:5901 &"
+]
   "remoteUser": "vscode"
 }
