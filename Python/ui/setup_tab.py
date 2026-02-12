@@ -829,7 +829,6 @@ class SetupTab(QWidget):
                 if sender_row:
                     script_name = "cdemu.cmd" if os.name == 'nt' else "cdemu.sh"
                     sender_row.path = os.path.join(bin_dir, script_name)
-                    # Write exe path to config
                     # Auto-populate complementary field
                     if sender_row.config_key == "disc_mount_path":
                         unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
@@ -839,25 +838,6 @@ class SetupTab(QWidget):
                         mount_script = "cdemu.cmd" if os.name == 'nt' else "cdemu.sh"
                         self.path_rows["disc_mount_path"].path = os.path.join(bin_dir, mount_script)
                         self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
-
-    def _on_wincdemu_download_finished(self, success, message, result_path, bin_dir):
-        self._on_download_finished_slot(success, message, result_path)
-        if success:
-            self._write_exe_path_to_config("wincdemu", result_path)
-            self._generate_mount_scripts_files(bin_dir, "wincdemu")
-            if getattr(self, 'active_download_row', None):
-                script_name = "cdemu.cmd" if os.name == 'nt' else "cdemu.sh"
-                self.active_download_row.path = os.path.join(bin_dir, script_name)
-                # Write exe path to config
-                # Auto-populate complementary field
-                if getattr(self.active_download_row, 'config_key', None) == "disc_mount_path":
-                    unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
-                    self.path_rows["disc_unmount_path"].path = os.path.join(bin_dir, unmount_script)
-                    self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
-                elif getattr(self.active_download_row, 'config_key', None) == "disc_unmount_path":
-                    mount_script = "cdemu.cmd" if os.name == 'nt' else "cdemu.sh"
-                    self.path_rows["disc_mount_path"].path = os.path.join(bin_dir, mount_script)
-                    self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
         
         elif special_type == "mount_cdmage":
             # Check if already downloaded
@@ -873,18 +853,15 @@ class SetupTab(QWidget):
 
                 self.download_thread = DownloadThread(tool_data['url'], bin_dir, tool_data['exe_name'])
                 self.download_thread.progress.connect(self.progress_dialog.setValue)
-                
-                # Connect finished signal to a lambda that also generates scripts
                 self.download_thread.finished.connect(lambda s, m, p: self._on_cdmage_download_finished(s, m, p, bin_dir))
                 self.download_thread.start()
             else:
-                # Just   scripts and set path
+                # Just generate scripts and set path
                 self._write_exe_path_to_config("cdmage", exe_path)
                 self._generate_mount_scripts_files(bin_dir, "cdmage")
                 if sender_row:
                     script_name = "cdmage.cmd" if os.name == 'nt' else "cdmage.sh"
                     sender_row.path = os.path.join(bin_dir, script_name)
-                    # Write exe path to config
                     # Auto-populate complementary field
                     if sender_row.config_key == "disc_mount_path":
                         unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
@@ -894,8 +871,7 @@ class SetupTab(QWidget):
                         mount_script = "cdmage.cmd" if os.name == 'nt' else "cdmage.sh"
                         self.path_rows["disc_mount_path"].path = os.path.join(bin_dir, mount_script)
                         self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
-
-
+        
         elif special_type == "mount_osf":
             # Check if already downloaded
             exe_path = os.path.join(bin_dir, tool_data['exe_name'])
@@ -910,30 +886,26 @@ class SetupTab(QWidget):
 
                 self.download_thread = DownloadThread(tool_data['url'], bin_dir, tool_data['exe_name'])
                 self.download_thread.progress.connect(self.progress_dialog.setValue)
-                
-                # Connect finished signal to a lambda that also generates scripts
-                self.download_thread.finished.connect(lambda s, m, p: self._on_imgdrive_download_finished(s, m, p, bin_dir))
+                self.download_thread.finished.connect(lambda s, m, p: self._on_osf_download_finished(s, m, p, bin_dir))
                 self.download_thread.start()
             else:
                 # Just generate scripts and set path
-                self._write_exe_path_to_config("imgdrive", exe_path)
-                self._generate_mount_scripts_files(bin_dir, "imgdrive")
+                self._write_exe_path_to_config("osf", exe_path)
+                self._generate_mount_scripts_files(bin_dir, "osf")
                 if sender_row:
-                    script_name = "imgdrive.cmd" if os.name == 'nt' else "imgdrive.sh"
+                    script_name = "osf.cmd" if os.name == 'nt' else "osf.sh"
                     sender_row.path = os.path.join(bin_dir, script_name)
-                    # Write exe path to config
                     # Auto-populate complementary field
                     if sender_row.config_key == "disc_mount_path":
                         unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
                         self.path_rows["disc_unmount_path"].path = os.path.join(bin_dir, unmount_script)
                         self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
                     elif sender_row.config_key == "disc_unmount_path":
-                        mount_script = "imgdrive.cmd" if os.name == 'nt' else "imgdrive.sh"
+                        mount_script = "osf.cmd" if os.name == 'nt' else "osf.sh"
                         self.path_rows["disc_mount_path"].path = os.path.join(bin_dir, mount_script)
                         self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
-
-
-        elif special_type == "mount_imount":
+        
+        elif special_type == "mount_imgdrive":
             # Check if already downloaded
             exe_path = os.path.join(bin_dir, tool_data['exe_name'])
             if not os.path.exists(exe_path):
@@ -947,8 +919,6 @@ class SetupTab(QWidget):
 
                 self.download_thread = DownloadThread(tool_data['url'], bin_dir, tool_data['exe_name'])
                 self.download_thread.progress.connect(self.progress_dialog.setValue)
-                
-                # Connect finished signal to a lambda that also generates scripts
                 self.download_thread.finished.connect(lambda s, m, p: self._on_imgdrive_download_finished(s, m, p, bin_dir))
                 self.download_thread.start()
             else:
@@ -958,7 +928,6 @@ class SetupTab(QWidget):
                 if sender_row:
                     script_name = "imgdrive.cmd" if os.name == 'nt' else "imgdrive.sh"
                     sender_row.path = os.path.join(bin_dir, script_name)
-                    # Write exe path to config
                     # Auto-populate complementary field
                     if sender_row.config_key == "disc_mount_path":
                         unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
@@ -974,6 +943,7 @@ class SetupTab(QWidget):
             self.progress_dialog.close()
 
         if success:
+            self._write_exe_path_to_config("wincdemu", result_path)
             self._generate_mount_scripts_files(bin_dir, "wincdemu")
             if getattr(self, 'active_download_row', None):
                 script_name = "cdemu.cmd" if os.name == 'nt' else "cdemu.sh"
@@ -981,11 +951,11 @@ class SetupTab(QWidget):
                 # Auto-populate complementary field
                 if getattr(self.active_download_row, 'config_key', None) == "disc_mount_path":
                     unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
-                    self.path_rows["disc_unmount_path"].line_edit.setText(os.path.join(bin_dir, unmount_script))
+                    self.path_rows["disc_unmount_path"].path = os.path.join(bin_dir, unmount_script)
                     self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
                 elif getattr(self.active_download_row, 'config_key', None) == "disc_unmount_path":
                     mount_script = "cdemu.cmd" if os.name == 'nt' else "cdemu.sh"
-                    self.path_rows["disc_mount_path"].line_edit.setText(os.path.join(bin_dir, mount_script))
+                    self.path_rows["disc_mount_path"].path = os.path.join(bin_dir, mount_script)
                     self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
             
             QMessageBox.information(self, "Download Complete", f"Successfully downloaded to:\n{result_path}")
@@ -1034,7 +1004,6 @@ class SetupTab(QWidget):
             if getattr(self, 'active_download_row', None):
                 script_name = "cdmage.cmd" if os.name == 'nt' else "cdmage.sh"
                 self.active_download_row.path = os.path.join(bin_dir, script_name)
-                # Write exe path to config
                 # Auto-populate complementary field
                 if getattr(self.active_download_row, 'config_key', None) == "disc_mount_path":
                     unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
@@ -1051,7 +1020,34 @@ class SetupTab(QWidget):
 
         self.active_download_row = None
         self._current_download_tool_name = None
-        self.progress_dialog.close()
+
+    def _on_osf_download_finished(self, success, message, result_path, bin_dir):
+        if hasattr(self, 'progress_dialog'):
+            self.progress_dialog.close()
+
+        if success:
+            exe_path = os.path.join(bin_dir, "osf.exe")
+            self._write_exe_path_to_config("osf", exe_path)
+            self._generate_mount_scripts_files(bin_dir, "osf")
+            if getattr(self, 'active_download_row', None):
+                script_name = "osf.cmd" if os.name == 'nt' else "osf.sh"
+                self.active_download_row.path = os.path.join(bin_dir, script_name)
+                # Auto-populate complementary field
+                if getattr(self.active_download_row, 'config_key', None) == "disc_mount_path":
+                    unmount_script = "_unmount.cmd" if os.name == 'nt' else "_unmount.sh"
+                    self.path_rows["disc_unmount_path"].path = os.path.join(bin_dir, unmount_script)
+                    self.path_rows["disc_unmount_path"].enabled_cb.setChecked(True)
+                elif getattr(self.active_download_row, 'config_key', None) == "disc_unmount_path":
+                    mount_script = "osf.cmd" if os.name == 'nt' else "osf.sh"
+                    self.path_rows["disc_mount_path"].path = os.path.join(bin_dir, mount_script)
+                    self.path_rows["disc_mount_path"].enabled_cb.setChecked(True)
+            
+            QMessageBox.information(self, "Download Complete", f"Successfully downloaded to:\n{result_path}")
+        else:
+            QMessageBox.critical(self, "Download Failed", f"Error: {message}")
+
+        self.active_download_row = None
+        self._current_download_tool_name = None
 
     def _write_exe_path_to_config(self, exe_name, exe_path):
         """Write the executable path to config.json with the format {exe_name}_exe_path."""
@@ -1069,26 +1065,112 @@ class SetupTab(QWidget):
     def _generate_mount_scripts_files(self, bin_dir, tool_type):
         """Generate the appropriate mount/unmount scripts based on tool type."""
         assets_dir = constants.ASSETS_DIR
-        template_path = os.path.join(assets_dir, "combined.cmd.set")
-        if not os.path.exists(template_path):
-            logging.warning(f"Mount script template 'combined.cmd.set' not found: {template_path}")
-            return
-
-        script_name = ""
+        
+        # Determine script names based on tool type
+        mount_script_name = ""
         if tool_type == "native":
-            script_name = "nativemount.cmd"
+            mount_script_name = "nativemount"
         elif tool_type == "wincdemu":
-            script_name = "cdemu.cmd"
+            mount_script_name = "cdemu"
         elif tool_type == "imgdrive":
-            script_name = "imgdrive.cmd"
+            mount_script_name = "imgdrive"
         elif tool_type == "cdmage":
-            script_name = "cdmage.cmd"
+            mount_script_name = "cdmage"
         elif tool_type == "osf":
-            script_name = "osf.cmd"
+            mount_script_name = "osf"
+        
+        if not mount_script_name:
+            logging.warning(f"Unknown mount tool type: {tool_type}")
+            return
+        
+        # Generate mount script (handles both mount and unmount via flag)
+        if os.name == 'nt':
+            # Windows: use combined.cmd.set template
+            template_path = os.path.join(assets_dir, "combined.cmd.set")
+            if os.path.exists(template_path):
+                dest_path = os.path.join(bin_dir, f"{mount_script_name}.cmd")
+                self._copy_template_file(template_path, dest_path)
+                
+                # Create _unmount.cmd that calls the mount script with unmount flag
+                unmount_dest = os.path.join(bin_dir, "_unmount.cmd")
+                unmount_content = f"""@echo off
+REM Universal unmount script - calls mount scripts with unmount flag
+set "ISO=%~1"
+set "BIN_DIR=%~dp0"
 
-        if script_name:
-            dest_path = os.path.join(bin_dir, script_name)
-            self._copy_template_file(template_path, dest_path)
+REM Try all available mount tools with unmount flag
+if exist "%BIN_DIR%{mount_script_name}.cmd" (
+    call "%BIN_DIR%{mount_script_name}.cmd" "%ISO%" --unmount
+    exit /b %ERRORLEVEL%
+)
+
+REM Fallback to native PowerShell unmount
+powershell -command "Dismount-DiskImage -ImagePath '%ISO%'" >nul 2>&1
+exit /b %ERRORLEVEL%
+"""
+                try:
+                    with open(unmount_dest, 'w', encoding='utf-8') as f:
+                        f.write(unmount_content)
+                except Exception as e:
+                    logging.error(f"Failed to create unmount script: {e}")
+            else:
+                logging.warning(f"Mount script template not found: {template_path}")
+        else:
+            # Linux/macOS: use combined.sh.set template
+            template_path = os.path.join(assets_dir, "combined.sh.set")
+            if os.path.exists(template_path):
+                dest_path = os.path.join(bin_dir, f"{mount_script_name}.sh")
+                self._copy_template_file(template_path, dest_path)
+                # Make script executable
+                try:
+                    os.chmod(dest_path, 0o755)
+                except Exception as e:
+                    logging.error(f"Failed to make script executable: {e}")
+                
+                # Create _unmount.sh that calls the mount script with unmount flag
+                unmount_dest = os.path.join(bin_dir, "_unmount.sh")
+                unmount_content = f"""#!/bin/bash
+# Universal unmount script - calls mount scripts with unmount flag
+DISCIMAGE="$1"
+BIN_DIR="$(dirname "$0")"
+
+# Try the selected mount tool with unmount flag
+if [ -f "$BIN_DIR/{mount_script_name}.sh" ]; then
+    "$BIN_DIR/{mount_script_name}.sh" "$DISCIMAGE" --unmount
+    exit $?
+fi
+
+# Fallback unmount logic
+if [ -f "drvltr" ]; then
+    MOUNTPOINT=$(cat "drvltr")
+    
+    # Try cdemu
+    if command -v cdemu &> /dev/null; then
+        cdemu unload 0 &> /dev/null
+        rm -f "drvltr"
+        exit 0
+    fi
+    
+    # Try udisksctl
+    if command -v udisksctl &> /dev/null && [ ! -z "$MOUNTPOINT" ]; then
+        udisksctl unmount -b "$MOUNTPOINT" 2>/dev/null
+        udisksctl loop-delete -b "$MOUNTPOINT" 2>/dev/null
+        rm -f "drvltr"
+        exit 0
+    fi
+fi
+
+echo "Could not unmount disc image."
+exit 1
+"""
+                try:
+                    with open(unmount_dest, 'w', encoding='utf-8') as f:
+                        f.write(unmount_content)
+                    os.chmod(unmount_dest, 0o755)
+                except Exception as e:
+                    logging.error(f"Failed to create unmount script: {e}")
+            else:
+                logging.warning(f"Mount script template not found: {template_path}")
 
     def _copy_template_file(self, template_path, dest_path):
         """Copy a template file to destination with variable replacement."""

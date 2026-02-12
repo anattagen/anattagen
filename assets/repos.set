@@ -26,6 +26,7 @@ ds4windowscmd = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$
 
 [WINDOWING]
 borderlessgaming = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+borderless= $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 borderstripper = $SOURCEHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 fullscreenizer = $SOURCEHOST/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAMEraw/refs/heads/main]
 

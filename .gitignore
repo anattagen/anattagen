@@ -27,6 +27,7 @@ bin/*.xml
 bin/*.settings
 bin/*.config
 bin/*.json
+bin/*.cmd
 bin/wincdemu.exe
 bin/ds4windows
 bin/ds4windowscmd

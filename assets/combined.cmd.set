@@ -1,48 +1,33 @@
 @echo off
+setlocal enabledelayedexpansion
 set "ISO=%~1"
 set "SCRIPT_NAME=%~n0"
+set "FLAG=%~2"
 
-:: Unmount Logic
-if /I "%SCRIPT_NAME%"=="_unmount" (
-    :: Try Native
-    powershell -command "Dismount-DiskImage -ImagePath '%ISO%'" >nul 2>&1
-    
-    :: Try WinCDEmu
-    if not "[$_$(WINCDEMU_EXE_PATH)]"=="" (
-        "[$_$(WINCDEMU_EXE_PATH)]" /unmount "%ISO%" >nul 2>&1
-    )
-    
-    :: Try iMount
-    if not "[$_$(IMOUNT_EXE_PATH)]"=="" (
-        "[$_$(IMOUNT_EXE_PATH)]" -unmount "%ISO%" >nul 2>&1
-    )
-    
-    :: Try OSF
-    if not "[$_$(OSF_EXE_PATH)]"=="" (
-        "[$_$(OSF_EXE_PATH)]" -unmount "%ISO%" >nul 2>&1
-    )
-    
-    goto :eof
-)
+:: Check for unmount flag
+if /I "%FLAG%"=="-unmount" goto :unmount
+if /I "%FLAG%"=="/unmount" goto :unmount
+if /I "%FLAG%"=="--unmount" goto :unmount
 
-:: Mount Logic
+:: Check if script name indicates unmount
+if /I "%SCRIPT_NAME%"=="_unmount" goto :unmount
+
+:: ============================================
+:: MOUNT LOGIC
+:: ============================================
+
 if /I "%SCRIPT_NAME%"=="nativemount" (
     powershell -command "Mount-DiskImage -ImagePath '%ISO%'"
     goto :eof
 )
 
 if /I "%SCRIPT_NAME%"=="cdemu" (
-    "[$_$(WINCDEMU_EXE_PATH)]" /mount "%ISO%"
-    goto :eof
-)
-
-if /I "%SCRIPT_NAME%"=="imount" (
-    "[$_$(IMOUNT_EXE_PATH)]" -mount "%ISO%"
+    "[$_$(WINCDEMU_EXE_PATH)]" "%ISO%"
     goto :eof
 )
 
 if /I "%SCRIPT_NAME%"=="osf" (
-    "[$_$(OSF_EXE_PATH)]" -mount "%ISO%"
+    "[$_$(OSF_EXE_PATH)]" /mount "%ISO%"
     goto :eof
 )
 
@@ -50,3 +35,47 @@ if /I "%SCRIPT_NAME%"=="cdmage" (
     "[$_$(CDMAGE_EXE_PATH)]" /mount "%ISO%"
     goto :eof
 )
+
+if /I "%SCRIPT_NAME%"=="imgdrive" (
+    "[$_$(IMGDRIVE_EXE_PATH)]" /mount "%ISO%"
+    goto :eof
+)
+
+goto :eof
+
+:: ============================================
+:: UNMOUNT LOGIC
+:: ============================================
+:unmount
+
+:: Try Native
+powershell -command "Dismount-DiskImage -ImagePath '%ISO%'" >nul 2>&1
+if %ERRORLEVEL%==0 goto :eof
+
+:: Try WinCDEmu
+if not "[$_$(WINCDEMU_EXE_PATH)]"=="" (
+    "[$_$(WINCDEMU_EXE_PATH)]" /unmount "%ISO%" >nul 2>&1
+    if %ERRORLEVEL%==0 goto :eof
+)
+
+:: Try OSF
+if not "[$_$(OSF_EXE_PATH)]"=="" (
+    "[$_$(OSF_EXE_PATH)]" -unmount "%ISO%" >nul 2>&1
+    if %ERRORLEVEL%==0 goto :eof
+)
+
+:: Try CDMage
+if not "[$_$(CDMAGE_EXE_PATH)]"=="" (
+    "[$_$(CDMAGE_EXE_PATH)]" -eject >nul 2>&1
+    if %ERRORLEVEL%==0 goto :eof
+)
+
+:: Try ImgDrive
+if not "[$_$(IMGDRIVE_EXE_PATH)]"=="" (
+    "[$_$(IMGDRIVE_EXE_PATH)]" -u "%ISO%" >nul 2>&1
+    if %ERRORLEVEL%==0 goto :eof
+)
+
+:eof
+endlocal
+exit /b
