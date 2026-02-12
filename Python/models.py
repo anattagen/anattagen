@@ -88,9 +88,6 @@ class AppConfig:
         self.multimonitor_media_mode = "CEN"
 
         # Setup Tab: Appearance
-        self.app_font = "System"
-        self.app_theme = "Dark"
-        self.font_size = 10
         self.editor_page_size = 50
 
         # Setup Tab: Execution Sequences

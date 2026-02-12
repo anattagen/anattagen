@@ -12,7 +12,6 @@ import collections
 import re
 import difflib
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor
 from Python import constants
 from Python.managers.index_manager import backup_index
 
@@ -693,11 +692,11 @@ class EditorTab(QWidget):
 
             # Disc Mount
             'disc_mount_path': config.disc_mount_path, 'disc_mount_enabled': config.defaults.get('disc_mount_path_enabled', True), 'disc_mount_overwrite': config.overwrite_states.get('disc_mount_path', True),
-            'disc_mount_options': config.disc_mount_options, 'disc_mount_arguments': config.disc_mount_arguments, 'disc_mount_run_wait': config.run_wait_states.get('disc_mount_path_run_wait', False),
+            'disc_mount_options': config.disc_mount_path_options, 'disc_mount_arguments': config.disc_mount_path_arguments, 'disc_mount_run_wait': config.run_wait_states.get('disc_mount_path_run_wait', False),
 
             # Disc Unmount
             'disc_unmount_path': config.disc_unmount_path, 'disc_unmount_enabled': config.defaults.get('disc_unmount_path_enabled', True), 'disc_unmount_overwrite': config.overwrite_states.get('disc_unmount_path', True),
-            'disc_unmount_options': config.disc_unmount_options, 'disc_unmount_arguments': config.disc_unmount_arguments, 'disc_unmount_run_wait': config.run_wait_states.get('disc_unmount_path_run_wait', False),
+            'disc_unmount_options': config.disc_unmount_path_options, 'disc_unmount_arguments': config.disc_unmount_path_arguments, 'disc_unmount_run_wait': config.run_wait_states.get('disc_unmount_path_run_wait', False),
         }
         
         self.original_data.append(copy.deepcopy(game_data))
@@ -969,8 +968,6 @@ class EditorTab(QWidget):
             constants.EditorCols.ISO_PATH
         ]
         
-        invalid_color = QColor(144, 238, 144) # Light Green
-        
         for row in range(self.table.rowCount()):
             for col_enum in path_cols:
                 col = col_enum.value
@@ -991,16 +988,8 @@ class EditorTab(QWidget):
                     clean_path = path[2:]
                 
                 if clean_path and not os.path.exists(clean_path):
-                    # Highlight
-                    if widget:
-                        widget.setStyleSheet(f"background-color: {invalid_color.name()}; color: black;")
-                    else:
-                        item = self.table.item(row, col)
-                        if not item:
-                            item = QTableWidgetItem()
-                            self.table.setItem(row, col, item)
-                        item.setBackground(invalid_color)
-                        item.setForeground(QColor("black"))
+                    # Path is invalid but no visual highlighting
+                    pass
 
     def clone_game(self, row):
         """Clone the game at the specified row or selected rows."""
@@ -1783,14 +1772,8 @@ class EditorTab(QWidget):
         return widget
 
     def _apply_merged_widget_styling(self, line_edit):
-        """Apply Bold/Underline/Red if LC (> prefix) and file > 10MB."""
-        text = line_edit.text()
-        style = ""
-        if text.startswith("> "):
-            path = text[2:]
-            if path and os.path.exists(path) and os.path.isfile(path) and os.path.getsize(path) > 10 * 1024 * 1024:
-                style = "QLineEdit { font-weight: bold; text-decoration: underline; color: red; }"
-        line_edit.setStyleSheet(style)
+        """Apply styling removed - no visual indicators."""
+        pass
 
     def _on_checkbox_changed(self, row, col, state):
         self._sync_cell_to_data(row, col)
@@ -2471,70 +2454,9 @@ class EditorTab(QWidget):
         self.table.blockSignals(False) # Unblock signals
 
     def _apply_styling(self, row, game_data, duplicates):
-        """Apply background colors based on game state."""
-        # Helper to set background
-        def set_bg(r, c, color):
-            item = self.table.item(r, c)
-            if item:
-                if color:
-                    item.setBackground(color)
-                    item.setForeground(QColor("black")) # Ensure readability against colored bg
-                else:
-                    item.setData(Qt.ItemDataRole.BackgroundRole, None)
-                    item.setData(Qt.ItemDataRole.ForegroundRole, None)
-            
-            widget = self.table.cellWidget(r, c)
-            if widget:
-                if color:
-                    # Set text color to black to ensure readability
-                    widget.setStyleSheet(f"background-color: {color.name()}; color: black;")
-                else:
-                    widget.setStyleSheet("")
-
-        # 1. Check Create status (Grey Row) - Prioritized
-        is_created = game_data.get('create', False)
-        if not is_created:
-            row_color = QColor(211, 211, 211) # Light Grey
-            for col in range(self.table.columnCount()):
-                set_bg(row, col, row_color)
-            return # Prioritize this, ignore others
-
-        # Clear row color if created
-        for col in range(self.table.columnCount()):
-            set_bg(row, col, None)
-
-        # 2. Empty Steam ID (Yellow)
-        steam_id = str(game_data.get('steam_id', ''))
-        if not steam_id or steam_id == 'NOT_FOUND_IN_DATA':
-            set_bg(row, constants.EditorCols.STEAMID.value, QColor(255, 255, 224)) # Light Yellow
-
-        # 3. LC Propagation (Purple)
-        # Check all path columns for ">" symbol
-        path_cols = [
-            constants.EditorCols.CM_PATH, constants.EditorCols.BW_PATH, constants.EditorCols.MM_PATH,
-            constants.EditorCols.MM_GAME_PROFILE, constants.EditorCols.MM_DESKTOP_PROFILE,
-            constants.EditorCols.PLAYER1_PROFILE, constants.EditorCols.PLAYER2_PROFILE, constants.EditorCols.MEDIACENTER_PROFILE,
-            constants.EditorCols.JA_PATH, constants.EditorCols.JB_PATH,
-            constants.EditorCols.PRE1_PATH, constants.EditorCols.POST1_PATH,
-            constants.EditorCols.PRE2_PATH, constants.EditorCols.POST2_PATH,
-            constants.EditorCols.PRE3_PATH, constants.EditorCols.POST3_PATH,
-            constants.EditorCols.LAUNCHER_EXE,
-            constants.EditorCols.DM_PATH, constants.EditorCols.DU_PATH,
-            constants.EditorCols.ISO_PATH
-        ]
-        
-        for col_enum in path_cols:
-            col = col_enum.value
-            widget = self.table.cellWidget(row, col)
-            if widget:
-                le = widget.findChild(QLineEdit)
-                if le and le.text().strip().startswith(">"):
-                    set_bg(row, col, QColor(230, 230, 250)) # Lavender
-
-        # 4. Duplicate Name Override (Red)
-        name_override = game_data.get('name_override', '').strip()
-        if name_override and name_override in duplicates:
-             set_bg(row, constants.EditorCols.NAME_OVERRIDE.value, QColor(255, 220, 220)) # Light Red
+        """Apply background colors based on game state - styling removed."""
+        # All visual styling has been removed
+        pass
 
     def get_all_game_data(self):
         """Extract all game data from the table."""

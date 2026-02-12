@@ -203,7 +203,6 @@ class DeploymentTab(QWidget):
         self.indexing_progress.setVisible(False)
 
         self.index_sources_button = QPushButton("INDEX SOURCES")
-        self.index_sources_button.setStyleSheet("QPushButton { font-weight: bold; background-color: #4CAF50; color: white; font-size: 120%; }")
         self.index_sources_button.clicked.connect(self.index_sources_requested.emit)
         self.index_sources_button.setMinimumHeight(40)
 
@@ -248,7 +247,6 @@ class DeploymentTab(QWidget):
 
         # Create button shows dynamic count of selected items
         self.create_button = QPushButton()
-        self.create_button.setStyleSheet("QPushButton { font-weight: bold; background-color: #4CAF50; color: white; padding: 8px; }")
 
         # Layout for creation options
         creation_content_layout = QVBoxLayout()
@@ -317,10 +315,8 @@ class DeploymentTab(QWidget):
         self.indexing_progress.setVisible(active)
         if active:
             self.index_sources_button.setText("CANCEL")
-            self.index_sources_button.setStyleSheet("QPushButton { font-weight: bold; background-color: #F44336; color: white; font-size: 120%; }")
         else:
             self.index_sources_button.setText("INDEX SOURCES")
-            self.index_sources_button.setStyleSheet("QPushButton { font-weight: bold; background-color: #4CAF50; color: white; font-size: 120%; }")
 
     def show_log_viewer(self):
         """Open the modal log viewer dialog."""
@@ -382,11 +378,6 @@ class DeploymentTab(QWidget):
                 alert = True
         
         self.steam_status_textbox.setText("\n".join(status_parts))
-        
-        if alert:
-            self.steam_status_textbox.setStyleSheet("QTextEdit { color: red; font-weight: bold; }")
-        else:
-            self.steam_status_textbox.setStyleSheet("")
 
     def update_overwrite_checkboxes(self, config: AppConfig, specific_key: str = None):
         """Uncheck overwrite boxes if the corresponding path is empty or disabled."""

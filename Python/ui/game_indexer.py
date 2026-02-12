@@ -264,11 +264,16 @@ def index_games(main_window, progress_callback=None) -> list:
                 logging.info("Indexing cancelled by user.")
                 return found_executables
 
+            # Check if this directory is excluded or is a subdirectory of an excluded directory
+            root_normalized = os.path.normpath(root).lower()
             is_excluded = any(
-                os.path.normpath(root).lower() == os.path.normpath(excluded).lower()
+                root_normalized == os.path.normpath(excluded).lower() or
+                root_normalized.startswith(os.path.normpath(excluded).lower() + os.sep)
                 for excluded in config.excluded_dirs
             )
             if is_excluded:
+                # Skip this directory and all its subdirectories
+                dirs[:] = []  # Clear dirs list to prevent os.walk from descending
                 continue
 
             for filename in files:

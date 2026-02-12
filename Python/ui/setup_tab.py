@@ -10,9 +10,8 @@ from PyQt6.QtWidgets import (
     QComboBox, QHBoxLayout, QCheckBox, QTabWidget,
     QFileDialog, QApplication, QSpinBox, QMessageBox, QMenu, QInputDialog,
     QDialog, QDialogButtonBox, QLineEdit, QProgressDialog, QGridLayout, QDoubleSpinBox,
-    QFontComboBox, QStyle
+    QStyle
 )
-from PyQt6.QtGui import QFontDatabase, QFont, QPalette, QColor
 import re
 from PyQt6.QtCore import pyqtSignal, Qt, QThread, pyqtSlot
 from Python.models import AppConfig
@@ -320,8 +319,7 @@ class SetupTab(QWidget):
         # Launcher Configuration Group
         launcher_group = QGroupBox("Launcher Configuration")
         launcher_layout = QFormLayout(launcher_group)
-        self.path_rows["launcher_executable"] = PathConfigRow("launcher_executable", is_directory=False, add_enabled=False, add_cen_lc=True, use_combobox=False)
-        self.path_rows["launcher_executable"].line_edit.setPlaceholderText(constants.LAUNCHER_EXECUTABLE)
+        self.path_rows["launcher_executable"] = PathConfigRow("launcher_executable", is_directory=False, add_enabled=False, add_cen_lc=True, use_combobox=True)
         self._add_path_row(launcher_layout, "Launcher Executable:", "launcher_executable", self.path_rows["launcher_executable"])
 
         # Moved checkboxes from Deployment Tab
@@ -430,57 +428,37 @@ class SetupTab(QWidget):
         sequences_layout.addWidget(exit_sequence_group)
         sequences_section = AccordionSection("EXECUTION SEQUENCES", sequences_widget)
 
-        # --- Section 4: Appearance & Behavior ---
-        appearance_widget = QWidget()
-        appearance_layout = QFormLayout(appearance_widget)
+        # --- Section 4: Behavior ---
+        behavior_widget = QWidget()
+        behavior_layout = QFormLayout(behavior_widget)
         # Logging Verbosity
         self.logging_verbosity_combo = QComboBox()
         self.logging_verbosity_combo.addItems(["None", "Low", "Medium", "High", "Debug"])
-        appearance_layout.addRow("LOGGING VERBOSITY:", self.logging_verbosity_combo)
+        behavior_layout.addRow("LOGGING VERBOSITY:", self.logging_verbosity_combo)
         
         # Fuzzy Match Cutoff
         self.fuzzy_match_spin = QDoubleSpinBox()
         self.fuzzy_match_spin.setRange(0.1, 1.0)
         self.fuzzy_match_spin.setSingleStep(0.05)
         self.fuzzy_match_spin.setToolTip("Sensitivity for fuzzy name matching (0.1 = loose, 1.0 = exact). Default: 0.6")
-        appearance_layout.addRow("Fuzzy Match Sensitivity:", self.fuzzy_match_spin)
-
-        # Theme
-        self.theme_combo = QComboBox()
-        self.theme_combo.addItems(["System", "Dark", "Light"])
-        appearance_layout.addRow("Theme:", self.theme_combo)
-
-        # Font Settings
-        self.font_combo = QFontComboBox()
-        appearance_layout.addRow("Font Family:", self.font_combo)
-        self.font_size_spin = QSpinBox()
-        self.font_size_spin.setRange(8, 32)
-        appearance_layout.addRow("Font Size:", self.font_size_spin)
-        self.section_combo = QComboBox()
-        self.section_combo.addItems(["Global", "Editor", "Setup", "Deployment"])
-        appearance_layout.addRow("Apply Font To:", self.section_combo)
-
-        # Window Effect
-        self.effect_combo = QComboBox()
-        self.effect_combo.addItems(["Opaque", "Transparent", "Acrylic (Simulated)"])
-        appearance_layout.addRow("Window Effect:", self.effect_combo)
+        behavior_layout.addRow("Fuzzy Match Sensitivity:", self.fuzzy_match_spin)
 
         # Editor Page Size
         self.page_size_spin = QSpinBox()
         self.page_size_spin.setRange(25, 2000)
         self.page_size_spin.setValue(50)
         self.page_size_spin.setToolTip("Number of rows per page in the Editor tab (75-2000)")
-        appearance_layout.addRow("Editor Page Size:", self.page_size_spin)
+        behavior_layout.addRow("Editor Page Size:", self.page_size_spin)
         # Restart Button
         self.restart_btn = QPushButton("Reset to Defaults")
         self.restart_btn.setToolTip("Reset all application configuration to defaults")
-        appearance_layout.addRow(self.restart_btn)
-        appearance_section = AccordionSection("APPEARANCE AND BEHAVIOR", appearance_widget)
+        behavior_layout.addRow(self.restart_btn)
+        behavior_section = AccordionSection("BEHAVIOR", behavior_widget)
 
         main_layout.addWidget(source_config_section)
         main_layout.addWidget(paths_section)
         main_layout.addWidget(sequences_section)
-        main_layout.addWidget(appearance_section)
+        main_layout.addWidget(behavior_section)
         main_layout.addStretch()
         self._connect_signals()
         
@@ -492,15 +470,58 @@ class SetupTab(QWidget):
         # If launcher_executable is not a combobox, skip population
         if not self.path_rows["launcher_executable"].use_combobox:
             return
-            
+        
+        combo = self.path_rows["launcher_executable"].combo
+        
+        # Clear any existing items first
+        combo.clear()
+        
+        # The preferred default launcher
+        default_launcher = constants.LAUNCHER_EXECUTABLE  # bin/Launcher.exe
+        
+        # Scan bin directory for launcher-related files
         bin_dir = os.path.join(constants.APP_ROOT_DIR, "bin")
+        launcher_files = []
+        
         if os.path.exists(bin_dir):
-            valid_extensions = {'.exe', '.7zx', '.bat', '.cmd', '.ps1', '.jar', '.wsc', '.wsf', '.wsh'}
+            # Valid extensions for executables, shortcuts, and scripts
+            valid_extensions = {'.exe', '.bat', '.cmd', '.ps1', '.vbs', '.js', '.lnk', '.url'}
+            
             for f in os.listdir(bin_dir):
                 name, ext = os.path.splitext(f)
+                # Check if filename contains "launcher" (case-insensitive) and has valid extension
                 if "launcher" in name.lower() and ext.lower() in valid_extensions:
                     full_path = os.path.join(bin_dir, f)
-                    self.path_rows["launcher_executable"].combo.addItem(full_path)
+                    launcher_files.append((f, full_path))
+        
+        # Sort launcher files, but prioritize Launcher.exe first
+        def sort_key(item):
+            filename, _ = item
+            # Launcher.exe gets priority 0, everything else gets priority 1
+            if filename.lower() == "launcher.exe":
+                return (0, filename.lower())
+            else:
+                return (1, filename.lower())
+        
+        launcher_files.sort(key=sort_key)
+        
+        # Add all launcher files to combo
+        for filename, full_path in launcher_files:
+            combo.addItem(full_path)
+        
+        # Set the default launcher as the current selection if it exists
+        if os.path.exists(default_launcher):
+            idx = combo.findText(default_launcher)
+            if idx >= 0:
+                combo.setCurrentIndex(idx)
+            else:
+                # If somehow not in list, add it and select it
+                combo.insertItem(0, default_launcher)
+                combo.setCurrentIndex(0)
+        
+        # Set placeholder text for the combo's line edit
+        if combo.lineEdit():
+            combo.lineEdit().setPlaceholderText(default_launcher)
 
     def _show_options_args_dialog(self, pos, config_key, label_text):
         """Show a modal dialog to edit options and arguments for the selected app."""
@@ -545,10 +566,8 @@ class SetupTab(QWidget):
             
             if is_match:
                 status_label.setText("✓ Matches defaults")
-                status_label.setStyleSheet("color: green;")
             else:
                 status_label.setText("⚠ Custom values")
-                status_label.setStyleSheet("color: orange;")
 
         options_edit.textChanged.connect(check_defaults)
         args_edit.textChanged.connect(check_defaults)
@@ -642,14 +661,7 @@ class SetupTab(QWidget):
         self.logging_verbosity_combo.currentTextChanged.connect(self.main_window._on_logging_verbosity_changed)
         self.fuzzy_match_spin.valueChanged.connect(self.config_changed.emit)
         
-        # Appearance
-        self.theme_combo.currentTextChanged.connect(self.config_changed.emit)
-        self.font_combo.currentFontChanged.connect(self.config_changed.emit)
-        self.font_size_spin.valueChanged.connect(self.config_changed.emit)
-        self.section_combo.currentTextChanged.connect(self.config_changed.emit)
-        self.effect_combo.currentTextChanged.connect(self.config_changed.emit)
-        
-        # Appearance
+        # Behavior
         self.page_size_spin.valueChanged.connect(self.config_changed.emit)
         self.restart_btn.clicked.connect(self._reset_to_defaults)
 
@@ -1304,14 +1316,6 @@ class SetupTab(QWidget):
         self.exclude_manager_checkbox.setChecked(config.exclude_selected_manager_games)
         self.logging_verbosity_combo.setCurrentText(config.logging_verbosity)
         self.fuzzy_match_spin.setValue(getattr(config, 'fuzzy_match_cutoff', 0.6))
-        
-        self.theme_combo.setCurrentText(getattr(config, 'theme', 'System'))
-        font_family = getattr(config, 'font_family', '')
-        if font_family:
-            self.font_combo.setCurrentFont(QFont(font_family))
-        self.font_size_spin.setValue(getattr(config, 'font_size', 9))
-        self.section_combo.setCurrentText(getattr(config, 'font_section', 'Global'))
-        self.effect_combo.setCurrentText(getattr(config, 'window_effect', 'Opaque'))
 
         self.run_as_admin_checkbox.setChecked(config.run_as_admin)
         self.use_kill_list_checkbox.setChecked(config.use_kill_list)
@@ -1323,11 +1327,19 @@ class SetupTab(QWidget):
         for attr_name in self.PATH_ATTRIBUTES:
             if attr_name in self.path_rows:
                 row = self.path_rows[attr_name]
-                row.path = getattr(config, attr_name, "")
+                path_value = getattr(config, attr_name, "")
+                
+                # Special handling for launcher_executable: if empty, keep the default selection
+                if attr_name == "launcher_executable" and not path_value:
+                    # Don't set the path, keep the default from _populate_launcher_combo
+                    pass
+                else:
+                    row.path = path_value
+                
                 row.mode = config.deployment_path_modes.get(attr_name, "CEN")
                 
                 # Default state logic: Uncheck if path is empty, unless it's a core directory
-                if not row.path and attr_name not in ["profiles_dir", "launchers_dir"]:
+                if not path_value and attr_name not in ["profiles_dir", "launchers_dir"]:
                     row.enabled = False
                 else:
                     row.enabled = config.defaults.get(f"{attr_name}_enabled", True)
@@ -1365,12 +1377,6 @@ class SetupTab(QWidget):
         config.logging_verbosity = self.logging_verbosity_combo.currentText()
         config.fuzzy_match_cutoff = self.fuzzy_match_spin.value()
         config.editor_page_size = self.page_size_spin.value()
-        
-        config.theme = self.theme_combo.currentText()
-        config.font_family = self.font_combo.currentFont().family()
-        config.font_size = self.font_size_spin.value()
-        config.font_section = self.section_combo.currentText()
-        config.window_effect = self.effect_combo.currentText()
 
         config.run_as_admin = self.run_as_admin_checkbox.isChecked()
         config.use_kill_list = self.use_kill_list_checkbox.isChecked()

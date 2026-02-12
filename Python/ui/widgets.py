@@ -149,23 +149,8 @@ class PathConfigRow(QWidget):
 
     def _check_styling(self):
         """Apply styling if LC is enabled and file > 10MB."""
-        path = self.path
-        style = ""
-         
-        if self.mode == "LC" and not self.overwrite:
-            style = "QLineEdit { color: red; }"
-        elif self.mode == "CEN":
-            style = "QLineEdit { color: green; }"
-        elif self.mode == "LC" and path and os.path.exists(path):
-            try:
-                if os.path.isfile(path) and os.path.getsize(path) > 10 * 1024 * 1024:
-                    style = "QLineEdit { font-weight: bold; text-decoration: underline; color: red; }"
-            except Exception:
-                pass
-        if self.use_combobox:
-            self.combo.lineEdit().setStyleSheet(style)
-        else:
-            self.line_edit.setStyleSheet(style)
+        # Styling removed - no visual indicators for LC/CEN modes
+        pass
 
     def _update_ui_state(self):
         """Enable or disable widgets based on the enabled checkbox."""

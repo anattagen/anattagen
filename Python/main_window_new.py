@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QMessageBox, QMenu, QFileDialog, QProgressDialog
 )
 from PyQt6.QtCore import Qt, pyqtSlot
-from PyQt6.QtGui import QCursor, QIcon, QPalette, QColor, QFont
+from PyQt6.QtGui import QCursor, QIcon
 import os
 from Python.ui.deployment_tab import DeploymentTab
 from Python.ui.setup_tab import SetupTab
@@ -15,25 +15,16 @@ from Python.managers.data_manager import DataManager
 from Python.managers.steam_manager import SteamManager
 from Python import constants
 import logging
-try:
-    import qdarktheme
-except ImportError:
-    qdarktheme = None
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         """Initialize the main window"""
         super().__init__()
-         # Store original style before any changes are made
-        app = QApplication.instance()
-        self.original_style_name = app.style().objectName()
-        self.original_palette = app.palette()
         
         # Initialize managers
         self.config_manager = ConfigManager()
         self.config = self.config_manager.load_config()
-        self._normalize_config()
 
         self.indexing_cancelled = False
         self.data_manager = DataManager(self.config, self)
@@ -50,22 +41,9 @@ class MainWindow(QMainWindow):
         
         # Sync the UI to reflect the loaded configuration
         self.sync_ui_from_config()
-        self.apply_appearance_settings()
         
         # Show the window
         self.show()
-
-    def _normalize_config(self):
-        """Migrate legacy settings to current standard before UI sync."""
-        # Theme migration
-        theme = getattr(self.config, 'theme', 'System')
-        if theme == 'System' and hasattr(self.config, 'app_theme'):
-             self.config.theme = self.config.app_theme
-        
-        # Font migration
-        font_family = getattr(self.config, 'font_family', '')
-        if not font_family and hasattr(self.config, 'app_font'):
-             self.config.font_family = self.config.app_font
 
     def reset_configuration_to_defaults(self):
         """Handles the logic for resetting the app config to its default state."""
@@ -86,7 +64,6 @@ class MainWindow(QMainWindow):
         self.setGeometry(100, 100, 740, 240)  # Reduced from 950, 750 to 800, 600
 
         self.tabs = QTabWidget()
-        self.tabs.setStyleSheet("QTabBar::tab { font-weight: bold; }")
         self.setCentralWidget(self.tabs)
 
         # Create all tab widgets first
@@ -372,79 +349,6 @@ class MainWindow(QMainWindow):
         # Update the model and save the configuration
         self.config.logging_verbosity = level_text
         self.config_manager.save_config(self.config)
-        
-    def apply_appearance_settings(self):
-        """Apply theme, font, and other appearance settings."""
-        app = QApplication.instance()
-        
-        # Theme
-        theme = getattr(self.config, 'theme', 'System')
-
-        if qdarktheme:
-            try:
-                if hasattr(qdarktheme, 'setup_theme'):
-                    if theme == 'Dark':
-                        qdarktheme.setup_theme(theme="dark")
-                    elif theme == 'Light':
-                        qdarktheme.setup_theme(theme="light")
-                    else:
-                        qdarktheme.setup_theme(theme="auto")
-                elif hasattr(qdarktheme, 'setup'):
-                    if theme == 'Dark':
-                        qdarktheme.setup(theme="dark")
-                    elif theme == 'Light':
-                        qdarktheme.setup(theme="light")
-                    else:
-                        qdarktheme.setup(theme="auto")
-                elif hasattr(qdarktheme, 'load_stylesheet'):
-                    style = "dark" if theme == 'Dark' else "light"
-                    app.setStyleSheet(qdarktheme.load_stylesheet(style))
-            except Exception as e:
-                logging.error(f"Failed to apply qdarktheme: {e}")
-        else:
-            # Fallback if qdarktheme is not installed
-            if theme == 'Dark':
-                # ... existing manual dark palette code ...
-                palette = QPalette()
-                palette.setColor(QPalette.ColorRole.Window, QColor(53, 53, 53))
-                palette.setColor(QPalette.ColorRole.WindowText, Qt.GlobalColor.white)
-                palette.setColor(QPalette.ColorRole.Base, QColor(25, 25, 25))
-                palette.setColor(QPalette.ColorRole.AlternateBase, QColor(53, 53, 53))
-                palette.setColor(QPalette.ColorRole.ToolTipBase, Qt.GlobalColor.black)
-                palette.setColor(QPalette.ColorRole.ToolTipText, Qt.GlobalColor.white)
-                palette.setColor(QPalette.ColorRole.Text, Qt.GlobalColor.white)
-                palette.setColor(QPalette.ColorRole.Button, QColor(53, 53, 53))
-                palette.setColor(QPalette.ColorRole.ButtonText, Qt.GlobalColor.white)
-                palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.red)
-                palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
-                palette.setColor(QPalette.ColorRole.Highlight, QColor(42, 130, 218))
-                palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.black)
-                app.setPalette(palette)
-            else:
-                app.setPalette(self.original_palette)
-
-        # Font
-        font_family = getattr(self.config, 'font_family', '')
-
-        font_size = getattr(self.config, 'font_size', 9)
-        section = getattr(self.config, 'font_section', 'Global')
-        
-        if font_family:
-            font = QFont(font_family, font_size)
-            if section == 'Global':
-                app.setFont(font)
-            elif section == 'Editor':
-                self.editor_tab.setFont(font)
-            # Add other sections as needed
-        
-        # Transparency / Effect
-        effect = getattr(self.config, 'window_effect', 'Opaque')
-        if effect == 'Transparent':
-            self.setWindowOpacity(0.9)
-        elif effect == 'Acrylic (Simulated)':
-            self.setWindowOpacity(0.95)
-        else:
-            self.setWindowOpacity(1.0)
 
     def sync_ui_from_config(self):
         """Updates the UI widgets with values from the AppConfig model."""
@@ -456,7 +360,6 @@ class MainWindow(QMainWindow):
         """Updates the AppConfig model from the UI and saves it to disk."""
         self.setup_tab.sync_config_from_ui(self.config)
         self.deployment_tab.sync_config_from_ui(self.config)
-        self.apply_appearance_settings()
                 
         self.config_manager.save_config(self.config)
 
@@ -506,7 +409,7 @@ class MainWindow(QMainWindow):
             overwrite = self.config.overwrite_states.get(overwrite_key, True)
             status_str = f"Create: {enabled}, Overwrite: {overwrite}"
             if not enabled or not overwrite:
-                return f"<b><font color='red'>{name}: {status_str}</font></b>"
+                return f"<b>{name}: {status_str}</b>"
             return f"{name}: {status_str}"
 
         launchers_status = get_status_html("Launchers", "launchers_dir_enabled", "launchers_dir")
