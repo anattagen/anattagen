@@ -28,8 +28,6 @@ bin/*.settings
 bin/*.config
 bin/*.json
 bin/wincdemu.exe
-bin/*.cmd
-bin/*.bat
 bin/ds4windows
 bin/ds4windowscmd
 bin/borderlessgaming
