@@ -17,6 +17,7 @@ steam_filtered.txt
 config.json
 Build.bat
 setup_build_env.bat
+bin/*
 !bin/
 !bin/Launcher.exe
 !bin/Launcher.python.exe
