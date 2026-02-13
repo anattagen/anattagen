@@ -23,6 +23,56 @@ import win32process
 import win32api
 from typing import Dict, List, Optional, Tuple, Union
 
+def find_path_case_insensitive(path: str) -> Optional[str]:
+    """
+    Find a file or directory with case-insensitive matching.
+    Returns the actual path if found, None otherwise.
+    """
+    if not path:
+        return None
+    
+    # If the path exists as-is, return it
+    if os.path.exists(path):
+        return path
+    
+    # Split the path into components
+    path_obj = Path(path)
+    parts = path_obj.parts
+    
+    # Start with the root (drive letter on Windows, / on Unix)
+    if len(parts) == 0:
+        return None
+    
+    # Build the path component by component with case-insensitive matching
+    current_path = parts[0]
+    
+    # For Windows drive letters, ensure we have the backslash
+    if len(current_path) == 2 and current_path[1] == ':':
+        current_path = current_path + '\\'
+    
+    for part in parts[1:]:
+        if not os.path.exists(current_path):
+            return None
+        
+        # List items in current directory
+        try:
+            items = os.listdir(current_path)
+        except (PermissionError, OSError):
+            return None
+        
+        # Find matching item (case-insensitive)
+        found = False
+        for item in items:
+            if item.lower() == part.lower():
+                current_path = os.path.join(current_path, item)
+                found = True
+                break
+        
+        if not found:
+            return None
+    
+    return current_path if os.path.exists(current_path) else None
+
 class GameLauncher:
     def __init__(self):
         # Initialize variables
@@ -256,41 +306,49 @@ class GameLauncher:
         self.show_message("Running pre-launch applications")
         
         # Run pre-launch app 1
-        if self.pre_launch_app_1 and os.path.exists(self.pre_launch_app_1):
-            self.run_process(self.pre_launch_app_1, wait=self.pre_launch_app_1_wait)
+        app1 = find_path_case_insensitive(self.pre_launch_app_1)
+        if app1:
+            self.run_process(app1, wait=self.pre_launch_app_1_wait)
         
         # Run pre-launch app 2
-        if self.pre_launch_app_2 and os.path.exists(self.pre_launch_app_2):
-            self.run_process(self.pre_launch_app_2, wait=self.pre_launch_app_2_wait)
+        app2 = find_path_case_insensitive(self.pre_launch_app_2)
+        if app2:
+            self.run_process(app2, wait=self.pre_launch_app_2_wait)
         
         # Run pre-launch app 3
-        if self.pre_launch_app_3 and os.path.exists(self.pre_launch_app_3):
-            self.run_process(self.pre_launch_app_3, wait=self.pre_launch_app_3_wait)
+        app3 = find_path_case_insensitive(self.pre_launch_app_3)
+        if app3:
+            self.run_process(app3, wait=self.pre_launch_app_3_wait)
         
         # Set up multi-monitor configuration if specified
-        if self.multimonitor_tool and self.mm_game_config and os.path.exists(self.multimonitor_tool) and os.path.exists(self.mm_game_config):
-            self.run_process(f'"{self.multimonitor_tool}" /load "{self.mm_game_config}"', wait=True)
+        mm_tool = find_path_case_insensitive(self.multimonitor_tool)
+        mm_config = find_path_case_insensitive(self.mm_game_config)
+        if mm_tool and mm_config:
+            self.run_process(f'"{mm_tool}" /load "{mm_config}"', wait=True)
         
         # Set up controller mapper if specified
-        if self.controller_mapper_app and self.player1_profile and os.path.exists(self.controller_mapper_app) and os.path.exists(self.player1_profile):
+        mapper_app = find_path_case_insensitive(self.controller_mapper_app)
+        p1_profile = find_path_case_insensitive(self.player1_profile)
+        if mapper_app and p1_profile:
             # Determine which mapper we're using
-            mapper_name = os.path.basename(self.controller_mapper_app).lower()
+            mapper_name = os.path.basename(mapper_app).lower()
             
             if "antimicro" in mapper_name:
                 # For AntiMicroX
-                cmd = f'"{self.controller_mapper_app}" --tray --hidden --profile "{self.player1_profile}"'
-                if self.player2_profile and os.path.exists(self.player2_profile):
-                    cmd += f' --next --profile-controller 2 --profile "{self.player2_profile}"'
+                cmd = f'"{mapper_app}" --tray --hidden --profile "{p1_profile}"'
+                p2_profile = find_path_case_insensitive(self.player2_profile)
+                if p2_profile:
+                    cmd += f' --next --profile-controller 2 --profile "{p2_profile}"'
                 self.run_process(cmd)
             elif "joyxoff" in mapper_name:
                 # For JoyXoff
-                self.run_process(f'"{self.controller_mapper_app}" -load "{self.player1_profile}"')
+                self.run_process(f'"{mapper_app}" -load "{p1_profile}"')
             elif "joy2key" in mapper_name:
                 # For Joy2Key
-                self.run_process(f'"{self.controller_mapper_app}" -load "{self.player1_profile}"')
+                self.run_process(f'"{mapper_app}" -load "{p1_profile}"')
             elif "keysticks" in mapper_name:
                 # For KeySticks
-                self.run_process(f'"{self.controller_mapper_app}" -load "{self.player1_profile}"')
+                self.run_process(f'"{mapper_app}" -load "{p1_profile}"')
     
     def run_game(self):
         """Run the main game executable"""
@@ -304,21 +362,31 @@ class GameLauncher:
         if not self.game_dir:
             self.game_dir = os.path.dirname(self.game_path)
         
+        # Resolve paths case-insensitively
+        game_path = find_path_case_insensitive(self.game_path)
+        game_dir = find_path_case_insensitive(self.game_dir)
+        
+        if not game_path:
+            self.show_message(f"Game executable not found: {self.game_path}")
+            return
+        
         # Run the game
         if self.run_as_admin and platform.system() == 'Windows' and not self.is_admin:
             # Use PowerShell to run as admin
-            cmd = f'powershell -Command "Start-Process \'{self.game_path}\' -Verb RunAs"'
-            self.game_process = self.run_process(cmd, cwd=self.game_dir)
+            cmd = f'powershell -Command "Start-Process \'{game_path}\' -Verb RunAs"'
+            self.game_process = self.run_process(cmd, cwd=game_dir)
         else:
-            self.game_process = self.run_process(f'"{self.game_path}"', cwd=self.game_dir)
+            self.game_process = self.run_process(f'"{game_path}"', cwd=game_dir)
         
         # Run just after launch app if specified
-        if self.just_after_launch_app and os.path.exists(self.just_after_launch_app):
-            self.run_process(self.just_after_launch_app, wait=self.just_after_launch_wait)
+        just_after = find_path_case_insensitive(self.just_after_launch_app)
+        if just_after:
+            self.run_process(just_after, wait=self.just_after_launch_wait)
         
         # If borderless windowing is enabled, run it
-        if self.borderless in ['E', 'K'] and self.borderless_app and os.path.exists(self.borderless_app):
-            self.run_process(self.borderless_app)
+        borderless = find_path_case_insensitive(self.borderless_app)
+        if self.borderless in ['E', 'K'] and borderless:
+            self.run_process(borderless)
         
         # Wait for the game to exit
         if self.game_process:
@@ -329,8 +397,9 @@ class GameLauncher:
         self.show_message("Running post-launch applications")
         
         # Run just before exit app if specified
-        if self.just_before_exit_app and os.path.exists(self.just_before_exit_app):
-            self.run_process(self.just_before_exit_app, wait=self.just_before_exit_wait)
+        just_before = find_path_case_insensitive(self.just_before_exit_app)
+        if just_before:
+            self.run_process(just_before, wait=self.just_before_exit_wait)
         
         # Kill borderless windowing if specified
         if self.borderless == 'K' and self.borderless_app:

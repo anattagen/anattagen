@@ -35,6 +35,58 @@ TASKBAR_HWND = None
 TASKBAR_WAS_HIDDEN = False
 DYNAMIC_SPLASH_HWND = None
 
+# --- Helper Functions ---
+
+def find_path_case_insensitive(path: str) -> Optional[str]:
+    """
+    Find a file or directory with case-insensitive matching.
+    Returns the actual path if found, None otherwise.
+    """
+    if not path:
+        return None
+    
+    # If the path exists as-is, return it
+    if os.path.exists(path):
+        return path
+    
+    # Split the path into components
+    path_obj = Path(path)
+    parts = path_obj.parts
+    
+    # Start with the root (drive letter on Windows, / on Unix)
+    if len(parts) == 0:
+        return None
+    
+    # Build the path component by component with case-insensitive matching
+    current_path = parts[0]
+    
+    # For Windows drive letters, ensure we have the backslash
+    if len(current_path) == 2 and current_path[1] == ':':
+        current_path = current_path + '\\'
+    
+    for part in parts[1:]:
+        if not os.path.exists(current_path):
+            return None
+        
+        # List items in current directory
+        try:
+            items = os.listdir(current_path)
+        except (PermissionError, OSError):
+            return None
+        
+        # Find matching item (case-insensitive)
+        found = False
+        for item in items:
+            if item.lower() == part.lower():
+                current_path = os.path.join(current_path, item)
+                found = True
+                break
+        
+        if not found:
+            return None
+    
+    return current_path if os.path.exists(current_path) else None
+
 # --- Core Functions ---
 
 def show_message(message: str):
@@ -229,7 +281,12 @@ def close_dynamic_splash():
 def run_controller_mapper():
     app = CONFIG.get('controllermapperapp', '')
     p1 = CONFIG.get('player1profile', '')
-    if app and Path(app).exists() and p1 and Path(p1).exists():
+    
+    # Resolve paths case-insensitively
+    app = find_path_case_insensitive(app)
+    p1 = find_path_case_insensitive(p1)
+    
+    if app and p1:
         cmd = f'"{app}" --tray --hidden --profile "{p1}"'
         # Simplified for blueprint; C version will need to build this command string.
         process = run_process(cmd)
@@ -246,13 +303,23 @@ def kill_controller_mapper():
 def run_monitor_config_game():
     tool = CONFIG.get('multimonitortool', '')
     config = CONFIG.get('multimonitorgamingconfig', '')
-    if tool and config and Path(tool).exists() and Path(config).exists():
+    
+    # Resolve paths case-insensitively
+    tool = find_path_case_insensitive(tool)
+    config = find_path_case_insensitive(config)
+    
+    if tool and config:
         run_process(f'"{tool}" /load "{config}"', wait=True)
 
 def run_monitor_config_desktop():
     tool = CONFIG.get('multimonitortool', '')
     config = CONFIG.get('multimonitordesktopconfig', '')
-    if tool and config and Path(tool).exists() and Path(config).exists():
+    
+    # Resolve paths case-insensitively
+    tool = find_path_case_insensitive(tool)
+    config = find_path_case_insensitive(config)
+    
+    if tool and config:
         run_process(f'"{tool}" /load "{config}"', wait=True)
 
 def hide_taskbar():
@@ -269,7 +336,11 @@ def show_taskbar():
 def run_generic_app(app_key: str, wait_key: str):
     app_path = CONFIG.get(app_key, '')
     wait = CONFIG.get(wait_key, False)
-    if app_path and Path(app_path).exists():
+    
+    # Resolve path case-insensitively
+    app_path = find_path_case_insensitive(app_path)
+    
+    if app_path:
         process = run_process(f'"{app_path}"', wait=wait)
         if process and not wait:
             RUNNING_PROCESSES[app_key] = process
@@ -335,7 +406,11 @@ def run_game_process():
     game_path = CONFIG.get('executable', '')
     game_dir = CONFIG.get('directory', '')
 
-    if not (game_path and game_dir and Path(game_path).exists()):
+    # Resolve paths case-insensitively
+    game_path = find_path_case_insensitive(game_path)
+    game_dir = find_path_case_insensitive(game_dir)
+
+    if not (game_path and game_dir):
         show_message("Game executable or directory not found in config.")
         return
 
@@ -343,9 +418,10 @@ def run_game_process():
     GAME_PROCESS = run_process(f'"{game_path}"', cwd=game_dir)
 
     # Handle borderless windowing after game launch
-    if CONFIG.get('borderless') in ['E', 'K'] and CONFIG.get('borderlesswindowingapp'):
+    borderless_app = find_path_case_insensitive(CONFIG.get('borderlesswindowingapp', ''))
+    if CONFIG.get('borderless') in ['E', 'K'] and borderless_app:
         time.sleep(5) # Give the game window time to appear
-        BORDERLESS_PROCESS = run_process(f'"{CONFIG.get("borderlesswindowingapp")}"')
+        BORDERLESS_PROCESS = run_process(f'"{borderless_app}"')
 
     if GAME_PROCESS:
         GAME_PROCESS.wait()

@@ -42,7 +42,7 @@ AntimicroX, keySticks, multimonitortool.
 
 ## Installation
 
-0.99.45.56
+0.99.45.58
 
 Run the installer or extract the binary to a location of your choice, **or** download and build and run the source files and executables.
 ```
