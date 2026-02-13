@@ -16,6 +16,7 @@ python.lnk
 steam_filtered.txt
 config.json
 Build.bat
+Clean.bat
 setup_build_env.bat
 bin/*
 !bin/
