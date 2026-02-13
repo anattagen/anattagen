@@ -16,7 +16,7 @@ OS_NAME=$(uname -s)
 
 if [ "$MODE" = "windows" ]; then
     OUT=launcher.exe
-    LDFLAGS="-luser32 -lshlwapi -lole32 -lpsapi"
+    LDFLAGS="-luser32 -lshlwapi -lole32 -lpsapi -ladvapi32"
     # If on Linux, use cross-compiler
     if [ "$OS_NAME" = "Linux" ]; then
         CC=${CC:-x86_64-w64-mingw32-gcc}

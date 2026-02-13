@@ -78,6 +78,16 @@ typedef struct {
     char cloud_app[MAX_PATH_LEN];
     char cloud_app_options[MAX_CMD_LEN];
     char cloud_app_arguments[MAX_CMD_LEN];
+    
+    // Disc mounting
+    char disc_mount_app[MAX_PATH_LEN];
+    char disc_mount_options[MAX_CMD_LEN];
+    char disc_mount_arguments[MAX_CMD_LEN];
+    int disc_mount_wait;
+    char disc_unmount_app[MAX_PATH_LEN];
+    char disc_unmount_options[MAX_CMD_LEN];
+    char disc_unmount_arguments[MAX_CMD_LEN];
+    int disc_unmount_wait;
 
     // [Options]
     int run_as_admin;
@@ -147,6 +157,8 @@ HWND G_TASKBAR_HWND = NULL;
 BOOL G_TASKBAR_WAS_HIDDEN = FALSE;
 char G_LOG_PATH[MAX_PATH_LEN] = "";
 char G_HOME_DIR[MAX_PATH_LEN] = "";
+char G_PID_FILE[MAX_PATH_LEN] = "";
+BOOL G_IS_ADMIN = FALSE;
 
 // --- Function Prototypes ---
 void show_message(const char* message);
@@ -166,6 +178,11 @@ void add_tracked_process(const char* name, PROCESS_INFORMATION* pi);
 void remove_tracked_process(const char* name);
 void kill_all_tracked_processes();
 void ensure_cleanup();
+BOOL check_admin();
+BOOL check_instances();
+void write_pid_file();
+void cleanup_pid_file();
+void string_replace(char* dest, size_t dest_size, const char* src, const char* find, const char* replace);
 
 // Action function prototypes
 void action_run_controller_mapper(int is_exit);
@@ -177,11 +194,13 @@ void action_show_taskbar();
 void action_run_borderless();
 void action_kill_borderless();
 void action_run_cloud_sync();
-void action_run_generic_app(const char* app_path, int wait);
+void action_run_generic_app(const char* app_path, int wait, const char* options, const char* args);
 void action_kill_game();
 void action_kill_process_list();
 void action_mount_iso();
 void action_unmount_iso();
+void action_mount_disc_with_app();
+void action_unmount_disc_with_app();
 
 // --- Logging Implementation ---
 void log_message(const char* level, const char* message) {
@@ -226,16 +245,51 @@ void trim_whitespace(char* str) {
     }
 }
 
+// --- String Replacement Helper ---
+void string_replace(char* dest, size_t dest_size, const char* src, const char* find, const char* replace) {
+    if (!src || !find || !replace || !dest || dest_size == 0) return;
+    
+    char temp[MAX_CMD_LEN * 2];
+    const char* pos = src;
+    char* out = temp;
+    size_t find_len = strlen(find);
+    size_t replace_len = strlen(replace);
+    size_t remaining = sizeof(temp) - 1;
+    
+    while (*pos && remaining > 0) {
+        if (strncmp(pos, find, find_len) == 0) {
+            // Found match, replace it
+            size_t copy_len = (replace_len < remaining) ? replace_len : remaining;
+            strncpy(out, replace, copy_len);
+            out += copy_len;
+            remaining -= copy_len;
+            pos += find_len;
+        } else {
+            *out++ = *pos++;
+            remaining--;
+        }
+    }
+    *out = '\0';
+    
+    strncpy(dest, temp, dest_size - 1);
+    dest[dest_size - 1] = '\0';
+}
+
 // --- Path Resolution ---
 char* resolve_path(const char* path, char* resolved, size_t resolved_size) {
     if (!path || !resolved || resolved_size == 0) return NULL;
     
-    strncpy(resolved, path, resolved_size - 1);
-    resolved[resolved_size - 1] = '\0';
+    char temp[MAX_CMD_LEN * 2];
+    strncpy(temp, path, sizeof(temp) - 1);
+    temp[sizeof(temp) - 1] = '\0';
     
-    // Simple variable substitution
-    // Note: In a full implementation, you'd use a more robust replacement
-    // This is a simplified version
+    // Variable substitution: $GAMENAME, $HOME, $ISO
+    string_replace(temp, sizeof(temp), temp, "$GAMENAME", G_CONFIG.name);
+    string_replace(temp, sizeof(temp), temp, "$HOME", G_HOME_DIR);
+    string_replace(temp, sizeof(temp), temp, "$ISO", G_CONFIG.iso_path);
+    
+    strncpy(resolved, temp, resolved_size - 1);
+    resolved[resolved_size - 1] = '\0';
     
     return resolved;
 }
@@ -349,6 +403,22 @@ static int config_handler(void* user, const char* section, const char* name, con
         SET_STR(cloud_app_options);
     } else if (MATCH("Paths", "CloudAppArguments")) {
         SET_STR(cloud_app_arguments);
+    } else if (MATCH("Paths", "DiscMountApp")) {
+        SET_STR(disc_mount_app);
+    } else if (MATCH("Paths", "DiscMountOptions")) {
+        SET_STR(disc_mount_options);
+    } else if (MATCH("Paths", "DiscMountArguments")) {
+        SET_STR(disc_mount_arguments);
+    } else if (MATCH("Paths", "DiscMountWait")) {
+        SET_BOOL(disc_mount_wait);
+    } else if (MATCH("Paths", "DiscUnmountApp")) {
+        SET_STR(disc_unmount_app);
+    } else if (MATCH("Paths", "DiscUnmountOptions")) {
+        SET_STR(disc_unmount_options);
+    } else if (MATCH("Paths", "DiscUnmountArguments")) {
+        SET_STR(disc_unmount_arguments);
+    } else if (MATCH("Paths", "DiscUnmountWait")) {
+        SET_BOOL(disc_unmount_wait);
     }
     // [Options] section
     else if (MATCH("Options", "RunAsAdmin")) {
@@ -749,20 +819,32 @@ void action_run_cloud_sync() {
     run_process(cmd, NULL, TRUE, &pi);
 }
 
-void action_run_generic_app(const char* app_path, int wait) {
+void action_run_generic_app(const char* app_path, int wait, const char* options, const char* args) {
     if (strlen(app_path) == 0) return;
     
-    DWORD attribs = GetFileAttributesA(app_path);
+    char resolved[MAX_PATH_LEN];
+    resolve_path(app_path, resolved, sizeof(resolved));
+    
+    DWORD attribs = GetFileAttributesA(resolved);
     if (attribs == INVALID_FILE_ATTRIBUTES) return;
 
     char cmd[MAX_CMD_LEN];
-    snprintf(cmd, sizeof(cmd), "\"%s\"", app_path);
+    snprintf(cmd, sizeof(cmd), "\"%s\"", resolved);
+    
+    if (options && strlen(options) > 0) {
+        strncat(cmd, " ", sizeof(cmd) - strlen(cmd) - 1);
+        strncat(cmd, options, sizeof(cmd) - strlen(cmd) - 1);
+    }
+    if (args && strlen(args) > 0) {
+        strncat(cmd, " ", sizeof(cmd) - strlen(cmd) - 1);
+        strncat(cmd, args, sizeof(cmd) - strlen(cmd) - 1);
+    }
     
     PROCESS_INFORMATION pi;
     run_process(cmd, NULL, wait, &pi);
     if (!wait && pi.hProcess) {
         char name[MAX_NAME_LEN];
-        strncpy(name, app_path, MAX_NAME_LEN - 1);
+        strncpy(name, resolved, MAX_NAME_LEN - 1);
         add_tracked_process(name, &pi);
     }
 }
@@ -796,6 +878,96 @@ void action_kill_process_list() {
     }
 }
 
+void action_mount_disc_with_app() {
+    if (strlen(G_CONFIG.disc_mount_app) == 0 || strlen(G_CONFIG.iso_path) == 0) {
+        // Fallback to native mount
+        action_mount_iso();
+        return;
+    }
+    
+    char resolved_app[MAX_PATH_LEN];
+    char resolved_iso[MAX_PATH_LEN];
+    resolve_path(G_CONFIG.disc_mount_app, resolved_app, sizeof(resolved_app));
+    resolve_path(G_CONFIG.iso_path, resolved_iso, sizeof(resolved_iso));
+    
+    DWORD attribs = GetFileAttributesA(resolved_app);
+    if (attribs == INVALID_FILE_ATTRIBUTES) {
+        action_mount_iso();
+        return;
+    }
+    
+    attribs = GetFileAttributesA(resolved_iso);
+    if (attribs == INVALID_FILE_ATTRIBUTES) return;
+
+    show_message("Mounting disc with external app...");
+    
+    char cmd[MAX_CMD_LEN];
+    snprintf(cmd, sizeof(cmd), "\"%s\"", resolved_app);
+    
+    if (strlen(G_CONFIG.disc_mount_options) > 0) {
+        strncat(cmd, " ", sizeof(cmd) - strlen(cmd) - 1);
+        strncat(cmd, G_CONFIG.disc_mount_options, sizeof(cmd) - strlen(cmd) - 1);
+    }
+    
+    strncat(cmd, " \"", sizeof(cmd) - strlen(cmd) - 1);
+    strncat(cmd, resolved_iso, sizeof(cmd) - strlen(cmd) - 1);
+    strncat(cmd, "\"", sizeof(cmd) - strlen(cmd) - 1);
+    
+    if (strlen(G_CONFIG.disc_mount_arguments) > 0) {
+        strncat(cmd, " ", sizeof(cmd) - strlen(cmd) - 1);
+        strncat(cmd, G_CONFIG.disc_mount_arguments, sizeof(cmd) - strlen(cmd) - 1);
+    }
+    
+    PROCESS_INFORMATION pi;
+    run_process(cmd, NULL, G_CONFIG.disc_mount_wait, &pi);
+    
+    if (!G_CONFIG.disc_mount_wait) {
+        SleepMs(2000);
+    }
+}
+
+void action_unmount_disc_with_app() {
+    if (strlen(G_CONFIG.disc_unmount_app) == 0 || strlen(G_CONFIG.iso_path) == 0) {
+        // Fallback to native unmount
+        action_unmount_iso();
+        return;
+    }
+    
+    char resolved_app[MAX_PATH_LEN];
+    char resolved_iso[MAX_PATH_LEN];
+    resolve_path(G_CONFIG.disc_unmount_app, resolved_app, sizeof(resolved_app));
+    resolve_path(G_CONFIG.iso_path, resolved_iso, sizeof(resolved_iso));
+    
+    DWORD attribs = GetFileAttributesA(resolved_app);
+    if (attribs == INVALID_FILE_ATTRIBUTES) {
+        action_unmount_iso();
+        return;
+    }
+
+    show_message("Unmounting disc with external app...");
+    
+    char cmd[MAX_CMD_LEN];
+    snprintf(cmd, sizeof(cmd), "\"%s\"", resolved_app);
+    
+    if (strlen(G_CONFIG.disc_unmount_options) > 0) {
+        strncat(cmd, " ", sizeof(cmd) - strlen(cmd) - 1);
+        strncat(cmd, G_CONFIG.disc_unmount_options, sizeof(cmd) - strlen(cmd) - 1);
+    }
+    
+    // Add --unmount flag
+    strncat(cmd, " --unmount \"", sizeof(cmd) - strlen(cmd) - 1);
+    strncat(cmd, resolved_iso, sizeof(cmd) - strlen(cmd) - 1);
+    strncat(cmd, "\"", sizeof(cmd) - strlen(cmd) - 1);
+    
+    if (strlen(G_CONFIG.disc_unmount_arguments) > 0) {
+        strncat(cmd, " ", sizeof(cmd) - strlen(cmd) - 1);
+        strncat(cmd, G_CONFIG.disc_unmount_arguments, sizeof(cmd) - strlen(cmd) - 1);
+    }
+    
+    PROCESS_INFORMATION pi;
+    run_process(cmd, NULL, G_CONFIG.disc_unmount_wait, &pi);
+}
+
 void action_mount_iso() {
     if (strlen(G_CONFIG.iso_path) == 0) return;
     
@@ -805,7 +977,7 @@ void action_mount_iso() {
     DWORD attribs = GetFileAttributesA(resolved);
     if (attribs == INVALID_FILE_ATTRIBUTES) return;
 
-    show_message("Mounting ISO...");
+    show_message("Mounting ISO with native Windows...");
     
     char cmd[MAX_CMD_LEN];
     snprintf(cmd, sizeof(cmd), 
@@ -824,7 +996,7 @@ void action_unmount_iso() {
     char resolved[MAX_PATH_LEN];
     resolve_path(G_CONFIG.iso_path, resolved, sizeof(resolved));
 
-    show_message("Unmounting ISO...");
+    show_message("Unmounting ISO with native Windows...");
     
     char cmd[MAX_CMD_LEN];
     snprintf(cmd, sizeof(cmd), 
@@ -868,25 +1040,33 @@ void execute_action(const char* action, int is_exit_sequence) {
     } else if (strcmp(action, "Cloud-Sync") == 0) {
         action_run_cloud_sync();
     } else if (strcmp(action, "mount-disc") == 0) {
-        if (!is_exit_sequence) action_mount_iso();
+        if (!is_exit_sequence) action_mount_disc_with_app();
     } else if (strcmp(action, "Unmount-disc") == 0) {
-        if (is_exit_sequence) action_unmount_iso();
+        if (is_exit_sequence) action_unmount_disc_with_app();
     } else if (strcmp(action, "Pre1") == 0) {
-        action_run_generic_app(G_CONFIG.pre_launch_app_1, G_CONFIG.pre_launch_app_1_wait);
+        action_run_generic_app(G_CONFIG.pre_launch_app_1, G_CONFIG.pre_launch_app_1_wait, 
+                              G_CONFIG.pre_launch_app_1_options, G_CONFIG.pre_launch_app_1_arguments);
     } else if (strcmp(action, "Pre2") == 0) {
-        action_run_generic_app(G_CONFIG.pre_launch_app_2, G_CONFIG.pre_launch_app_2_wait);
+        action_run_generic_app(G_CONFIG.pre_launch_app_2, G_CONFIG.pre_launch_app_2_wait,
+                              G_CONFIG.pre_launch_app_2_options, G_CONFIG.pre_launch_app_2_arguments);
     } else if (strcmp(action, "Pre3") == 0) {
-        action_run_generic_app(G_CONFIG.pre_launch_app_3, G_CONFIG.pre_launch_app_3_wait);
+        action_run_generic_app(G_CONFIG.pre_launch_app_3, G_CONFIG.pre_launch_app_3_wait,
+                              G_CONFIG.pre_launch_app_3_options, G_CONFIG.pre_launch_app_3_arguments);
     } else if (strcmp(action, "Post1") == 0) {
-        action_run_generic_app(G_CONFIG.post_launch_app_1, G_CONFIG.post_launch_app_1_wait);
+        action_run_generic_app(G_CONFIG.post_launch_app_1, G_CONFIG.post_launch_app_1_wait,
+                              G_CONFIG.post_launch_app_1_options, G_CONFIG.post_launch_app_1_arguments);
     } else if (strcmp(action, "Post2") == 0) {
-        action_run_generic_app(G_CONFIG.post_launch_app_2, G_CONFIG.post_launch_app_2_wait);
+        action_run_generic_app(G_CONFIG.post_launch_app_2, G_CONFIG.post_launch_app_2_wait,
+                              G_CONFIG.post_launch_app_2_options, G_CONFIG.post_launch_app_2_arguments);
     } else if (strcmp(action, "Post3") == 0) {
-        action_run_generic_app(G_CONFIG.post_launch_app_3, G_CONFIG.post_launch_app_3_wait);
+        action_run_generic_app(G_CONFIG.post_launch_app_3, G_CONFIG.post_launch_app_3_wait,
+                              G_CONFIG.post_launch_app_3_options, G_CONFIG.post_launch_app_3_arguments);
     } else if (strcmp(action, "JustAfterLaunch") == 0) {
-        action_run_generic_app(G_CONFIG.just_after_launch_app, G_CONFIG.just_after_launch_wait);
+        action_run_generic_app(G_CONFIG.just_after_launch_app, G_CONFIG.just_after_launch_wait,
+                              G_CONFIG.just_after_launch_options, G_CONFIG.just_after_launch_arguments);
     } else if (strcmp(action, "JustBeforeExit") == 0) {
-        action_run_generic_app(G_CONFIG.just_before_exit_app, G_CONFIG.just_before_exit_wait);
+        action_run_generic_app(G_CONFIG.just_before_exit_app, G_CONFIG.just_before_exit_wait,
+                              G_CONFIG.just_before_exit_options, G_CONFIG.just_before_exit_arguments);
     } else {
         char msg[256];
         snprintf(msg, sizeof(msg), "  - Unknown action: %s", action);
@@ -946,6 +1126,68 @@ void run_game_process() {
     }
 }
 
+// --- Admin Check ---
+BOOL check_admin() {
+    BOOL is_admin = FALSE;
+    PSID admin_group = NULL;
+    SID_IDENTIFIER_AUTHORITY nt_authority = SECURITY_NT_AUTHORITY;
+    
+    if (AllocateAndInitializeSid(&nt_authority, 2, SECURITY_BUILTIN_DOMAIN_RID,
+                                  DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &admin_group)) {
+        CheckTokenMembership(NULL, admin_group, &is_admin);
+        FreeSid(admin_group);
+    }
+    
+    return is_admin;
+}
+
+// --- Instance Management ---
+BOOL check_instances() {
+    if (strlen(G_PID_FILE) == 0) return TRUE;
+    
+    // Check if PID file exists
+    FILE* pid_file = fopen(G_PID_FILE, "r");
+    if (pid_file) {
+        DWORD old_pid = 0;
+        if (fscanf(pid_file, "%lu", &old_pid) == 1) {
+            fclose(pid_file);
+            
+            // Check if process is still running
+            HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, old_pid);
+            if (hProcess) {
+                DWORD exit_code;
+                if (GetExitCodeProcess(hProcess, &exit_code) && exit_code == STILL_ACTIVE) {
+                    CloseHandle(hProcess);
+                    show_message("Another instance is already running.");
+                    return FALSE;
+                }
+                CloseHandle(hProcess);
+            }
+        } else {
+            fclose(pid_file);
+        }
+    }
+    
+    // Write our PID
+    write_pid_file();
+    return TRUE;
+}
+
+void write_pid_file() {
+    if (strlen(G_PID_FILE) == 0) return;
+    
+    FILE* pid_file = fopen(G_PID_FILE, "w");
+    if (pid_file) {
+        fprintf(pid_file, "%lu", GetCurrentProcessId());
+        fclose(pid_file);
+    }
+}
+
+void cleanup_pid_file() {
+    if (strlen(G_PID_FILE) == 0) return;
+    DeleteFileA(G_PID_FILE);
+}
+
 void ensure_cleanup() {
     show_message("Ensuring cleanup...");
     
@@ -959,6 +1201,8 @@ void ensure_cleanup() {
         CloseHandle(G_BORDERLESS_PROCESS);
         G_BORDERLESS_PROCESS = NULL;
     }
+    
+    cleanup_pid_file();
 }
 
 // --- Main Entry Point ---
@@ -991,8 +1235,24 @@ int main(int argc, char* argv[]) {
     char* last_sep = strrchr(G_HOME_DIR, '\\');
     if (!last_sep) last_sep = strrchr(G_HOME_DIR, '/');
     if (last_sep) *last_sep = '\0';
+    
+    // Set PID file path
+    snprintf(G_PID_FILE, sizeof(G_PID_FILE), "%s\\rjpids.ini", G_HOME_DIR);
 
     show_message("Launcher starting...");
+    
+    // Check admin privileges
+    G_IS_ADMIN = check_admin();
+    if (G_IS_ADMIN) {
+        show_message("Running with administrator privileges.");
+    }
+    
+    // Check for other instances
+    if (!check_instances()) {
+        show_message("Another instance is already running. Exiting.");
+        SleepMs(2000);
+        return 1;
+    }
 
     // Initialize the configuration struct with zeros
     memset(&G_CONFIG, 0, sizeof(GameConfiguration));

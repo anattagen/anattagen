@@ -16,6 +16,7 @@ import configparser
 import hashlib
 import os
 import datetime
+import platform
 import re
 import subprocess
 import sys
@@ -140,6 +141,7 @@ def run_gui(ini_path: Path) -> None:
         import tkinter as tk
         from tkinter import ttk
         from tkinter import filedialog
+        from tkinter import messagebox
     except Exception as e:
         print("Tkinter not available:", e)
         print("Use --apply or --init-ini instead.")
@@ -184,6 +186,10 @@ def run_gui(ini_path: Path) -> None:
         ent = ttk.Entry(frame, textvariable=sv, width=60)
         ent.grid(row=i, column=1, sticky="we", pady=4)
         vars[k] = sv
+
+        if k == "VERSION":
+            btn_inc = ttk.Button(frame, text="+", width=3, command=lambda s=sv: s.set(increment_version(s.get())))
+            btn_inc.grid(row=i, column=2, padx=2)
 
         # autosave on change
         def make_callback(key):
@@ -466,10 +472,38 @@ def run_gui(ini_path: Path) -> None:
         import threading
         
         msg = build_vars['commit_msg'].get()
+        version = vars.get('VERSION', tk.StringVar(value="")).get()
         
         def worker():
             set_ui_busy(True)
             proc_state['cancelled'] = False
+            
+            # Check GitHub version
+            if version:
+                log(f"Checking if version {version} exists on GitHub...\n")
+                try:
+                    check_cmd = ["gh", "release", "view", version]
+                    proc = subprocess.run(check_cmd, capture_output=True, text=True)
+                    
+                    if proc.returncode == 0:
+                        log(f"Version {version} already exists.\n")
+                        
+                        def show_error_and_increment():
+                            messagebox.showerror("Version Conflict", f"Version {version} already exists on GitHub.\nAuto-incrementing version.")
+                            new_ver = increment_version(version)
+                            if 'VERSION' in vars:
+                                vars['VERSION'].set(new_ver)
+                                save_all()
+                            log(f"Version auto-incremented to {new_ver}.\n")
+                        
+                        root.after(0, show_error_and_increment)
+                        set_ui_busy(False)
+                        return
+                except FileNotFoundError:
+                    log("GH CLI not found, skipping version check.\n")
+                except Exception as e:
+                    log(f"Version check failed: {e}\n")
+
             commands = [
                 ["git", "add", "."],
                 ["git", "commit", "-m", msg],
@@ -501,6 +535,33 @@ def run_gui(ini_path: Path) -> None:
             set_ui_busy(True)
             proc_state['cancelled'] = False
             log("\nStarting Release sequence...\n")
+            
+            # 0. Calculate SHA1 of Executable (Pre-compression)
+            if proc_state['cancelled']: 
+                set_ui_busy(False)
+                return
+
+            log("Calculating SHA1 of executable...\n")
+            exe_name = "anattagen.exe" if platform.system() == "Windows" else "anattagen"
+            exe_path = None
+            for root, dirs, files in os.walk(dest_dir):
+                if exe_name in files:
+                    exe_path = Path(root) / exe_name
+                    break
+            
+            sha1_hash = ""
+            if exe_path and exe_path.exists():
+                log(f"Found executable: {exe_path}\n")
+                sha1 = hashlib.sha1()
+                with open(exe_path, 'rb') as f:
+                    while True:
+                        data = f.read(65536)
+                        if not data: break
+                        sha1.update(data)
+                sha1_hash = sha1.hexdigest()
+                log(f"Executable SHA1: {sha1_hash}\n")
+            else:
+                log(f"Executable {exe_name} not found in {dest_dir}. Skipping SHA1.\n")
             
             # 1. Compress
             if proc_state['cancelled']: 
@@ -538,26 +599,16 @@ def run_gui(ini_path: Path) -> None:
                 set_ui_busy(False)
                 return
 
-            # 2. Calculate SHA1
-            if proc_state['cancelled']: 
+            # 2. Calculate Size
+            if proc_state['cancelled']:
                 set_ui_busy(False)
                 return
-
-            log("Calculating SHA1...\n")
-            sha1 = hashlib.sha1()
-            with open(archive_path, 'rb') as f:
-                while True:
-                    data = f.read(65536)
-                    if not data: break
-                    sha1.update(data)
-            sha1_hash = sha1.hexdigest()
-            log(f"SHA1: {sha1_hash}\n")
             
             size_mb = os.path.getsize(archive_path) / (1024 * 1024)
             
             # 3. Update GUI vars (thread-safe update)
             def update_ui():
-                if 'RSHA1' in vars: vars['RSHA1'].set(sha1_hash)
+                if 'RSHA1' in vars and sha1_hash: vars['RSHA1'].set(sha1_hash)
                 if 'RSIZE' in vars: vars['RSIZE'].set(f"{size_mb:.2f}")
                 if 'PORTABLE' in vars and git_user and rj_proj and version:
                     url = f"https://github.com/{git_user}/{rj_proj}/releases/download/Portable/{archive_name}"

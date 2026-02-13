@@ -2283,7 +2283,7 @@ class EditorTab(QWidget):
             for match_key in fuzzy_matches:
                 match_data = self.main_window.steam_cache_manager.normalized_steam_index.get(match_key)
                 if match_data:
-                    combo.addItem(f"{match_data['name']}", data=match_data.get('id'))
+                    combo.addItem(f"{match_data['name']}", match_data.get('id'))
             
             combo.currentIndexChanged.connect(lambda _, c=combo, r_idx=row_num: self._on_fuzzy_combo_changed(c, r_idx))
             combo.editTextChanged.connect(lambda _, c=combo, r_idx=row_num: self._on_fuzzy_combo_changed(c, r_idx))

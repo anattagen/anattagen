@@ -7,7 +7,7 @@ ALTHOST = https://github.com/romjacket
 EXHOST = https://github.com/anattagen
 Version = [VERSION]
 UPDATEFILE = $SOURCEHOST/anattaGen/releases/download/portable/portable.zip
-STEAMJSON1 = https://raw.githubusercontent.com/anattagen/anattagen/refs/heads/main/steam_games_joined.json
+STEAMJSON1 = https://raw.githubusercontent.com/anattagen/steam.json/refs/heads/main/steam.json
 STEAMJSON2 = https://raw.githubusercontent.com/anattagen/anattagen/refs/heads/main/steam.json
 STEAMIDB = https://store.steampowered.com/api/appdetails?appids=
 PC_GWB = https://pcgamingwiki.com

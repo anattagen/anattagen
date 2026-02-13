@@ -40,8 +40,8 @@ class SequenceExecutor:
             'Post3': lambda: self.run_generic_app('post_launch_app_3', 'post_launch_app_3_wait', 'post_launch_app_3_options', 'post_launch_app_3_arguments'),
             'Taskbar': self.show_taskbar,
             'Cloud-Sync': self.run_cloud_sync,
-            'mount-disc': lambda: self.run_generic_app('disc_mount_app', 'disc_mount_wait', 'disc_mount_options', 'disc_mount_arguments'),
-            'Unmount-disc': lambda: self.run_generic_app('disc_unmount_app', 'disc_unmount_wait', 'disc_unmount_options', 'disc_unmount_arguments'),
+            'mount-disc': self.mount_disc,
+            'Unmount-disc': self.unmount_disc,
         }
 
         # Define explicit "off" or "restore" actions for the exit sequence
@@ -52,7 +52,7 @@ class SequenceExecutor:
             'Monitor-Config': self.run_monitor_config_desktop,
             'Borderless': self.kill_borderless,
             'Cloud-Sync': self.run_cloud_sync,
-            'Unmount-disc': lambda: self.run_generic_app('disc_unmount_app', 'disc_unmount_wait', 'disc_unmount_options', 'disc_unmount_arguments'),
+            'Unmount-disc': self.unmount_disc,
         }
 
     def execute(self, sequence_name):
@@ -294,3 +294,75 @@ class SequenceExecutor:
         for name, process in list(self.running_processes.items()):
             self.launcher.terminate_process_tree(process)
         self.running_processes.clear()
+
+    def mount_disc(self):
+        """Mount disc image using the configured application or native methods."""
+        if not self.launcher.iso_path:
+            logging.warning("No ISO path configured, skipping disc mount")
+            return
+        
+        app_path = self.launcher.resolve_path(getattr(self.launcher, 'disc_mount_app', ''))
+        
+        if not app_path or not os.path.exists(app_path):
+            logging.warning(f"Disc mount app not found: {app_path}, skipping")
+            return
+        
+        # Build command with ISO path
+        iso_path = self.launcher.resolve_path(self.launcher.iso_path)
+        if not os.path.exists(iso_path):
+            logging.error(f"ISO file not found: {iso_path}")
+            return
+        
+        logging.info(f"Mounting disc: {iso_path} using {app_path}")
+        
+        # Check if it's a native Windows mount (PowerShell)
+        if 'powershell' in app_path.lower() or app_path.lower().endswith('.ps1'):
+            cmd = f'powershell -command "Mount-DiskImage -ImagePath \'{iso_path}\'"'
+        else:
+            # External application
+            options = getattr(self.launcher, 'disc_mount_options', '')
+            args = getattr(self.launcher, 'disc_mount_arguments', '')
+            cmd = f'"{app_path}"'
+            if options:
+                cmd += f' {options}'
+            cmd += f' "{iso_path}"'
+            if args:
+                cmd += f' {args}'
+        
+        wait = getattr(self.launcher, 'disc_mount_wait', False)
+        process = self.launcher.run_process(cmd, wait=wait)
+        if process and not wait:
+            self.running_processes['disc_mount'] = process
+    
+    def unmount_disc(self):
+        """Unmount disc image using the configured application or native methods."""
+        if not self.launcher.iso_path:
+            logging.warning("No ISO path configured, skipping disc unmount")
+            return
+        
+        app_path = self.launcher.resolve_path(getattr(self.launcher, 'disc_unmount_app', ''))
+        
+        if not app_path or not os.path.exists(app_path):
+            logging.warning(f"Disc unmount app not found: {app_path}, skipping")
+            return
+        
+        iso_path = self.launcher.resolve_path(self.launcher.iso_path)
+        logging.info(f"Unmounting disc: {iso_path} using {app_path}")
+        
+        # Check if it's a native Windows unmount (PowerShell)
+        if 'powershell' in app_path.lower() or app_path.lower().endswith('.ps1'):
+            cmd = f'powershell -command "Dismount-DiskImage -ImagePath \'{iso_path}\'"'
+        else:
+            # External application - pass --unmount flag
+            options = getattr(self.launcher, 'disc_unmount_options', '')
+            args = getattr(self.launcher, 'disc_unmount_arguments', '')
+            cmd = f'"{app_path}"'
+            if options:
+                cmd += f' {options}'
+            # Add unmount flag
+            cmd += f' --unmount "{iso_path}"'
+            if args:
+                cmd += f' {args}'
+        
+        wait = getattr(self.launcher, 'disc_unmount_wait', False)
+        self.launcher.run_process(cmd, wait=wait)

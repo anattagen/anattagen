@@ -261,7 +261,11 @@ class DeploymentTab(QWidget):
         for i, key in enumerate(PATH_KEYS):
             label = PATH_LABELS.get(key, f"Overwrite {key}")
             cb = QCheckBox(f"{label}")
-            cb.setChecked(True)
+            # Only check by default for profiles_dir and launchers_dir
+            if key in ["profiles_dir", "launchers_dir"]:
+                cb.setChecked(True)
+            else:
+                cb.setChecked(False)
             cb.stateChanged.connect(self.config_changed.emit)
             self.overwrite_checkboxes[key] = cb
             overwrite_layout.addWidget(cb, i // 2, i % 2)
@@ -380,7 +384,7 @@ class DeploymentTab(QWidget):
         self.steam_status_textbox.setText("\n".join(status_parts))
 
     def update_overwrite_checkboxes(self, config: AppConfig, specific_key: str = None):
-        """Uncheck overwrite boxes if the corresponding path is empty or disabled."""
+        """Update overwrite boxes based on propagation mode and path status."""
         self.blockSignals(True)
         
         keys_to_update = [specific_key] if specific_key else self.overwrite_checkboxes.keys()
@@ -402,17 +406,19 @@ class DeploymentTab(QWidget):
             # If path is empty or explicitly disabled, uncheck overwrite
             if not path_val or not is_enabled:
                 cb.setChecked(False)
-                # Update config to match UI
-                config.overwrite_states[key] = False
-            elif mode == "CEN":
-                cb.setChecked(False)
                 config.overwrite_states[key] = False
             elif mode == "LC":
+                # When mode is LC, check the overwrite box
+                cb.setChecked(True)
+                config.overwrite_states[key] = True
+            elif key in ["profiles_dir", "launchers_dir"]:
+                # Keep profiles_dir and launchers_dir checked by default
                 cb.setChecked(True)
                 config.overwrite_states[key] = True
             else:
-                # Otherwise respect the existing config state
-                cb.setChecked(config.overwrite_states.get(key, True))
+                # For CEN mode, uncheck unless it's a default-checked item
+                cb.setChecked(False)
+                config.overwrite_states[key] = False
         self.blockSignals(False)
 
     def _on_download_clicked(self):
@@ -442,9 +448,18 @@ class DeploymentTab(QWidget):
         self.download_artwork_checkbox.setChecked(config.download_artwork)
         self.overwrite_artwork_checkbox.setChecked(config.overwrite_artwork)
         
-        # Sync overwrite checkboxes
+        # Sync overwrite checkboxes with proper defaults
         for key, cb in self.overwrite_checkboxes.items():
-            cb.setChecked(config.overwrite_states.get(key, True))
+            # Get the mode for this key
+            mode = config.deployment_path_modes.get(key, "CEN")
+            # Default to checked only for profiles_dir and launchers_dir, or when mode is LC
+            if key in ["profiles_dir", "launchers_dir"]:
+                default_state = True
+            elif mode == "LC":
+                default_state = True
+            else:
+                default_state = False
+            cb.setChecked(config.overwrite_states.get(key, default_state))
 
         self.blockSignals(False)
 

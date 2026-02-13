@@ -109,12 +109,32 @@ class PathConfigRow(QWidget):
 
         # Populate from repo_items if available
         if repo_items and self.use_combobox:
+            # Only populate executables that are listed in repo_items (flyout menu)
+            bin_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'bin')
+            
             for name, data in repo_items.items():
-                if 'extract_dir' in data and 'exe_name' in data:
-                    exe_path = os.path.join(data['extract_dir'], data['exe_name'])
+                # Skip special mount options that don't have exe_name
+                if 'exe_name' not in data:
+                    continue
+                
+                exe_name = data['exe_name']
+                
+                # Check in extract_dir first if specified
+                if 'extract_dir' in data:
+                    exe_path = os.path.join(data['extract_dir'], exe_name)
                     if os.path.exists(exe_path):
                         if self.combo.findText(exe_path) == -1:
                             self.combo.addItem(exe_path)
+                        continue
+                
+                # Otherwise scan /bin directory for this specific executable
+                if os.path.exists(bin_dir):
+                    for root, dirs, files in os.walk(bin_dir):
+                        if exe_name in files:
+                            exe_path = os.path.join(root, exe_name)
+                            if self.combo.findText(exe_path) == -1:
+                                self.combo.addItem(exe_path)
+                            break
 
         # Run Wait Checkbox
         if self.add_run_wait:
