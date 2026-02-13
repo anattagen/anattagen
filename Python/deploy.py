@@ -471,6 +471,9 @@ def run_gui(ini_path: Path) -> None:
     def run_git():
         import threading
         
+        # Save and apply replacements before pushing
+        save_all()
+        
         msg = build_vars['commit_msg'].get()
         version = vars.get('VERSION', tk.StringVar(value="")).get()
         

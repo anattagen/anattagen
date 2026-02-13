@@ -4,6 +4,29 @@ from PyQt6.QtWidgets import (QListWidget, QAbstractItemView, QWidget, QHBoxLayou
 from PyQt6.QtCore import Qt, pyqtSignal
 import os
 
+def _find_dir_case_insensitive(parent_dir, dir_name):
+    """Find a directory with case-insensitive matching.
+    
+    Args:
+        parent_dir: Parent directory to search in
+        dir_name: Directory name to find (case-insensitive)
+        
+    Returns:
+        Full path to the directory if found, otherwise the original path
+    """
+    if not os.path.exists(parent_dir):
+        return os.path.join(parent_dir, dir_name)
+    
+    dir_name_lower = dir_name.lower()
+    for item in os.listdir(parent_dir):
+        if item.lower() == dir_name_lower:
+            full_path = os.path.join(parent_dir, item)
+            if os.path.isdir(full_path):
+                return full_path
+    
+    # If not found, return the original path
+    return os.path.join(parent_dir, dir_name)
+
 class DragDropListWidget(QListWidget):
     """A list widget that supports drag and drop for reordering items"""
     
@@ -109,32 +132,33 @@ class PathConfigRow(QWidget):
 
         # Populate from repo_items if available
         if repo_items and self.use_combobox:
-            # Only populate executables that are listed in repo_items (flyout menu)
+            # Only populate executables that exist on disk
             bin_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'bin')
             
+            # Collect all exe names to search for
+            exe_names_to_find = {}
             for name, data in repo_items.items():
                 # Skip special mount options that don't have exe_name
                 if 'exe_name' not in data:
                     continue
-                
                 exe_name = data['exe_name']
-                
-                # Check in extract_dir first if specified
-                if 'extract_dir' in data:
-                    exe_path = os.path.join(data['extract_dir'], exe_name)
-                    if os.path.exists(exe_path):
-                        if self.combo.findText(exe_path) == -1:
-                            self.combo.addItem(exe_path)
-                        continue
-                
-                # Otherwise scan /bin directory for this specific executable
-                if os.path.exists(bin_dir):
-                    for root, dirs, files in os.walk(bin_dir):
-                        if exe_name in files:
-                            exe_path = os.path.join(root, exe_name)
-                            if self.combo.findText(exe_path) == -1:
-                                self.combo.addItem(exe_path)
-                            break
+                exe_names_to_find[exe_name.lower()] = exe_name
+            
+            # Scan /bin directory recursively for all executables (case-insensitive)
+            found_paths = []
+            if os.path.exists(bin_dir):
+                for root, dirs, files in os.walk(bin_dir):
+                    for file in files:
+                        file_lower = file.lower()
+                        if file_lower in exe_names_to_find:
+                            actual_path = os.path.join(root, file)
+                            if actual_path not in found_paths:
+                                found_paths.append(actual_path)
+            
+            # Add all found paths to combobox
+            for path in found_paths:
+                if self.combo.findText(path) == -1:
+                    self.combo.addItem(path)
 
         # Run Wait Checkbox
         if self.add_run_wait:

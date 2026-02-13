@@ -100,10 +100,14 @@ class DownloadThread(QThread):
             # Construct result path
             result_path = os.path.join(self.extract_dir, self.exe_name)
             if not os.path.exists(result_path):
-                # Try to find it recursively if not found at root
+                # Try to find it recursively if not found at root (case-insensitive)
+                exe_name_lower = self.exe_name.lower()
                 for root, dirs, files in os.walk(self.extract_dir):
-                    if self.exe_name in files:
-                        result_path = os.path.join(root, self.exe_name)
+                    for file in files:
+                        if file.lower() == exe_name_lower:
+                            result_path = os.path.join(root, file)
+                            break
+                    if os.path.exists(result_path):
                         break
             
             self.finished.emit(True, "Download complete", result_path)
@@ -283,7 +287,7 @@ class SetupTab(QWidget):
         source_config_layout.setColumnStretch(0, 1)
         source_config_layout.setColumnStretch(1, 1)
 
-        source_config_section = AccordionSection("SOURCES AND INDEXING", source_config_widget)
+        source_config_section = AccordionSection("SOURCES AND INDEXING", source_config_widget, start_expanded=True)
 
         # --- Section 2: Paths & Profiles ---
         paths_widget = QWidget()
@@ -750,8 +754,29 @@ class SetupTab(QWidget):
             QMessageBox.warning(self, "Download in Progress", "Please wait for the current download to finish.")
             return
 
-        # Check if files exist
-        extract_dir = tool_data['extract_dir']
+        # Check if files exist - use case-insensitive directory resolution
+        extract_dir_raw = tool_data['extract_dir']
+        
+        # Resolve extract_dir case-insensitively by checking each path component
+        # Handle both absolute and relative paths
+        path_parts = extract_dir_raw.replace('\\', '/').split('/')
+        resolved_path = ""
+        
+        for i, part in enumerate(path_parts):
+            if not part:  # Skip empty parts (from leading slash or double slashes)
+                continue
+            
+            if i == 0:
+                # First part - could be drive letter (C:) or relative path start
+                resolved_path = part
+                # For Windows drive letters, ensure we have the backslash
+                if len(part) == 2 and part[1] == ':':
+                    resolved_path = part + '\\'
+            else:
+                parent = resolved_path
+                resolved_path = self._find_dir_case_insensitive(parent, part)
+        
+        extract_dir = resolved_path
         exe_name = tool_data['exe_name']
         url = tool_data['url']
         
@@ -780,7 +805,7 @@ class SetupTab(QWidget):
         self.progress_dialog.setAutoClose(False)
         self.progress_dialog.show()
 
-        self.download_thread = DownloadThread(tool_data['url'], tool_data['extract_dir'], tool_data['exe_name'])
+        self.download_thread = DownloadThread(tool_data['url'], extract_dir, tool_data['exe_name'])
         self.download_thread.progress.connect(self.progress_dialog.setValue)
         self.download_thread.finished.connect(self._on_download_finished_slot)
         self.download_thread.start()
@@ -798,9 +823,11 @@ class SetupTab(QWidget):
             # Script generation complete - no auto-assignment
                 
         elif special_type == "mount_wincdemu":
-            # Check if already downloaded
-            exe_path = os.path.join(bin_dir, tool_data['exe_name'])
-            if not os.path.exists(exe_path):
+            # Check if already downloaded (case-insensitive)
+            exe_name = tool_data['exe_name']
+            exe_path = self._find_exe_case_insensitive(bin_dir, exe_name)
+            
+            if not exe_path:
                 # Trigger download
                 self.active_download_row = sender_row
                 self.progress_dialog = QProgressDialog(f"Downloading {tool_name}...", "Cancel", 0, 100, self)
@@ -809,7 +836,7 @@ class SetupTab(QWidget):
                 self.progress_dialog.setAutoClose(False)
                 self.progress_dialog.show()
 
-                self.download_thread = DownloadThread(tool_data['url'], bin_dir, tool_data['exe_name'])
+                self.download_thread = DownloadThread(tool_data['url'], bin_dir, exe_name)
                 self.download_thread.progress.connect(self.progress_dialog.setValue)
                 
                 # Connect finished signal to a lambda that also generates scripts
@@ -821,9 +848,11 @@ class SetupTab(QWidget):
                 self._generate_mount_scripts_files(bin_dir, "wincdemu")
         
         elif special_type == "mount_cdmage":
-            # Check if already downloaded
-            exe_path = os.path.join(bin_dir, tool_data['exe_name'])
-            if not os.path.exists(exe_path):
+            # Check if already downloaded (case-insensitive)
+            exe_name = tool_data['exe_name']
+            exe_path = self._find_exe_case_insensitive(bin_dir, exe_name)
+            
+            if not exe_path:
                 # Trigger download
                 self.active_download_row = sender_row
                 self.progress_dialog = QProgressDialog(f"Downloading {tool_name}...", "Cancel", 0, 100, self)
@@ -832,7 +861,7 @@ class SetupTab(QWidget):
                 self.progress_dialog.setAutoClose(False)
                 self.progress_dialog.show()
 
-                self.download_thread = DownloadThread(tool_data['url'], bin_dir, tool_data['exe_name'])
+                self.download_thread = DownloadThread(tool_data['url'], bin_dir, exe_name)
                 self.download_thread.progress.connect(self.progress_dialog.setValue)
                 self.download_thread.finished.connect(lambda s, m, p: self._on_cdmage_download_finished(s, m, p, bin_dir))
                 self.download_thread.start()
@@ -842,9 +871,11 @@ class SetupTab(QWidget):
                 self._generate_mount_scripts_files(bin_dir, "cdmage")
         
         elif special_type == "mount_osf":
-            # Check if already downloaded
-            exe_path = os.path.join(bin_dir, tool_data['exe_name'])
-            if not os.path.exists(exe_path):
+            # Check if already downloaded (case-insensitive)
+            exe_name = tool_data['exe_name']
+            exe_path = self._find_exe_case_insensitive(bin_dir, exe_name)
+            
+            if not exe_path:
                 # Trigger download
                 self.active_download_row = sender_row
                 self.progress_dialog = QProgressDialog(f"Downloading {tool_name}...", "Cancel", 0, 100, self)
@@ -853,7 +884,7 @@ class SetupTab(QWidget):
                 self.progress_dialog.setAutoClose(False)
                 self.progress_dialog.show()
 
-                self.download_thread = DownloadThread(tool_data['url'], bin_dir, tool_data['exe_name'])
+                self.download_thread = DownloadThread(tool_data['url'], bin_dir, exe_name)
                 self.download_thread.progress.connect(self.progress_dialog.setValue)
                 self.download_thread.finished.connect(lambda s, m, p: self._on_osf_download_finished(s, m, p, bin_dir))
                 self.download_thread.start()
@@ -863,9 +894,11 @@ class SetupTab(QWidget):
                 self._generate_mount_scripts_files(bin_dir, "osf")
         
         elif special_type == "mount_imgdrive":
-            # Check if already downloaded
-            exe_path = os.path.join(bin_dir, tool_data['exe_name'])
-            if not os.path.exists(exe_path):
+            # Check if already downloaded (case-insensitive)
+            exe_name = tool_data['exe_name']
+            exe_path = self._find_exe_case_insensitive(bin_dir, exe_name)
+            
+            if not exe_path:
                 # Trigger download
                 self.active_download_row = sender_row
                 self.progress_dialog = QProgressDialog(f"Downloading {tool_name}...", "Cancel", 0, 100, self)
@@ -874,7 +907,7 @@ class SetupTab(QWidget):
                 self.progress_dialog.setAutoClose(False)
                 self.progress_dialog.show()
 
-                self.download_thread = DownloadThread(tool_data['url'], bin_dir, tool_data['exe_name'])
+                self.download_thread = DownloadThread(tool_data['url'], bin_dir, exe_name)
                 self.download_thread.progress.connect(self.progress_dialog.setValue)
                 self.download_thread.finished.connect(lambda s, m, p: self._on_imgdrive_download_finished(s, m, p, bin_dir))
                 self.download_thread.start()
@@ -882,6 +915,65 @@ class SetupTab(QWidget):
                 # Just generate scripts - no auto-assignment
                 self._write_exe_path_to_config("imgdrive", exe_path)
                 self._generate_mount_scripts_files(bin_dir, "imgdrive")
+    
+    def _find_exe_case_insensitive(self, directory, exe_name):
+        """Find an executable in a directory with case-insensitive matching."""
+        if not os.path.exists(directory):
+            return None
+        
+        exe_name_lower = exe_name.lower()
+        for file in os.listdir(directory):
+            if file.lower() == exe_name_lower:
+                full_path = os.path.join(directory, file)
+                if os.path.isfile(full_path):
+                    return full_path
+        return None
+    
+    def _find_dir_case_insensitive(self, parent_dir, dir_name):
+        """Find a directory with case-insensitive matching.
+        
+        Args:
+            parent_dir: Parent directory to search in
+            dir_name: Directory name to find (case-insensitive)
+            
+        Returns:
+            Full path to the directory if found, otherwise the original path
+        """
+        if not os.path.exists(parent_dir):
+            return os.path.join(parent_dir, dir_name)
+        
+        dir_name_lower = dir_name.lower()
+        for item in os.listdir(parent_dir):
+            if item.lower() == dir_name_lower:
+                full_path = os.path.join(parent_dir, item)
+                if os.path.isdir(full_path):
+                    return full_path
+        
+        # If not found, return the original path
+        return os.path.join(parent_dir, dir_name)
+    def _find_dir_case_insensitive(self, parent_dir, dir_name):
+        """Find a directory with case-insensitive matching.
+
+        Args:
+            parent_dir: Parent directory to search in
+            dir_name: Directory name to find (case-insensitive)
+
+        Returns:
+            Full path to the directory if found, otherwise the original path
+        """
+        if not os.path.exists(parent_dir):
+            return os.path.join(parent_dir, dir_name)
+
+        dir_name_lower = dir_name.lower()
+        for item in os.listdir(parent_dir):
+            if item.lower() == dir_name_lower:
+                full_path = os.path.join(parent_dir, item)
+                if os.path.isdir(full_path):
+                    return full_path
+
+        # If not found, return the original path
+        return os.path.join(parent_dir, dir_name)
+
 
     def _on_wincdemu_download_finished(self, success, message, result_path, bin_dir):
         if hasattr(self, 'progress_dialog'):

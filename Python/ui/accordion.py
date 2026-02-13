@@ -6,10 +6,10 @@ from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve, pyqtSlot
 
 
 class AccordionSection(QWidget):
-    def __init__(self, title: str, content: QWidget, animation_duration=200):
+    def __init__(self, title: str, content: QWidget, animation_duration=200, start_expanded=False):
         super().__init__()
 
-        self.toggle_button = QToolButton(text=title, checkable=True, checked=False)
+        self.toggle_button = QToolButton(text=title, checkable=True, checked=start_expanded)
         self.toggle_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         self.toggle_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.toggle_button.clicked.connect(self.toggle)
@@ -18,7 +18,9 @@ class AccordionSection(QWidget):
         self.content_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.content_area.setFrameShape(QFrame.Shape.NoFrame)
         self.content_area.setWidgetResizable(True)
-        self.content_area.setMaximumHeight(0)
+        # Set initial height based on start_expanded
+        initial_height = 0 if not start_expanded else content.sizeHint().height()
+        self.content_area.setMaximumHeight(initial_height)
         self.content_area.setMinimumHeight(0)
         self.content_area.setWidget(content)
 

@@ -87,7 +87,7 @@ class AppConfig:
         self.multimonitor_gaming_mode = "CEN"
         self.multimonitor_media_mode = "CEN"
 
-        # Setup Tab: Appearance
+        # Setup Tab: Behavior
         self.editor_page_size = 50
 
         # Setup Tab: Execution Sequences
@@ -95,19 +95,19 @@ class AppConfig:
         self.exit_sequence = []
 
         # Deployment Tab: General Options
-        self.download_game_json = False
+        self.download_game_json = True
         self.overwrite_game_json = False
-        self.download_artwork = False
+        self.download_artwork = True
         self.overwrite_artwork = False
-        self.download_pcgw_metadata = False
+        self.download_pcgw_metadata = True
         self.overwrite_pcgw_metadata = False
         self.hide_taskbar = False
         self.run_as_admin = False
-        self.enable_name_matching = False
+        self.enable_name_matching = True
         self.fuzzy_match_cutoff = 0.6
         self.steam_json_version = 2
-        self.use_kill_list = False
-        self.terminate_borderless_on_exit = False
+        self.use_kill_list = True
+        self.terminate_borderless_on_exit = True
 
         # Deployment Tab: Creation Options
         self.create_overwrite_joystick_profiles = False
@@ -132,7 +132,11 @@ class AppConfig:
         self.defaults = {}
 
         # Overwrite states for paths (Deployment Tab -> Creation)
-        self.overwrite_states = {}
+        # Default to False except for profiles_dir and launchers_dir
+        self.overwrite_states = {
+            "profiles_dir": True,
+            "launchers_dir": True
+        }
 
         # Default run-wait states for various features
         self.run_wait_states = {}

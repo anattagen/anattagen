@@ -1,7 +1,8 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
     QPushButton, QCheckBox, QGroupBox, QRadioButton, QButtonGroup, QGridLayout,
-    QLineEdit, QTextEdit, QProgressBar, QDialog, QDialogButtonBox, QFileDialog
+    QLineEdit, QTextEdit, QProgressBar, QDialog, QDialogButtonBox, QFileDialog,
+    QMenu, QToolButton
 )
 from PyQt6.QtCore import pyqtSignal, Qt
 from Python.ui.accordion import AccordionSection
@@ -152,39 +153,39 @@ class DeploymentTab(QWidget):
         steam_version_layout.addStretch()
         left_layout.addLayout(steam_version_layout)
 
-        # Download & Process Buttons
+        # Download & Process Buttons - Consolidated into flyout menu
         steam_actions_layout = QHBoxLayout()
-        self.download_steam_json_button = QPushButton("Download")
-        self.download_steam_json_button.setToolTip("Download the selected version of steam.json")
-        self.process_json_button = QPushButton("Process Json")
-        steam_actions_layout.addWidget(self.download_steam_json_button)
-        steam_actions_layout.addWidget(self.process_json_button)
+        self.download_steam_json_button = QPushButton("Steam Actions ▼")
+        self.download_steam_json_button.setToolTip("Steam JSON management actions")
+        
+        # Create flyout menu
+        self.steam_actions_menu = QMenu()
+        self.download_v1_action = self.steam_actions_menu.addAction("Download steam.json (v1)")
+        self.download_v2_action = self.steam_actions_menu.addAction("Download steam.json (v2)")
+        self.steam_actions_menu.addSeparator()
+        self.process_json_action = self.steam_actions_menu.addAction("Process Json")
+        self.steam_actions_menu.addSeparator()
+        self.delete_json_action = self.steam_actions_menu.addAction("Delete steam.json")
+        self.delete_cache_action = self.steam_actions_menu.addAction("Delete Steam Caches")
+        self.steam_actions_menu.addSeparator()
+        self.refresh_status_action = self.steam_actions_menu.addAction("Refresh Status")
+        
+        # Convert button to tool button with menu
+        self.steam_actions_button = QToolButton()
+        self.steam_actions_button.setText("Steam Actions ▼")
+        self.steam_actions_button.setMenu(self.steam_actions_menu)
+        self.steam_actions_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.steam_actions_button.setMinimumHeight(30)
+        
+        steam_actions_layout.addWidget(self.steam_actions_button)
+        steam_actions_layout.addStretch()
         left_layout.addLayout(steam_actions_layout)
 
-        # Delete Buttons
-        delete_actions_layout = QHBoxLayout()
-        self.delete_json_button = QPushButton("Delete steam.json")
-        self.delete_cache_button = QPushButton("Delete Steam Caches")
-        delete_actions_layout.addWidget(self.delete_json_button)
-        delete_actions_layout.addWidget(self.delete_cache_button)
-        left_layout.addLayout(delete_actions_layout)
-
-        # Steam Status Textbox
-        self.steam_status_container = QWidget()
-        status_layout = QHBoxLayout(self.steam_status_container)
-        status_layout.setContentsMargins(0, 0, 0, 0)
-
+        # Steam Status Textbox (removed refresh button - now in menu)
         self.steam_status_textbox = QTextEdit()
         self.steam_status_textbox.setReadOnly(True)
         self.steam_status_textbox.setFixedHeight(65)
-        self.refresh_status_btn = QPushButton("U")
-        self.refresh_status_btn.setToolTip("Update Steam File Status")
-        self.refresh_status_btn.setFixedWidth(30)
-        self.refresh_status_btn.clicked.connect(self.update_steam_status)
-        
-        status_layout.addWidget(self.refresh_status_btn)
-        status_layout.addWidget(self.steam_status_textbox)
-        left_layout.addWidget(self.steam_status_container)
+        left_layout.addWidget(self.steam_status_textbox)
         
         left_layout.addStretch()
 
@@ -284,7 +285,7 @@ class DeploymentTab(QWidget):
 
         # --- Accordion Setup ---
         # Rename General Options to Database Indexing
-        general_options_section = AccordionSection("DATABASE INDEXING", database_indexing_widget)
+        general_options_section = AccordionSection("DATABASE INDEXING", database_indexing_widget, start_expanded=True)
         general_options_section.content_height += 75
         creation_section = AccordionSection("CREATION", creation_options_widget)
         creation_section.content_height += 75
@@ -304,10 +305,18 @@ class DeploymentTab(QWidget):
         self.overwrite_artwork_checkbox.stateChanged.connect(self.config_changed.emit)
 
         self.create_button.clicked.connect(self.create_selected_requested.emit)
-        self.download_steam_json_button.clicked.connect(self._on_download_clicked)
-        self.delete_json_button.clicked.connect(self.delete_steam_json_requested.emit)
-        self.delete_cache_button.clicked.connect(self.delete_steam_cache_requested.emit)
-        self.process_json_button.clicked.connect(self.process_steam_json_requested.emit)
+        
+        # Connect Steam Actions menu items
+        self.download_v1_action.triggered.connect(lambda: self._on_download_clicked(1))
+        self.download_v2_action.triggered.connect(lambda: self._on_download_clicked(2))
+        self.process_json_action.triggered.connect(self.process_steam_json_requested.emit)
+        self.delete_json_action.triggered.connect(self.delete_steam_json_requested.emit)
+        self.delete_cache_action.triggered.connect(self.delete_steam_cache_requested.emit)
+        self.refresh_status_action.triggered.connect(self.update_steam_status)
+        
+        # Connect name matching checkbox to update index button state
+        self.name_check_checkbox.stateChanged.connect(self._update_index_button_state)
+        self.name_check_checkbox.stateChanged.connect(self._on_name_matching_changed)
 
         # Initialize and connect to editor tab data changes
         self.update_create_button_count()
@@ -382,6 +391,36 @@ class DeploymentTab(QWidget):
                 alert = True
         
         self.steam_status_textbox.setText("\n".join(status_parts))
+        
+        # Update index button state after status update
+        self._update_index_button_state()
+    
+    def _update_index_button_state(self):
+        """Enable/disable index button based on Steam matching state and cache availability."""
+        if not self.name_check_checkbox.isChecked():
+            # Steam matching disabled, always enable index button
+            self.index_sources_button.setEnabled(True)
+            return
+        
+        # Steam matching enabled, check for required cache files
+        filtered_path = os.path.join(constants.APP_ROOT_DIR, "steam_filtered.txt")
+        normalized_path = os.path.join(constants.APP_ROOT_DIR, "normalized_steam_games.cache")
+        
+        caches_exist = os.path.exists(filtered_path) and os.path.exists(normalized_path)
+        self.index_sources_button.setEnabled(caches_exist)
+        
+        if not caches_exist and self.name_check_checkbox.isChecked():
+            self.index_sources_button.setToolTip("Steam caches missing. Process steam.json first.")
+        else:
+            self.index_sources_button.setToolTip("Index game sources")
+    
+    def _on_name_matching_changed(self, state):
+        """Handle changes to Steam Name Matching checkbox."""
+        if not self.name_check_checkbox.isChecked():
+            # When disabled, uncheck the download checkboxes
+            self.download_game_json_checkbox.setChecked(False)
+            self.download_pcgw_checkbox.setChecked(False)
+            self.download_artwork_checkbox.setChecked(False)
 
     def update_overwrite_checkboxes(self, config: AppConfig, specific_key: str = None):
         """Update overwrite boxes based on propagation mode and path status."""
@@ -421,9 +460,8 @@ class DeploymentTab(QWidget):
                 config.overwrite_states[key] = False
         self.blockSignals(False)
 
-    def _on_download_clicked(self):
-        """Emit the download signal with the currently selected version."""
-        version = 1 if self.steam_json_v1_radio.isChecked() else 2
+    def _on_download_clicked(self, version):
+        """Emit the download signal with the specified version."""
         self.download_steam_json_requested.emit(version)
 
     def highlight_unpopulated_items(self, main_window):

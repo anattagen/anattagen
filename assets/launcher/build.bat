@@ -21,7 +21,7 @@ if defined BUILD_TOOLS_ROOT (
 			set VSCMD_VER=%%~a
 			break
 		)
-if "%VSCMD_VER%" NEQ ""	break
+	if "%VSCMD_VER%" NEQ ""	break
 	)
 )
 :VSCMD

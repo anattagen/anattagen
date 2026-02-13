@@ -121,19 +121,16 @@ class ConfigManager(QObject):
         }
 
         # Set default overwrite states (Deployment Tab -> Creation)
+        # Only profiles_dir and launchers_dir should be True by default
         config.overwrite_states = {
-            key: True for key in [
-                "profiles_dir", "launchers_dir", "launcher_executable", "controller_mapper_path", "borderless_gaming_path",
-                "multi_monitor_tool_path", "just_after_launch_path", "just_before_exit_path",
-                "p1_profile_path", "p2_profile_path", "mediacenter_profile_path",
-                "multimonitor_gaming_path", "multimonitor_media_path",
-                "pre1_path", "pre2_path", "pre3_path", "post1_path", "post2_path", "post3_path"
-            ]
+            "profiles_dir": True,
+            "launchers_dir": True
         }
 
         # Set default deployment tab options
-        config.download_game_json = False
-        config.download_artwork = False
+        config.download_game_json = True
+        config.download_pcgw_metadata = True
+        config.download_artwork = True
         config.hide_taskbar = False
         config.run_as_admin = True
         config.enable_name_matching = True
@@ -200,12 +197,76 @@ class ConfigManager(QObject):
         if antimicrox_path:
             config.controller_mapper_path = antimicrox_path
             logging.info(f"Using AntimicroX: {antimicrox_path}")
+            self._populate_controller_profiles(config, antimicrox_path, "antimicrox", ".amgp")
             return
 
         keysticks_path = self._find_executable_recursive(bin_dir, KEYSTICKS_EXES) or self._find_executable_recursive(project_dir, KEYSTICKS_EXES)
         if keysticks_path:
             config.controller_mapper_path = keysticks_path
             logging.info(f"Using Keysticks: {keysticks_path}")
+            self._populate_controller_profiles(config, keysticks_path, "keysticks", ".keysticks")
+    
+    def _populate_controller_profiles(self, config: AppConfig, mapper_path: str, prefix: str, ext: str):
+        """Populate controller profiles for Player1, Player2, and MediaCenter."""
+        project_dir = Path(constants.APP_ROOT_DIR)
+        mapper_dir = Path(mapper_path).parent
+        assets_dir = project_dir / "assets"
+        
+        # Profile mappings: config_attr -> (search_name, template_name, output_name)
+        profiles = {
+            'p1_profile_path': ('Player1', f'{prefix}_Player{ext}.set', f'Player1{ext}'),
+            'p2_profile_path': ('Player2', f'{prefix}_Player{ext}.set', f'Player2{ext}'),
+            'mediacenter_profile_path': ('MediaCenter', f'{prefix}_MediaCenter{ext}.set', f'MediaCenter{ext}')
+        }
+        
+        for config_attr, (search_name, template_name, output_name) in profiles.items():
+            # Search for existing profile in project dir or mapper subdirectories
+            found_profile = None
+            
+            # Search in project root
+            for file in project_dir.glob(f'*{search_name}*{ext}'):
+                found_profile = str(file)
+                break
+            
+            # Search in mapper directory and subdirectories
+            if not found_profile and mapper_dir.exists():
+                for file in mapper_dir.rglob(f'*{search_name}*{ext}'):
+                    found_profile = str(file)
+                    break
+            
+            if found_profile:
+                setattr(config, config_attr, found_profile)
+                logging.info(f"Found {search_name} profile: {found_profile}")
+            else:
+                # Create from template
+                template_path = assets_dir / template_name
+                output_path = project_dir / output_name
+                
+                if template_path.exists() and not output_path.exists():
+                    try:
+                        # Read template
+                        with open(template_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                        
+                        # Replace tags
+                        # [NEWOSK] - path to osk program
+                        osk_path = "C:\\Windows\\System32\\osk.exe" if os.name == 'nt' else "/usr/bin/onboard"
+                        content = content.replace('[NEWOSK]', osk_path)
+                        
+                        # [AMICRX] - path to antimicrox.exe
+                        if prefix == "antimicrox":
+                            content = content.replace('[AMICRX]', mapper_path)
+                        else:
+                            content = content.replace('[AMICRX]', '')
+                        
+                        # Write output
+                        with open(output_path, 'w', encoding='utf-8') as f:
+                            f.write(content)
+                        
+                        setattr(config, config_attr, str(output_path))
+                        logging.info(f"Created {search_name} profile from template: {output_path}")
+                    except Exception as e:
+                        logging.error(f"Failed to create {search_name} profile from template: {e}")
 
     def _detect_multimonitor_tool(self, config: AppConfig):
         project_dir = Path(constants.APP_ROOT_DIR)

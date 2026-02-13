@@ -44,6 +44,9 @@ class MainWindow(QMainWindow):
         
         # Show the window
         self.show()
+        
+        # Check if steam.json exists but caches don't - auto-process if needed
+        self._check_and_process_steam_on_startup()
 
     def reset_configuration_to_defaults(self):
         """Handles the logic for resetting the app config to its default state."""
@@ -61,7 +64,7 @@ class MainWindow(QMainWindow):
     def _setup_ui(self):
         self.setWindowTitle("Game Environment Manager")
         self.setWindowIcon(QIcon(constants.APP_ICON))
-        self.setGeometry(100, 100, 740, 240)  # Reduced from 950, 750 to 800, 600
+        self.setGeometry(100, 100, 880, 500)  # Reduced from 950, 750 to 800, 600
 
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
@@ -96,6 +99,19 @@ class MainWindow(QMainWindow):
         """Clear the editor table"""
         self.editor_tab.clear_table()
         self.statusBar().showMessage("List view cleared", 3000)
+    
+    def _check_and_process_steam_on_startup(self):
+        """Check if steam.json exists but caches don't, and auto-process if needed."""
+        import os
+        steam_json_path = constants.STEAM_JSON_FILE
+        filtered_path = os.path.join(constants.APP_ROOT_DIR, "steam_filtered.txt")
+        normalized_path = os.path.join(constants.APP_ROOT_DIR, "normalized_steam_games.cache")
+        
+        # If steam.json exists but caches don't, auto-process
+        if os.path.exists(steam_json_path):
+            if not os.path.exists(filtered_path) or not os.path.exists(normalized_path):
+                self.statusBar().showMessage("Processing steam.json on startup...", 0)
+                self.steam_manager.process_existing_json()
 
     def _connect_signals(self):
         """Connect signals from UI tabs and managers to slots."""
@@ -113,6 +129,7 @@ class MainWindow(QMainWindow):
         self.steam_manager.processing_started.connect(self._disable_ui_for_long_process)
         self.steam_manager.process_file_selection_requested.connect(self._on_process_file_selection_requested)
         self.steam_manager.processing_finished.connect(self._enable_ui_after_long_process)
+        self.steam_manager.processing_finished.connect(self.deployment_tab.update_steam_status)
 
         # --- UI Signals ---
         self.setup_tab.config_changed.connect(self._sync_config_from_ui_and_save)
@@ -196,14 +213,11 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(str)
     def _on_processing_prompt_requested(self, file_path: str):
-        """Ask user if they want to process a newly downloaded file."""
-        reply = QMessageBox.question(
-            self, "Process Steam Data",
-            "Steam data downloaded. Do you want to process it now? This may take some time.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes)
-        if reply == QMessageBox.StandardButton.Yes:
-            self.steam_manager.prompt_and_process_steam_json(file_path)
+        """Auto-process newly downloaded Steam JSON file."""
+        # Auto-process without prompting
+        self.steam_manager.prompt_and_process_steam_json(file_path)
+        # Update deployment tab status after processing starts
+        self.deployment_tab.update_steam_status()
 
     @pyqtSlot()
     def _on_process_file_selection_requested(self):
