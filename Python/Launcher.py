@@ -34,9 +34,9 @@ if sys.platform == 'win32':
 
 # Import the new sequence executor
 try:
-    from Python.sequence_executor import SequenceExecutor
+    from Python.sequence_executor_v2 import SequenceExecutorV2
 except ImportError:
-    from sequence_executor import SequenceExecutor
+    from sequence_executor_v2 import SequenceExecutorV2
 
 class DynamicSplash:
     """Handles a dynamic splash screen using Pygame and Win32GUI for transparency."""
@@ -241,7 +241,20 @@ class GameLauncher:
         
         # Initialize the sequence executor
         self.update_splash_progress(90, "Preparing execution sequences...")
-        self.executor = SequenceExecutor(self)
+        
+        # Initialize plugin manager if available
+        try:
+            from Python.managers.plugin_manager import PluginManager
+            self.plugin_manager = PluginManager()
+        except ImportError:
+            try:
+                from managers.plugin_manager import PluginManager
+                self.plugin_manager = PluginManager()
+            except ImportError:
+                self.plugin_manager = None
+                logging.warning("Plugin manager not available")
+        
+        self.executor = SequenceExecutorV2(self)
         
         # Close splash screen after initialization is done
         self.update_splash_progress(100, "Ready to launch!")
@@ -415,6 +428,24 @@ class GameLauncher:
             self.cloud_app_options = config.get('Paths', 'CloudAppOptions', fallback='')
             self.cloud_app_arguments = config.get('Paths', 'CloudAppArguments', fallback='')
             
+            # Cloud backup specific paths
+            self.rclone_app = config.get('Paths', 'RcloneApp', fallback='')
+            self.ludusavi_app = config.get('Paths', 'LudusaviApp', fallback='')
+            
+            # Rclone configuration
+            self.rclone_remote_name = config.get('Paths', 'RcloneRemoteName', fallback='')
+            self.rclone_local_path = config.get('Paths', 'RcloneLocalPath', fallback='')
+            self.rclone_remote_path = config.get('Paths', 'RcloneRemotePath', fallback='')
+            self.rclone_sync_mode = config.get('Paths', 'RcloneSyncMode', fallback='sync')
+            self.rclone_backup_on_launch = config.getboolean('Paths', 'RcloneBackupOnLaunch', fallback=False)
+            self.rclone_backup_on_exit = config.getboolean('Paths', 'RcloneBackupOnExit', fallback=True)
+            
+            # Ludusavi configuration
+            self.ludusavi_backup_path = config.get('Paths', 'LudusaviBackupPath', fallback='')
+            self.ludusavi_game_name = config.get('Paths', 'LudusaviGameName', fallback='')
+            self.ludusavi_backup_on_launch = config.getboolean('Paths', 'LudusaviBackupOnLaunch', fallback=False)
+            self.ludusavi_backup_on_exit = config.getboolean('Paths', 'LudusaviBackupOnExit', fallback=True)
+            
             self.disc_mount_app = config.get('Paths', 'DiscMountApp', fallback='')
             self.disc_mount_options = config.get('Paths', 'DiscMountOptions', fallback='')
             self.disc_mount_arguments = config.get('Paths', 'DiscMountArguments', fallback='')
@@ -557,6 +588,8 @@ class GameLauncher:
             '$BORDERLESS': self.borderless_app,
             '$MMONAPP': self.multimonitor_tool,
             '$CLOUDAPP': getattr(self, 'cloud_app', ''),
+            '$RCLONE': getattr(self, 'rclone_app', ''),
+            '$LUDUSAVI': getattr(self, 'ludusavi_app', ''),
             '$GAMEDIR': self.game_dir,
             '$GAMEEXE': self.game_path,
             '$GAMENAME': self.game_name,

@@ -127,7 +127,8 @@ class SetupTab(QWidget):
         "p2_profile_path", "mediacenter_profile_path", "multimonitor_gaming_path",
         "multimonitor_media_path", "pre1_path", "pre2_path", "pre3_path",
         "just_after_launch_path", "just_before_exit_path",
-        "post1_path", "post2_path", "post3_path"
+        "post1_path", "post2_path", "post3_path",
+        "rclone_path", "ludusavi_path"
     ]
 
     SEQUENCE_TOOLTIPS = {
@@ -147,12 +148,20 @@ class SetupTab(QWidget):
         "Post3": "Runs Post-Launch Script 3.",
         "Borderless": "Starts/Stops Borderless Gaming.",
         "Cloud-Sync": "Runs the Cloud Sync application.",
+        "JustAfterLaunch": "Runs immediately after game launches.",
+        "JustBeforeExit": "Runs immediately before game exits.",
     }
     def __init__(self, parent=None):
         super().__init__(parent)
         self.main_window = parent
         self.path_rows = {}
+        
+        # Get plugin manager from main window if available
+        self.plugin_manager = getattr(parent, 'plugin_manager', None)
+        
+        # Parse repos.set
         self.repos = self._parse_repos_set()
+        
         self.last_detected_tools = {}
         self.options_args_map = self._parse_options_arguments_set()
         
@@ -178,6 +187,7 @@ class SetupTab(QWidget):
                     self.mounting_tools["imgdrive"] = tool_data
 
         self.download_thread = None
+        
         self._setup_ui()
 
     def _add_path_row(self, layout, label_text, config_key, row_widget):
@@ -371,6 +381,16 @@ class SetupTab(QWidget):
         self.path_rows["just_before_exit_path"] = PathConfigRow("just_before_exit_path", add_run_wait=True, repo_items=all_tools)
         self.path_rows["just_before_exit_path"].enabled_cb.setToolTip("Enable Just Before Exit App")
         self._add_path_row(app_paths_layout, "Just Before Exit:", "just_before_exit_path", self.path_rows["just_before_exit_path"])
+        
+        # Cloud Backup / Sync Tools
+        self.path_rows["rclone_path"] = PathConfigRow("rclone_path", add_run_wait=True, add_cen_lc=True, add_enabled=True, repo_items=self.repos.get("SYNC"))
+        self.path_rows["rclone_path"].enabled_cb.setToolTip("Enable Rclone Cloud Backup")
+        self._add_path_row(app_paths_layout, "Rclone (Cloud Sync):", "rclone_path", self.path_rows["rclone_path"])
+        
+        self.path_rows["ludusavi_path"] = PathConfigRow("ludusavi_path", add_run_wait=True, add_cen_lc=True, add_enabled=True, repo_items=self.repos.get("SYNC"))
+        self.path_rows["ludusavi_path"].enabled_cb.setToolTip("Enable Ludusavi Save Backup")
+        self._add_path_row(app_paths_layout, "Ludusavi (Save Backup):", "ludusavi_path", self.path_rows["ludusavi_path"])
+        
         paths_tabs.addTab(app_paths_widget, "APPLICATIONS")
 
         # Profile Paths Tab
@@ -387,6 +407,56 @@ class SetupTab(QWidget):
         self.path_rows["multimonitor_media_path"] = PathConfigRow("multimonitor_media_path", add_enabled=True)
         profile_paths_layout.addRow("MM Desktop Config:", self.path_rows["multimonitor_media_path"])
         paths_tabs.addTab(profile_paths_widget, "   PROFILES   ")
+
+        # Cloud Backup Configuration Tab
+        cloud_backup_widget = QWidget()
+        cloud_backup_layout = QFormLayout(cloud_backup_widget)
+        
+        # Rclone Configuration
+        cloud_backup_layout.addRow(QLabel("<b>Rclone Configuration:</b>"))
+        self.rclone_remote_name_edit = QLineEdit()
+        self.rclone_remote_name_edit.setPlaceholderText("e.g., gdrive:")
+        cloud_backup_layout.addRow("Remote Name:", self.rclone_remote_name_edit)
+        
+        self.rclone_local_path_row = PathConfigRow("rclone_local_path", is_directory=True)
+        cloud_backup_layout.addRow("Local Save Path:", self.rclone_local_path_row)
+        
+        self.rclone_remote_path_edit = QLineEdit()
+        self.rclone_remote_path_edit.setPlaceholderText("e.g., GameSaves/MyGame")
+        cloud_backup_layout.addRow("Remote Path:", self.rclone_remote_path_edit)
+        
+        self.rclone_sync_mode_combo = QComboBox()
+        self.rclone_sync_mode_combo.addItems(["sync", "copy", "copyto"])
+        self.rclone_sync_mode_combo.setToolTip("sync=bidirectional, copy=upload only, copyto=download only")
+        cloud_backup_layout.addRow("Sync Mode:", self.rclone_sync_mode_combo)
+        
+        self.rclone_backup_on_launch_cb = QCheckBox("Backup on Launch (download saves)")
+        cloud_backup_layout.addRow("", self.rclone_backup_on_launch_cb)
+        
+        self.rclone_backup_on_exit_cb = QCheckBox("Backup on Exit (upload saves)")
+        self.rclone_backup_on_exit_cb.setChecked(True)
+        cloud_backup_layout.addRow("", self.rclone_backup_on_exit_cb)
+        
+        # Separator
+        cloud_backup_layout.addRow(QLabel(""))
+        
+        # Ludusavi Configuration
+        cloud_backup_layout.addRow(QLabel("<b>Ludusavi Configuration:</b>"))
+        self.ludusavi_backup_path_row = PathConfigRow("ludusavi_backup_path", is_directory=True)
+        cloud_backup_layout.addRow("Backup Directory:", self.ludusavi_backup_path_row)
+        
+        self.ludusavi_game_name_edit = QLineEdit()
+        self.ludusavi_game_name_edit.setPlaceholderText("Leave empty for auto-detection")
+        cloud_backup_layout.addRow("Game Name:", self.ludusavi_game_name_edit)
+        
+        self.ludusavi_backup_on_launch_cb = QCheckBox("Restore on Launch")
+        cloud_backup_layout.addRow("", self.ludusavi_backup_on_launch_cb)
+        
+        self.ludusavi_backup_on_exit_cb = QCheckBox("Backup on Exit")
+        self.ludusavi_backup_on_exit_cb.setChecked(True)
+        cloud_backup_layout.addRow("", self.ludusavi_backup_on_exit_cb)
+        
+        paths_tabs.addTab(cloud_backup_widget, "CLOUD BACKUP")
 
         # Script Paths Tab
         script_paths_widget = QWidget()
@@ -453,6 +523,13 @@ class SetupTab(QWidget):
         self.page_size_spin.setValue(50)
         self.page_size_spin.setToolTip("Number of rows per page in the Editor tab (75-2000)")
         behavior_layout.addRow("Editor Page Size:", self.page_size_spin)
+        
+        # Plugin Manager Button
+        self.plugin_manager_btn = QPushButton("Plugin Manager")
+        self.plugin_manager_btn.setToolTip("Open Plugin Manager to view, enable/disable, and manage plugins")
+        self.plugin_manager_btn.clicked.connect(self._open_plugin_manager)
+        behavior_layout.addRow("Plugins:", self.plugin_manager_btn)
+        
         # Restart Button
         self.restart_btn = QPushButton("Reset to Defaults")
         self.restart_btn.setToolTip("Reset all application configuration to defaults")
@@ -1256,13 +1333,13 @@ exit 1
 
     def _reset_launch_sequence(self):
         self.launch_sequence_list.clear()
-        self.launch_sequence_list.addItems(["Kill-Game", "Kill-List", "mount-disc", "Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Borderless", "Pre2", "Pre3"])
+        self.launch_sequence_list.addItems(["Cloud-Sync", "mount-disc", "Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Pre2", "Pre3", "Borderless"])
         self.config_changed.emit()
         self._update_list_tooltips(self.launch_sequence_list)
 
     def _reset_exit_sequence(self):
         self.exit_sequence_list.clear()
-        self.exit_sequence_list.addItems(["Kill-Game", "Kill-List", "Unmount-disc", "Monitor-Config", "Taskbar", "Post1", "Post2", "Post3", "Controller-Mapper", "Borderless"])
+        self.exit_sequence_list.addItems(["Post1", "Post2", "Post3", "Monitor-Config", "Taskbar", "Controller-Mapper", "Unmount-disc", "Cloud-Sync"])
         self.config_changed.emit()
         self._update_list_tooltips(self.exit_sequence_list)
 
@@ -1273,9 +1350,9 @@ exit 1
         
         # Define full sets
         if sequence_type == "launch":
-            full_set = ["Kill-Game", "Kill-List", "mount-disc", "Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Borderless", "Pre2", "Pre3"]
+            full_set = ["Cloud-Sync", "mount-disc", "Kill-Game", "Kill-List", "Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Pre2", "Pre3", "Borderless"]
         else:
-            full_set = ["Kill-Game", "Kill-List", "Unmount-disc", "Monitor-Config", "Taskbar", "Post1", "Post2", "Post3", "Controller-Mapper", "Borderless"]
+            full_set = ["Post1", "Post2", "Post3", "Kill-Game", "Kill-List", "Monitor-Config", "Taskbar", "Controller-Mapper", "Borderless", "Unmount-disc", "Cloud-Sync"]
             
         current_items = [list_widget.item(i).text() for i in range(list_widget.count())]
         removed_items = [x for x in full_set if x not in current_items]
@@ -1432,14 +1509,56 @@ exit 1
                         self.last_detected_tools[attr_name] = exe_name
 
         self.launch_sequence_list.clear()
-        self.launch_sequence_list.addItems(config.launch_sequence if config.launch_sequence else 
-            ["Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Pre2", "Pre3", "Borderless"])
+        # Ensure new items are in the sequence (migration for existing configs)
+        launch_seq = config.launch_sequence if config.launch_sequence else []
+        if not launch_seq:
+            # Use defaults for new configs
+            launch_seq = ["Cloud-Sync", "mount-disc", "Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Pre2", "Pre3", "Borderless"]
+        else:
+            # Migrate existing configs: add new items if missing
+            if "Cloud-Sync" not in launch_seq:
+                launch_seq.insert(0, "Cloud-Sync")
+            if "mount-disc" not in launch_seq:
+                # Insert after Cloud-Sync
+                insert_pos = launch_seq.index("Cloud-Sync") + 1 if "Cloud-Sync" in launch_seq else 0
+                launch_seq.insert(insert_pos, "mount-disc")
+        
+        self.launch_sequence_list.addItems(launch_seq)
         self._update_list_tooltips(self.launch_sequence_list)
         
         self.exit_sequence_list.clear()
-        self.exit_sequence_list.addItems(config.exit_sequence if config.exit_sequence else
-            ["Post1", "Post2", "Post3", "Monitor-Config", "Taskbar", "Controller-Mapper"])
+        # Ensure new items are in the sequence (migration for existing configs)
+        exit_seq = config.exit_sequence if config.exit_sequence else []
+        if not exit_seq:
+            # Use defaults for new configs
+            exit_seq = ["Post1", "Post2", "Post3", "Monitor-Config", "Taskbar", "Controller-Mapper", "Unmount-disc", "Cloud-Sync"]
+        else:
+            # Migrate existing configs: add new items if missing
+            if "Unmount-disc" not in exit_seq:
+                # Insert before Cloud-Sync if it exists, otherwise at end
+                if "Cloud-Sync" in exit_seq:
+                    insert_pos = exit_seq.index("Cloud-Sync")
+                else:
+                    insert_pos = len(exit_seq)
+                exit_seq.insert(insert_pos, "Unmount-disc")
+            if "Cloud-Sync" not in exit_seq:
+                exit_seq.append("Cloud-Sync")
+        
+        self.exit_sequence_list.addItems(exit_seq)
         self._update_list_tooltips(self.exit_sequence_list)
+        
+        # Cloud Backup Configuration
+        self.rclone_remote_name_edit.setText(getattr(config, 'rclone_remote_name', ''))
+        self.rclone_local_path_row.path = getattr(config, 'rclone_local_path', '')
+        self.rclone_remote_path_edit.setText(getattr(config, 'rclone_remote_path', ''))
+        self.rclone_sync_mode_combo.setCurrentText(getattr(config, 'rclone_sync_mode', 'sync'))
+        self.rclone_backup_on_launch_cb.setChecked(getattr(config, 'rclone_backup_on_launch', False))
+        self.rclone_backup_on_exit_cb.setChecked(getattr(config, 'rclone_backup_on_exit', True))
+        
+        self.ludusavi_backup_path_row.path = getattr(config, 'ludusavi_backup_path', '')
+        self.ludusavi_game_name_edit.setText(getattr(config, 'ludusavi_game_name', ''))
+        self.ludusavi_backup_on_launch_cb.setChecked(getattr(config, 'ludusavi_backup_on_launch', False))
+        self.ludusavi_backup_on_exit_cb.setChecked(getattr(config, 'ludusavi_backup_on_exit', True))
 
         self.blockSignals(False)
 
@@ -1469,6 +1588,19 @@ exit 1
 
         config.launch_sequence = [self.launch_sequence_list.item(i).text() for i in range(self.launch_sequence_list.count())]
         config.exit_sequence = [self.exit_sequence_list.item(i).text() for i in range(self.exit_sequence_list.count())]
+        
+        # Cloud Backup Configuration
+        config.rclone_remote_name = self.rclone_remote_name_edit.text()
+        config.rclone_local_path = self.rclone_local_path_row.path
+        config.rclone_remote_path = self.rclone_remote_path_edit.text()
+        config.rclone_sync_mode = self.rclone_sync_mode_combo.currentText()
+        config.rclone_backup_on_launch = self.rclone_backup_on_launch_cb.isChecked()
+        config.rclone_backup_on_exit = self.rclone_backup_on_exit_cb.isChecked()
+        
+        config.ludusavi_backup_path = self.ludusavi_backup_path_row.path
+        config.ludusavi_game_name = self.ludusavi_game_name_edit.text()
+        config.ludusavi_backup_on_launch = self.ludusavi_backup_on_launch_cb.isChecked()
+        config.ludusavi_backup_on_exit = self.ludusavi_backup_on_exit_cb.isChecked()
 
     def _on_path_text_changed(self, config_key, new_path):
         """Updates options and arguments if the new path matches a known tool."""
@@ -1487,3 +1619,25 @@ exit 1
             # Enable the unmount row if mount is set
             if unmount_row.enabled_cb:
                 unmount_row.enabled_cb.setChecked(True)
+
+    def _log_plugin_info(self):
+        """Log information about registered plugins"""
+        import logging
+        registry = self.plugin_manager.get_registry()
+        logging.info(f"Plugin system initialized with {len(registry)} plugins")
+        
+        for plugin in registry.get_all():
+            logging.info(f"  - {plugin.metadata.display_name} ({plugin.metadata.name}) v{plugin.metadata.version}")
+        
+        # Log installed tools
+        installed = self.plugin_manager.scan_installed_tools()
+        if installed:
+            logging.info(f"Found {len(installed)} installed tools:")
+            for tool_name, paths in installed.items():
+                logging.info(f"  - {tool_name}: {len(paths)} executable(s) found")
+
+    def _open_plugin_manager(self):
+        """Open the Plugin Manager dialog"""
+        from Python.ui.plugin_manager_dialog import PluginManagerDialog
+        dialog = PluginManagerDialog(self)
+        dialog.exec()

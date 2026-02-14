@@ -1,0 +1,435 @@
+# Plugin Configuration Guide
+
+Detailed configuration reference for all built-in plugins.
+
+## AntiMicroX Plugin
+
+**Purpose**: Controller to keyboard/mouse mapping
+
+### Configuration
+
+```ini
+[Paths]
+ControllerMapperApp=bin\AntiMicroX\bin\antimicrox.exe
+ControllerMapperOptions=
+ControllerMapperArguments=
+Player1Profile=Profiles\MyGame_P1.amgp
+Player2Profile=Profiles\MyGame_P2.amgp
+MediaCenterProfile=Profiles\MediaCenter.amgp
+```
+
+### Behavior
+
+- **Launch**: Loads Player1 and Player2 profiles for gaming
+- **Exit**: Loads MediaCenter profile to restore desktop controls
+
+### Example Profiles
+
+**Gaming Profile** (`Witcher3_P1.amgp`):
+- A Button → Space (Jump)
+- B Button → E (Interact)
+- X Button → Q (Quick Menu)
+- Y Button → Tab (Inventory)
+
+**Media Profile** (`MediaCenter.amgp`):
+- A Button → Play/Pause
+- B Button → Stop
+- D-Pad → Volume/Seek
+
+### Tips
+
+- Create separate profiles per game genre
+- Use `--tray --hidden` in options to minimize
+- Test profiles before deploying
+
+---
+
+## Borderless Gaming Plugin
+
+**Purpose**: Borderless fullscreen mode
+
+### Configuration
+
+```ini
+[Paths]
+BorderlessWindowingApp=bin\BorderlessGaming.exe
+BorderlessWindowingOptions=
+BorderlessWindowingArguments=
+
+[Options]
+Borderless=E  # E=Enable, K=Kill on exit, 0=Disabled
+TerminateBorderlessOnExit=True
+```
+
+### Behavior
+
+- **Launch**: Starts BorderlessGaming, auto-detects game window
+- **Exit**: Terminates if `TerminateBorderlessOnExit=True`
+
+### When to Use
+
+- Games without native borderless mode
+- Better alt-tab performance
+- Multi-monitor gaming
+
+### Tips
+
+- Add game to BorderlessGaming favorites
+- Set `TerminateBorderlessOnExit=False` for shared use
+
+---
+
+## MultiMonitorTool Plugin
+
+**Purpose**: Automatic monitor configuration switching
+
+### Configuration
+
+```ini
+[Paths]
+MultiMonitorTool=bin\MultiMonitorTool.exe
+MultiMonitorOptions=
+MultiMonitorArguments=
+MultiMonitorGamingConfig=Profiles\gaming.cfg
+MultiMonitorDesktopConfig=Profiles\desktop.cfg
+```
+
+### Behavior
+
+- **Launch**: Applies gaming monitor configuration
+- **Exit**: Restores desktop monitor configuration
+
+### Example Configurations
+
+**Gaming** (`gaming.cfg`):
+- Primary: 144Hz, 1920x1080
+- Secondary: Disabled
+
+**Desktop** (`desktop.cfg`):
+- Primary: 60Hz, 1920x1080
+- Secondary: 60Hz, 1920x1080
+
+### Creating Configurations
+
+1. Arrange monitors as desired
+2. Open MultiMonitorTool
+3. File → Save Configuration
+4. Save to `Profiles/` folder
+
+---
+
+## Rclone Cloud Backup Plugin
+
+**Purpose**: Sync save games to cloud storage
+
+### Configuration
+
+```ini
+[Paths]
+RcloneApp=bin\rclone.exe
+RcloneRemoteName=gdrive:
+RcloneLocalPath=C:\Games\MyGame\Saves
+RcloneRemotePath=GameSaves/MyGame
+RcloneSyncMode=sync
+RcloneBackupOnLaunch=False
+RcloneBackupOnExit=True
+```
+
+### Sync Modes
+
+| Mode | Direction | Use Case |
+|------|-----------|----------|
+| `sync` | Bidirectional | Multi-PC setup |
+| `copy` | Local → Cloud | Backup only |
+| `copyto` | Cloud → Local | Restore only |
+
+### Behavior
+
+- **Launch**: Downloads saves if `BackupOnLaunch=True`
+- **Exit**: Uploads saves if `BackupOnExit=True`
+
+### Supported Providers
+
+- Google Drive (`gdrive:`)
+- Dropbox (`dropbox:`)
+- OneDrive (`onedrive:`)
+- Amazon S3 (`s3:`)
+- Backblaze B2 (`b2:`)
+- 40+ more
+
+### Setup Example: Google Drive
+
+```bash
+cd bin
+rclone config
+# n (new remote)
+# Name: gdrive
+# Storage: drive
+# Follow authentication
+```
+
+### Tips
+
+- Use `sync` for multi-PC gaming
+- Use `copy` for backup-only
+- Test with small save files first
+- Check `launcher.log` for sync status
+
+---
+
+## Ludusavi Backup Plugin
+
+**Purpose**: Local save game backup with automatic detection
+
+### Configuration
+
+```ini
+[Paths]
+LudusaviApp=bin\ludusavi.exe
+LudusaviBackupPath=D:\Backups\GameSaves
+LudusaviGameName=My Game Name
+LudusaviBackupOnLaunch=False
+LudusaviBackupOnExit=True
+```
+
+### Behavior
+
+- **Launch**: Restores saves if `BackupOnLaunch=True`
+- **Exit**: Backs up saves if `BackupOnExit=True`
+
+### Features
+
+- Automatic save location detection
+- Supports 10,000+ games
+- Incremental backups
+- Restore from any backup
+
+### Game Name
+
+- **Specific**: `LudusaviGameName=The Witcher 3`
+- **All Games**: Leave empty or omit
+
+### Tips
+
+- Leave `GameName` empty for auto-detection
+- Use specific names for targeted backups
+- Check Ludusavi database for game support
+
+---
+
+## Pre/Post Launch Apps
+
+**Purpose**: Run custom scripts or applications
+
+### Configuration
+
+```ini
+[PreLaunch]
+App1=scripts\setup.bat
+App1Options=
+App1Arguments=
+App1Wait=1  # 1=Wait for completion, 0=Run async
+
+App2=tools\optimizer.exe
+App2Options=
+App2Arguments=--game-mode
+App2Wait=1
+
+App3=
+App3Options=
+App3Arguments=
+App3Wait=0
+
+[PostLaunch]
+App1=scripts\cleanup.bat
+App1Options=
+App1Arguments=
+App1Wait=1
+
+App2=
+App2Options=
+App2Arguments=
+App2Wait=0
+
+App3=
+App3Options=
+App3Arguments=
+App3Wait=0
+```
+
+### Behavior
+
+- **Pre-Launch**: Runs before game starts
+- **Post-Launch**: Runs after game exits
+- **Wait**: If `1`, waits for completion before continuing
+
+### Use Cases
+
+- Performance optimization scripts
+- Lighting control (RGB, smart lights)
+- Discord status updates
+- Custom logging
+
+---
+
+## Disc Mounting
+
+**Purpose**: Mount ISO/disc images
+
+### Configuration
+
+```ini
+[Game]
+IsoPath=D:\ISOs\MyGame.iso
+
+[Paths]
+DiscMountApp=powershell
+DiscMountOptions=-command
+DiscMountArguments=Mount-DiskImage -ImagePath '$ISO'
+DiscMountWait=True
+
+DiscUnmountApp=powershell
+DiscUnmountOptions=-command
+DiscUnmountArguments=Dismount-DiskImage -ImagePath '$ISO'
+DiscUnmountWait=False
+```
+
+### Behavior
+
+- **Launch**: Mounts ISO before game starts
+- **Exit**: Unmounts ISO after game exits
+
+### Supported Tools
+
+- Windows PowerShell (native)
+- WinCDEmu
+- Daemon Tools
+- Virtual CloneDrive
+
+### Tips
+
+- Use native PowerShell for Windows 10+
+- Set `DiscMountWait=True` to ensure mount completes
+- Verify ISO path is correct
+
+---
+
+## Sequence Configuration
+
+### Available Actions
+
+| Action | Description |
+|--------|-------------|
+| `Controller-Mapper` | Load/unload controller profiles |
+| `Monitor-Config` | Switch monitor configurations |
+| `Borderless` | Start borderless windowing |
+| `Cloud-Sync` | Sync saves to/from cloud |
+| `No-TB` | Hide Windows taskbar |
+| `Taskbar` | Show Windows taskbar |
+| `Pre1`, `Pre2`, `Pre3` | Pre-launch apps |
+| `Post1`, `Post2`, `Post3` | Post-launch apps |
+| `mount-disc` | Mount ISO image |
+| `Unmount-disc` | Unmount ISO image |
+| `Kill-Game` | Force kill game process |
+| `Kill-List` | Kill processes from list |
+
+### Example Sequences
+
+**Minimal**:
+```ini
+LaunchSequence=Controller-Mapper
+ExitSequence=Controller-Mapper
+```
+
+**Standard**:
+```ini
+LaunchSequence=Controller-Mapper,Monitor-Config,Borderless
+ExitSequence=Monitor-Config,Controller-Mapper
+```
+
+**Full Featured**:
+```ini
+LaunchSequence=Cloud-Sync,Controller-Mapper,Monitor-Config,No-TB,Pre1,Borderless
+ExitSequence=Post1,Monitor-Config,Taskbar,Controller-Mapper,Cloud-Sync
+```
+
+**Disc-Based Game**:
+```ini
+LaunchSequence=mount-disc,Controller-Mapper,Borderless
+ExitSequence=Controller-Mapper,Unmount-disc
+```
+
+---
+
+## Variable Substitution
+
+Use variables in paths and arguments:
+
+| Variable | Description |
+|----------|-------------|
+| `$HOME` | [RJ_PROJ] directory |
+| `$GAMEDIR` | Game directory |
+| `$GAMEEXE` | Game executable |
+| `$GAMENAME` | Game name |
+| `$ISO` | ISO path |
+| `$MAPPER` | Controller mapper path |
+| `$BORDERLESS` | Borderless app path |
+| `$MMONAPP` | Multi-monitor tool path |
+| `$RCLONE` | Rclone path |
+| `$LUDUSAVI` | Ludusavi path |
+
+### Example
+
+```ini
+[PreLaunch]
+App1=$HOME\scripts\setup.bat
+App1Arguments=$GAMENAME $GAMEDIR
+```
+
+---
+
+## Complete Example
+
+```ini
+[Game]
+Executable=C:\Games\Witcher3\bin\x64\witcher3.exe
+Directory=C:\Games\Witcher3
+Name=The Witcher 3
+IsoPath=
+
+[Paths]
+ControllerMapperApp=bin\AntiMicroX\bin\antimicrox.exe
+Player1Profile=Profiles\Witcher3_P1.amgp
+MediaCenterProfile=Profiles\MediaCenter.amgp
+
+BorderlessWindowingApp=bin\BorderlessGaming.exe
+
+MultiMonitorTool=bin\MultiMonitorTool.exe
+MultiMonitorGamingConfig=Profiles\gaming.cfg
+MultiMonitorDesktopConfig=Profiles\desktop.cfg
+
+RcloneApp=bin\rclone.exe
+RcloneRemoteName=gdrive:
+RcloneLocalPath=C:\Users\Me\Documents\The Witcher 3\gamesaves
+RcloneRemotePath=GameSaves/Witcher3
+RcloneSyncMode=sync
+RcloneBackupOnExit=True
+
+[Options]
+RunAsAdmin=False
+HideTaskbar=True
+Borderless=E
+TerminateBorderlessOnExit=True
+
+[Sequences]
+LaunchSequence=Cloud-Sync,Controller-Mapper,Monitor-Config,No-TB,Borderless
+ExitSequence=Monitor-Config,Taskbar,Controller-Mapper,Cloud-Sync
+```
+
+---
+
+## See Also
+
+- [TUTORIAL.md](TUTORIAL.md) - Complete tutorial
+- [CLOUD_BACKUP_INTEGRATION.md](CLOUD_BACKUP_INTEGRATION.md) - Cloud backup details
+- [Game.ini.example](Game.ini.example) - Full configuration example

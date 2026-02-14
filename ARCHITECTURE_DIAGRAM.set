@@ -1,0 +1,362 @@
+# Architecture Diagram: Plugin System Integration
+
+## System Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         User Interface                          │
+│                      (main_window_new.py)                       │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      Configuration Layer                        │
+│                         (models.py)                             │
+│  • Game settings                                                │
+│  • Tool paths                                                   │
+│  • Cloud backup config                                          │
+│  • Sequence definitions                                         │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                       Game Launcher                             │
+│                       (Launcher.py)                             │
+│  • Loads configuration                                          │
+│  • Initializes plugin manager                                   │
+│  • Creates sequence executor                                    │
+│  • Runs game with sequences                                     │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Plugin Manager                               │
+│                 (plugin_manager.py)                             │
+│  • Loads built-in plugins                                       │
+│  • Manages plugin registry                                      │
+│  • Provides plugin access                                       │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  Sequence Executor V2                           │
+│               (sequence_executor_v2.py)                         │
+│  • Executes launch/exit sequences                               │
+│  • Plugin-first execution strategy                              │
+│  • Falls back to legacy actions                                 │
+│  • Builds plugin configurations                                 │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                ┌────────────┴────────────┐
+                ▼                         ▼
+┌───────────────────────┐   ┌───────────────────────┐
+│   System Actions      │   │   Plugin Actions      │
+│                       │   │                       │
+│ • Kill-Game           │   │ • Controller-Mapper   │
+│ • Kill-List           │   │ • Monitor-Config      │
+│ • No-TB (Hide)        │   │ • Borderless          │
+│ • Taskbar (Show)      │   │ • Cloud-Sync          │
+│ • mount-disc          │   │                       │
+│ • Unmount-disc        │   │                       │
+└───────────────────────┘   └───────────┬───────────┘
+                                        │
+                                        ▼
+                        ┌───────────────────────────┐
+                        │    Plugin Registry        │
+                        │    (registry.py)          │
+                        │  • Manages plugins        │
+                        │  • Lookup by name/exe     │
+                        │  • Category filtering     │
+                        └───────────┬───────────────┘
+                                    │
+                    ┌───────────────┼───────────────┐
+                    ▼               ▼               ▼
+        ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+        │  AntiMicroX  │ │  Borderless  │ │ MultiMonitor │
+        │   Plugin     │ │   Plugin     │ │    Plugin    │
+        └──────────────┘ └──────────────┘ └──────────────┘
+                    ▼               ▼
+        ┌──────────────┐ ┌──────────────┐
+        │   Rclone     │ │  Ludusavi    │
+        │   Plugin     │ │   Plugin     │
+        └──────────────┘ └──────────────┘
+```
+
+## Execution Flow
+
+### Launch Sequence
+
+```
+1. User launches game
+   │
+   ▼
+2. Launcher.py loads Game.ini
+   │
+   ▼
+3. Plugin Manager initializes
+   │
+   ▼
+4. Sequence Executor V2 created
+   │
+   ▼
+5. Execute LaunchSequence:
+   │
+   ├─► Cloud-Sync (if configured)
+   │   └─► Rclone/Ludusavi downloads saves
+   │
+   ├─► Controller-Mapper
+   │   └─► AntiMicroX loads profiles
+   │
+   ├─► Monitor-Config
+   │   └─► MultiMonitorTool applies gaming config
+   │
+   ├─► No-TB
+   │   └─► Hide Windows taskbar
+   │
+   ├─► Borderless
+   │   └─► Start borderless windowing tool
+   │
+   ▼
+6. Game runs
+   │
+   ▼
+7. Execute ExitSequence:
+   │
+   ├─► Monitor-Config
+   │   └─► MultiMonitorTool restores desktop config
+   │
+   ├─► Taskbar
+   │   └─► Show Windows taskbar
+   │
+   ├─► Controller-Mapper
+   │   └─► AntiMicroX loads media center profile
+   │
+   ├─► Cloud-Sync (if configured)
+   │   └─► Rclone/Ludusavi uploads saves
+   │
+   ▼
+8. Cleanup and exit
+```
+
+## Plugin System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        ToolPlugin (ABC)                         │
+│                      (base_plugin.py)                           │
+│  • Abstract base class                                          │
+│  • Defines plugin interface                                     │
+│  • Configuration schema                                         │
+│  • Command building methods                                     │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             │ inherits
+                             │
+        ┌────────────────────┼────────────────────┐
+        │                    │                    │
+        ▼                    ▼                    ▼
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│  Controller  │    │  Windowing   │    │    Sync      │
+│   Plugins    │    │   Plugins    │    │   Plugins    │
+│              │    │              │    │              │
+│ • AntiMicroX │    │ • Borderless │    │ • Rclone     │
+│ • KeySticks  │    │ • Windowed   │    │ • Ludusavi   │
+└──────────────┘    └──────────────┘    └──────────────┘
+        │                    │                    │
+        └────────────────────┼────────────────────┘
+                             │
+                             ▼
+                    ┌──────────────┐
+                    │   Display    │
+                    │   Plugins    │
+                    │              │
+                    │ • MultiMon   │
+                    └──────────────┘
+```
+
+## Configuration Flow
+
+```
+Game.ini
+   │
+   ├─► [Game] section
+   │   └─► Game executable, directory, name
+   │
+   ├─► [Paths] section
+   │   ├─► Tool paths (RcloneApp, LudusaviApp, etc.)
+   │   ├─► Profile paths (Player1Profile, etc.)
+   │   └─► Cloud backup config (RcloneRemoteName, etc.)
+   │
+   ├─► [Options] section
+   │   └─► Behavior flags (RunAsAdmin, HideTaskbar, etc.)
+   │
+   ├─► [Sequences] section
+   │   ├─► LaunchSequence
+   │   └─► ExitSequence
+   │
+   ▼
+Launcher.py loads config
+   │
+   ▼
+SequenceExecutorV2 builds PluginConfig
+   │
+   ├─► tool_path from [Paths]
+   ├─► options from [Paths]
+   ├─► arguments from [Paths]
+   └─► custom_fields from plugin schema
+   │
+   ▼
+Plugin executes with configuration
+```
+
+## Cloud Backup Flow
+
+### Rclone Sync
+
+```
+Launch:
+  Cloud-Sync action
+    │
+    ▼
+  Check RcloneBackupOnLaunch
+    │
+    ├─► True: Download saves
+    │   │
+    │   └─► rclone sync "remote:path" "local/path"
+    │
+    └─► False: Skip
+    
+Exit:
+  Cloud-Sync action
+    │
+    ▼
+  Check RcloneBackupOnExit
+    │
+    ├─► True: Upload saves
+    │   │
+    │   └─► rclone sync "local/path" "remote:path"
+    │
+    └─► False: Skip
+```
+
+### Ludusavi Backup
+
+```
+Launch:
+  Cloud-Sync action
+    │
+    ▼
+  Check LudusaviBackupOnLaunch
+    │
+    ├─► True: Restore saves
+    │   │
+    │   └─► ludusavi restore --path "backup/path"
+    │
+    └─► False: Skip
+    
+Exit:
+  Cloud-Sync action
+    │
+    ▼
+  Check LudusaviBackupOnExit
+    │
+    ├─► True: Backup saves
+    │   │
+    │   └─► ludusavi backup --path "backup/path"
+    │
+    └─► False: Skip
+```
+
+## Data Flow
+
+```
+User Input (UI)
+   │
+   ▼
+AppConfig (models.py)
+   │
+   ▼
+Game.ini file
+   │
+   ▼
+Launcher.py (loads config)
+   │
+   ▼
+PluginManager (provides plugins)
+   │
+   ▼
+SequenceExecutorV2 (builds PluginConfig)
+   │
+   ▼
+Plugin (executes command)
+   │
+   ▼
+External Tool (rclone, antimicrox, etc.)
+   │
+   ▼
+Result (logged to launcher.log)
+```
+
+## Key Design Patterns
+
+### 1. Strategy Pattern
+- Different plugins implement the same interface
+- Executor selects plugin based on action name
+- Runtime plugin selection
+
+### 2. Factory Pattern
+- PluginManager creates plugin instances
+- Registry manages plugin lifecycle
+- Centralized plugin creation
+
+### 3. Template Method Pattern
+- ToolPlugin defines execution template
+- Subclasses implement specific behavior
+- Consistent plugin structure
+
+### 4. Adapter Pattern
+- SequenceExecutorV2 adapts launcher attributes to PluginConfig
+- Bridges legacy config to plugin system
+- Maintains backward compatibility
+
+## Benefits
+
+### Extensibility
+```
+New Plugin
+   │
+   ├─► Inherit from ToolPlugin
+   ├─► Implement required methods
+   ├─► Register with PluginManager
+   └─► Ready to use!
+```
+
+### Maintainability
+```
+Plugin Code
+   │
+   ├─► Isolated in own file
+   ├─► Self-contained logic
+   ├─► Independent testing
+   └─► Easy to modify
+```
+
+### Flexibility
+```
+Configuration
+   │
+   ├─► Per-plugin schemas
+   ├─► Dynamic field validation
+   ├─► Runtime configuration
+   └─► User-friendly
+```
+
+## Summary
+
+The plugin system provides:
+- ✅ Clean architecture
+- ✅ Extensible design
+- ✅ Maintainable code
+- ✅ Flexible configuration
+- ✅ Backward compatibility
+- ✅ Production ready

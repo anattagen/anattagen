@@ -1,0 +1,92 @@
+# Phase 4 UI Integration - Bug Fixes
+
+## Issues Resolved
+
+### 1. Plugin Manager Dialog Import Error
+**Problem**: ImportError when trying to open Plugin Manager dialog
+```
+ImportError: cannot import name 'PluginManagerDialog' from 'Python.ui.plugin_manager_dialog'
+```
+
+**Root Cause**: Missing `__init__.py` file in the `Python/ui/` package directory
+
+**Solution**: Created `Python/ui/__init__.py` with proper exports:
+```python
+"""UI package for [RJ_PROJ]"""
+
+from .plugin_manager_dialog import PluginManagerDialog
+
+__all__ = ['PluginManagerDialog']
+```
+
+**Status**: ✅ Fixed - Plugin Manager dialog can now be imported and opened
+
+---
+
+### 2. Rclone and Ludusavi Not Populating Comboboxes
+**Problem**: rclone.exe and ludusavi.exe present in /bin directory but not appearing in comboboxes
+
+**Root Cause**: PathConfigRow only scanned /bin directory, didn't search system PATH
+
+**Solution**: Enhanced `Python/ui/widgets.py` PathConfigRow initialization to:
+1. Continue scanning /bin directory recursively (existing behavior)
+2. Additionally search system PATH environment variable for rclone.exe and ludusavi.exe
+3. Add first occurrence from PATH to combobox if found
+
+**Implementation**:
+```python
+# Also search system PATH for rclone.exe and ludusavi.exe
+path_search_exes = ['rclone.exe', 'ludusavi.exe']
+for exe_name in path_search_exes:
+    if exe_name.lower() in exe_names_to_find:
+        # Search in PATH environment variable
+        path_env = os.environ.get('PATH', '')
+        for path_dir in path_env.split(os.pathsep):
+            if not path_dir:
+                continue
+            potential_path = os.path.join(path_dir, exe_name)
+            if os.path.isfile(potential_path) and potential_path not in found_paths:
+                found_paths.append(potential_path)
+                break  # Only add first occurrence from PATH
+```
+
+**Status**: ✅ Fixed - Both /bin directory and system PATH are now searched
+
+---
+
+## Testing Recommendations
+
+1. **Plugin Manager Dialog**:
+   - Click "Plugin Manager" button in Setup → Behavior section
+   - Verify dialog opens without errors
+   - Check that Manager and Market tabs are visible
+   - Verify plugin list populates correctly
+
+2. **Rclone/Ludusavi Comboboxes**:
+   - Navigate to Setup → Applications tab
+   - Check rclone and ludusavi comboboxes
+   - Verify executables from /bin directory appear
+   - If rclone/ludusavi installed in system PATH, verify they also appear
+   - Navigate to Setup → Cloud Backup tab
+   - Verify path fields work correctly
+
+3. **PATH Search**:
+   - Install rclone or ludusavi to a system PATH location
+   - Restart [RJ_PROJ]
+   - Verify the PATH-installed version appears in combobox
+
+---
+
+## Files Modified
+
+1. `Python/ui/__init__.py` - Created (new file)
+2. `Python/ui/widgets.py` - Enhanced PathConfigRow with PATH search
+
+---
+
+## Notes
+
+- The PATH search is specifically implemented for rclone.exe and ludusavi.exe as these are commonly installed system-wide
+- The search prioritizes /bin directory first, then adds PATH locations
+- Only the first occurrence from PATH is added to avoid duplicate entries
+- Case-insensitive matching is maintained throughout

@@ -43,6 +43,11 @@ class AppConfig:
         self.custom_mount_path = ""
         self.disc_mount_path = ""
         self.disc_unmount_path = ""
+        
+        # Cloud backup tools
+        self.rclone_path = ""
+        self.ludusavi_path = ""
+        self.cloud_backup_path = ""  # Generic cloud backup tool
 
         # App Options & Arguments
         self.controller_mapper_path_options = ""
@@ -60,6 +65,28 @@ class AppConfig:
         self.disc_mount_path_arguments = ""
         self.disc_unmount_path_options = ""
         self.disc_unmount_path_arguments = ""
+        
+        # Cloud backup options & arguments
+        self.rclone_path_options = ""
+        self.rclone_path_arguments = ""
+        self.ludusavi_path_options = ""
+        self.ludusavi_path_arguments = ""
+        self.cloud_backup_path_options = ""
+        self.cloud_backup_path_arguments = ""
+        
+        # Rclone-specific configuration
+        self.rclone_remote_name = ""
+        self.rclone_local_path = ""
+        self.rclone_remote_path = ""
+        self.rclone_sync_mode = "sync"
+        self.rclone_backup_on_launch = False
+        self.rclone_backup_on_exit = True
+        
+        # Ludusavi-specific configuration
+        self.ludusavi_backup_path = ""
+        self.ludusavi_game_name = ""
+        self.ludusavi_backup_on_launch = False
+        self.ludusavi_backup_on_exit = True
         
         self.pre1_path_options = ""
         self.pre1_path_arguments = ""
@@ -118,6 +145,7 @@ class AppConfig:
         self.enable_multimonitor_app = False
         self.enable_after_launch_app = False
         self.enable_before_exit_app = False
+        self.enable_cloud_backup = False
         self.enable_pre1 = False
         self.enable_pre2 = False
         self.enable_pre3 = False

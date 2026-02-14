@@ -1,4 +1,4 @@
-anattagen
+[RJ_PROJ]
 
 A desktop application to create isolated environments for PC games. 
 
@@ -7,6 +7,13 @@ A desktop application to create isolated environments for PC games.
 *   Game indexing from user-selected directories.
 *   Customizable options for each game.
 *   Tabbed interface for Setup, Deployment, and Editing environments.
+*   **Plugin-based architecture** for extensible tool integration.
+*   **Cloud backup support** with Rclone and Ludusavi integration.
+*   Automatic save game synchronization to cloud storage.
+*   Controller mapping with AntiMicroX and KeySticks.
+*   Borderless windowing and multi-monitor configuration.
+*   Pre/post launch script execution.
+*   Disc image mounting support.
 
 ## Tech Stack
 
@@ -46,7 +53,7 @@ AntimicroX, keySticks, multimonitortool.
 
 Run the installer or extract the binary to a location of your choice, **or** download and build and run the source files and executables.
 ```
-anattagen/
+[RJ_PROJ]/
 ├── assets/
 │   ├── launcher/
 │   │      ├── launcher.c
@@ -144,7 +151,32 @@ anattagen/
 ```
 # Documentation
 
-anattagen
+## Quick Start
+
+- **[TUTORIAL.md](TUTORIAL.md)** - Complete tutorial for creating game launchers
+- **[QUICK_START_CLOUD_BACKUP.md](QUICK_START_CLOUD_BACKUP.md)** - Get cloud backup working in 5 minutes!
+
+## Plugin System & Cloud Backup
+
+The application now features a comprehensive plugin system with cloud backup support:
+
+- **[PLUGIN_SYSTEM_SUMMARY.md](PLUGIN_SYSTEM_SUMMARY.md)** - Complete overview of the plugin architecture
+- **[PLUGIN_QUICKSTART.md](PLUGIN_QUICKSTART.md)** - Quick reference for users and developers
+- **[PLUGIN_CONFIGURATION_GUIDE.md](PLUGIN_CONFIGURATION_GUIDE.md)** - Detailed plugin configuration reference
+- **[CLOUD_BACKUP_INTEGRATION.md](CLOUD_BACKUP_INTEGRATION.md)** - Cloud backup setup and configuration guide
+- **[MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)** - Migrating from legacy to plugin-based system
+- **[ARCHITECTURE_DIAGRAM.md](ARCHITECTURE_DIAGRAM.md)** - System architecture and data flow
+- **[Game.ini.example](Game.ini.example)** - Complete configuration example
+
+### Phase Documentation
+
+- **[PLUGIN_SYSTEM_PHASE1.md](PLUGIN_SYSTEM_PHASE1.md)** - Foundation architecture
+- **[PLUGIN_SYSTEM_PHASE2.md](PLUGIN_SYSTEM_PHASE2.md)** - Core implementation
+- **[PLUGIN_SYSTEM_PHASE3.md](PLUGIN_SYSTEM_PHASE3.md)** - Integration & cloud backup
+- **[PLUGIN_SYSTEM_PHASE4.md](PLUGIN_SYSTEM_PHASE4.md)** - Dependency injection, hot-reloading, marketplace
+- **[PHASE3_COMPLETION_SUMMARY.md](PHASE3_COMPLETION_SUMMARY.md)** - Phase 3 completion report
+
+[RJ_PROJ]
 
 # Setup
 
@@ -155,8 +187,8 @@ anattagen
 ```
 		sudo apt install python3-venv python3-pip
 		cd ~
-		git clone --recursive https://github.com/anattagen/anattagen/anattagen.git
-		cd anattagen
+		git clone --recursive https://github.com/[RJ_PROJ]/[RJ_PROJ]/[RJ_PROJ].git
+		cd [RJ_PROJ]
 		python3 -m venv .venv
 		source .venv/bin/activate
 		python -m pip install -r requirements.txt
@@ -173,8 +205,8 @@ win
 ### Now you can clone or download the repo, and install the requirements via pip
 ```
 		cd %userprofile%/Downloads
-		git clone --recursive https://https://github.com/anattagen/anattagen/anattagen
-		cd anattagen
+		git clone --recursive https://https://github.com/[RJ_PROJ]/[RJ_PROJ]/[RJ_PROJ]
+		cd [RJ_PROJ]
 		python -m pip install -r requirements_win.txt
 		python -m Python\main.py
 ```
@@ -186,12 +218,12 @@ win
 ```
 ### Windows open a dev console:
 ```
-		pushd "%userprofile\Downloads\anattagen\assets"
+		pushd "%userprofile%\Downloads\[RJ_PROJ]\assets"
 		build.bat
 ```
 #### or in Mingw64:
 ```
-		cd /c/Users/[USER]/Downloads/anattagen\assets
+		cd /c/Users/$USER/Downloads/[RJ_PROJ]/assets
 		./build.sh --windows
 ```
 ### Build and Compile your own project:
@@ -205,5 +237,6 @@ win
 ```
 ## Apple Mac Users
 ```
-		  Upgrade your monitor-stand and update iTunes to enable auto-deduction from your ApplePay account. Do not look directly at anattagen. Carefully replace the stickers and reattatch any modification-detection components before initializing apology-procedures. Disconnect your keyboard and press the button to authorize Thought-Coin permissions.
+		  Update iTunes to enable auto-deduction from your ApplePay account. 
+Upgrade your monitor-stand and do not look directly at [RJ_PROJ]. Carefully replace the stickers and reattatch any modification-detection components before initializing apology-procedures. Disconnect your keyboard and press the button to authorize Thought-Coin permissions.
 ```

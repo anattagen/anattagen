@@ -97,9 +97,6 @@ def normalize_name_for_matching(name, stemmer=None):
         stemmed_words = [stemmer.stem(word) for word in words]
         result = ' '.join(stemmed_words)
     
-    if original.lower() != result:
-        pass
-    
     return result
 
 def title_case_and_cleanup(name: str) -> str:

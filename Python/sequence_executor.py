@@ -55,6 +55,15 @@ class SequenceExecutor:
             'Unmount-disc': self.unmount_disc,
         }
 
+    def _build_cmd(self, app_path: str, options: str = '', args: str = '') -> str:
+        """Build a command string from components."""
+        cmd = f'"{app_path}"'
+        if options:
+            cmd += f' {options}'
+        if args:
+            cmd += f' {args}'
+        return cmd
+
     def execute(self, sequence_name):
         """Executes a named sequence from the launcher's configuration."""
         sequence = getattr(self.launcher, sequence_name, [])
@@ -96,11 +105,7 @@ class SequenceExecutor:
 
         if app_path and os.path.exists(app_path):
             logging.info(f"Running generic app: {app_path} (Wait: {wait})")
-            cmd = f'"{app_path}"'
-            if options:
-                cmd += f' {options}'
-            if args:
-                cmd += f' {args}'
+            cmd = self._build_cmd(app_path, options, args)
             process = self.launcher.run_process(cmd, wait=wait)
             if process and not wait:
                 # Track the process if we don't wait for it to close
@@ -173,31 +178,22 @@ class SequenceExecutor:
                 self.launcher.kill_process_by_name(os.path.basename(app))
 
     def run_monitor_config_game(self):
-        tool = getattr(self.launcher, 'multimonitor_tool', '')
-        config = getattr(self.launcher, 'mm_game_config', '')
-        options = getattr(self.launcher, 'multimonitor_options', '')
-        args = getattr(self.launcher, 'multimonitor_arguments', '')
-
-        if tool and config and os.path.exists(self.launcher.resolve_path(tool)) and os.path.exists(config):
-            logging.info(f"Applying Game Monitor Config: {config}")
-            cmd = f'"{tool}"'
-            if options: cmd += f' {options}'
-            cmd += f' /load "{config}"'
-            if args: cmd += f' {args}'
-            self.launcher.run_process(cmd, wait=True)
+        self._run_monitor_config('mm_game_config')
 
     def run_monitor_config_desktop(self):
+        self._run_monitor_config('mm_desktop_config')
+
+    def _run_monitor_config(self, config_attr):
+        """Apply a monitor configuration using the multi-monitor tool."""
         tool = getattr(self.launcher, 'multimonitor_tool', '')
-        config = getattr(self.launcher, 'mm_desktop_config', '')
+        config = getattr(self.launcher, config_attr, '')
         options = getattr(self.launcher, 'multimonitor_options', '')
         args = getattr(self.launcher, 'multimonitor_arguments', '')
 
         if tool and config and os.path.exists(self.launcher.resolve_path(tool)) and os.path.exists(config):
-            logging.info(f"Applying Desktop Monitor Config: {config}")
-            cmd = f'"{tool}"'
-            if options: cmd += f' {options}'
+            logging.info(f"Applying Monitor Config: {config}")
+            cmd = self._build_cmd(tool, options, args)
             cmd += f' /load "{config}"'
-            if args: cmd += f' {args}'
             self.launcher.run_process(cmd, wait=True)
 
     def hide_taskbar(self):
@@ -229,9 +225,7 @@ class SequenceExecutor:
 
         if borderless in ['E', 'K'] and app and os.path.exists(app):
             logging.info("Starting Borderless Gaming...")
-            cmd = f'"{app}"'
-            if options: cmd += f' {options}'
-            if args: cmd += f' {args}'
+            cmd = self._build_cmd(app, options, args)
             self.launcher.borderless_process = self.launcher.run_process(cmd)
 
     def kill_borderless(self):
@@ -257,9 +251,7 @@ class SequenceExecutor:
 
         if app and os.path.exists(app):
             logging.info("Running Cloud Sync...")
-            cmd = f'"{app}"'
-            if options: cmd += f' {options}'
-            if args: cmd += f' {args}'
+            cmd = self._build_cmd(app, options, args)
             self.launcher.run_process(cmd, wait=True)
 
     def kill_game_process(self):

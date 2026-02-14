@@ -8,13 +8,9 @@ from PyQt6.QtCore import pyqtSignal, Qt
 from Python.ui.accordion import AccordionSection
 from Python.models import AppConfig
 from Python import constants
-import datetime
 import os
+import datetime
 
-
-def get_module_path():
-    """Dynamically calculates the path to the current module."""
-    return os.path.dirname(os.path.abspath(__file__))
 
 
 PATH_KEYS = [

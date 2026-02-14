@@ -2,14 +2,13 @@ import sys
 import os
 import logging
 import argparse
+from importlib import import_module
 
 # Add the parent directory (anattagen) to the Python path
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-
-from importlib import import_module
 
 
 def setup_logging():

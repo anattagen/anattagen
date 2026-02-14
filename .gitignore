@@ -3,12 +3,16 @@
 Python/*/__pycache__/
 *.index
 config.json
+test_plugin_system.py
 *.pyc
 *.cache
+*.old
 *.code-workspace
 *.amgp
 *.cfg
 *.log
+*.spec
+*.example
 deploy_ui.ini
 site_values.ini
 clean.bat
@@ -29,6 +33,8 @@ Python/app.log
 assets/splash.png
 assets/logo.png
 build/
+saves/
+cache/
 dist/
 Profiles/
 Launchers/

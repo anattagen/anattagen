@@ -406,16 +406,19 @@ class GameLauncher:
             self.kill_process(os.path.basename(self.borderless_app))
         
         # Run post-launch app 1
-        if self.post_launch_app_1 and os.path.exists(self.post_launch_app_1):
-            self.run_process(self.post_launch_app_1, wait=self.post_launch_app_1_wait)
+        post1 = find_path_case_insensitive(self.post_launch_app_1)
+        if post1:
+            self.run_process(post1, wait=self.post_launch_app_1_wait)
         
         # Run post-launch app 2
-        if self.post_launch_app_2 and os.path.exists(self.post_launch_app_2):
-            self.run_process(self.post_launch_app_2, wait=self.post_launch_app_2_wait)
+        post2 = find_path_case_insensitive(self.post_launch_app_2)
+        if post2:
+            self.run_process(post2, wait=self.post_launch_app_2_wait)
         
         # Run post-launch app 3
-        if self.post_launch_app_3 and os.path.exists(self.post_launch_app_3):
-            self.run_process(self.post_launch_app_3, wait=self.post_launch_app_3_wait)
+        post3 = find_path_case_insensitive(self.post_launch_app_3)
+        if post3:
+            self.run_process(post3, wait=self.post_launch_app_3_wait)
     
     def cleanup(self):
         """Clean up processes and restore settings"""

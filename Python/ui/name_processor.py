@@ -82,9 +82,6 @@ class NameProcessor:
         # Step 7: Final cleanup
         result = self.final_cleanup(result)
         
-        if original != result:
-            pass
-        
         return result
     
     def replace_delimiters_with_spaces(self, name: str) -> str:
@@ -166,9 +163,6 @@ class NameProcessor:
         # Clean up any trailing delimiters
         result = result.rstrip('.-_[] ')
         
-        if original != result:
-            pass
-        
         return result
     
     def cull_version_tags(self, name: str) -> str:
@@ -237,9 +231,6 @@ class NameProcessor:
         
         # Clean up any trailing delimiters
         result = result.rstrip('.-_[] ')
-        
-        if original != result:
-            pass
         
         return result
     
@@ -383,9 +374,6 @@ class NameProcessor:
         # Final whitespace cleanup
         result = self.clean_whitespace(result)
         
-        if original != result:
-            pass
-        
         return result
     
     def get_match_name(self, name: str) -> str:
@@ -402,9 +390,6 @@ class NameProcessor:
         if not name:
             return ""
         
-        # Store original for debugging
-        original = name
-        
         # Step 1: Remove non-alphanumeric characters except commas and spaces
         result = self.non_alphanum_except_spaces_commas.sub('', name)
         
@@ -416,9 +401,6 @@ class NameProcessor:
         
         # Step 4: Convert to lowercase
         result = result.lower()
-        
-        if original != result:
-            pass
         
         return result
     
@@ -437,9 +419,6 @@ class NameProcessor:
         if not name:
             return ""
         
-        # Store original for debugging
-        original = name
-        
         # Step 1: Remove non-alphanumeric characters except commas and spaces
         result = self.non_alphanum_except_spaces_commas.sub('', name)
         
@@ -453,7 +432,7 @@ class NameProcessor:
                 if words:  # Only try to stem if we have words
                     stemmed_words = [stemmer.stem(word) for word in words]
                     result = ' '.join(stemmed_words)
-            except Exception as e:
+            except Exception:
                 pass
         
         # Step 4: Remove all remaining spaces (commas already removed by regex)
@@ -461,9 +440,6 @@ class NameProcessor:
         
         # Step 5: Convert to lowercase
         result = result.lower()
-        
-        if original != result:
-            pass
         
         return result
     

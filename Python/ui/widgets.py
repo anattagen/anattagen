@@ -155,6 +155,20 @@ class PathConfigRow(QWidget):
                             if actual_path not in found_paths:
                                 found_paths.append(actual_path)
             
+            # Also search system PATH for rclone.exe and ludusavi.exe
+            path_search_exes = ['rclone.exe', 'ludusavi.exe']
+            for exe_name in path_search_exes:
+                if exe_name.lower() in exe_names_to_find:
+                    # Search in PATH environment variable
+                    path_env = os.environ.get('PATH', '')
+                    for path_dir in path_env.split(os.pathsep):
+                        if not path_dir:
+                            continue
+                        potential_path = os.path.join(path_dir, exe_name)
+                        if os.path.isfile(potential_path) and potential_path not in found_paths:
+                            found_paths.append(potential_path)
+                            break  # Only add first occurrence from PATH
+            
             # Add all found paths to combobox
             for path in found_paths:
                 if self.combo.findText(path) == -1:

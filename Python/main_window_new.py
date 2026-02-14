@@ -1,10 +1,11 @@
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget, 
-    QMessageBox, QMenu, QFileDialog, QProgressDialog
+    QMessageBox, QFileDialog, QProgressDialog
 )
 from PyQt6.QtCore import Qt, pyqtSlot
-from PyQt6.QtGui import QCursor, QIcon
+from PyQt6.QtGui import QIcon
 import os
+import shutil
 from Python.ui.deployment_tab import DeploymentTab
 from Python.ui.setup_tab import SetupTab
 from Python.ui.steam_cache import SteamCacheManager, STEAM_FILTERED_TXT, NORMALIZED_INDEX_CACHE
@@ -13,7 +14,9 @@ from Python.models import AppConfig
 from Python.managers.config_manager import ConfigManager
 from Python.managers.data_manager import DataManager
 from Python.managers.steam_manager import SteamManager
+from Python.managers.plugin_manager import PluginManager
 from Python import constants
+from Python.utils import format_bytes
 import logging
 
 
@@ -30,6 +33,13 @@ class MainWindow(QMainWindow):
         self.data_manager = DataManager(self.config, self)
         self.steam_cache_manager = SteamCacheManager(self)
         self.steam_manager = SteamManager(self.steam_cache_manager)
+        
+        # Initialize plugin manager
+        bin_dir = os.path.join(constants.APP_ROOT_DIR, 'bin')
+        self.plugin_manager = PluginManager(bin_dir)
+        self.plugin_manager.load_builtin_plugins()
+        self.plugin_manager.scan_for_installed_tools()
+        logging.info(f"Plugin system initialized with {self.plugin_manager.registry.get_plugin_count()} plugins")
         
         # Initialize creation controller
         self._setup_creation_controller()
@@ -84,12 +94,6 @@ class MainWindow(QMainWindow):
         # Create status bar
         self.statusBar().showMessage("Ready")
 
-    def _update_steam_json_cache(self):
-        """Update the Steam JSON cache"""
-        # This method should update the Steam JSON cache
-        self.statusBar().showMessage("Updating Steam JSON cache...", 5000)
-        # In a real implementation, this would call a function to update the cache
-        
     def _locate_and_exclude_manager_config(self):
         """Locate and exclude games from other managers' configurations"""
         from Python.ui.steam_utils import locate_and_exclude_manager_config
@@ -239,55 +243,9 @@ class MainWindow(QMainWindow):
         
     def _regenerate_all_names(self):
         """Regenerate all name overrides in the table"""
-        # This is a placeholder for the actual implementation
-        # It will be called when the user clicks "Regenerate All Names" in the editor tab
         from Python.ui.name_processor import regenerate_all_names
         regenerate_all_names(self)
         self.statusBar().showMessage("All names regenerated", 3000)
-        
-    def _on_editor_table_cell_left_click(self, row, column):
-        """Handle left-click on a cell in the editor table"""
-        # This is a placeholder for the actual implementation
-        # It will be called when the user left-clicks on a cell in the editor table
-        pass
-        
-    def _on_editor_table_custom_context_menu(self, position):
-        """Handle right-click on the editor table"""
-        # This is a placeholder for the actual implementation
-        # It will be called when the user right-clicks on the editor table
-        context_menu = QMenu(self)
-        
-        # Add actions to the menu
-        edit_action = context_menu.addAction("Edit")
-        copy_action = context_menu.addAction("Copy")
-        paste_action = context_menu.addAction("Paste")
-        delete_action = context_menu.addAction("Delete")
-        
-        # Show the menu at the cursor position
-        action = context_menu.exec(QCursor.pos())
-        
-        # Handle the selected action
-        if action == edit_action:
-            # Edit the selected row
-            pass
-        elif action == delete_action:
-            # Delete the selected row
-            pass
-        
-        if action == copy_action:
-            # Copy the selected row
-            pass
-        
-        if action == paste_action:
-            # Paste the selected row
-            pass
-        
-        
-    def _on_editor_table_header_click(self, column):
-        """Handle click on a header in the editor table"""
-        # This is a placeholder for the actual implementation
-        # It will be called when the user clicks on a header in the editor table
-        pass
         
     def _on_editor_table_edited(self, item):
         """Called when the editor table is edited"""
@@ -466,15 +424,6 @@ class MainWindow(QMainWindow):
         new_profiles_count = max(0, create_count - existing_profiles_count)
         total_bytes = (lc_unchecked_size * new_profiles_count) + (lc_overwrite_size * create_count)
         
-        def format_bytes(size):
-            power = 2**10
-            n = 0
-            power_labels = {0 : '', 1: 'KB', 2: 'MB', 3: 'GB', 4: 'TB'}
-            while size > power:
-                size /= power
-                n += 1
-            return f"{size:.2f} {power_labels.get(n, '')}"
-            
         total_size_str = format_bytes(total_bytes)
 
         # Construct Message
@@ -529,35 +478,19 @@ class MainWindow(QMainWindow):
 
     def _backup_steam_cache_files(self):
         """Backup Steam cache files before processing"""
-        # Get the cache file paths
         from Python.ui.steam_cache import STEAM_FILTERED_TXT, NORMALIZED_INDEX_CACHE
-        filtered_cache_path = os.path.join(constants.APP_ROOT_DIR, STEAM_FILTERED_TXT)
-        normalized_index_path = os.path.join(constants.APP_ROOT_DIR, NORMALIZED_INDEX_CACHE)
         
-        # Backup filtered cache if it exists
-        if os.path.exists(filtered_cache_path):
-            backup_path = filtered_cache_path + ".old"
-            try:
-                # Remove old backup if it exists
-                if os.path.exists(backup_path):
-                    os.remove(backup_path)
-                
-                # Create backup
-                shutil.copy2(filtered_cache_path, backup_path)
-
-            except Exception as e:
-                pass
+        cache_files = [
+            os.path.join(constants.APP_ROOT_DIR, STEAM_FILTERED_TXT),
+            os.path.join(constants.APP_ROOT_DIR, NORMALIZED_INDEX_CACHE)
+        ]
         
-        # Backup normalized index if it exists
-        if os.path.exists(normalized_index_path):
-            backup_path = normalized_index_path + ".old"
-            try:
-                # Remove old backup if it exists
-                if os.path.exists(backup_path):
-                    os.remove(backup_path)
-                
-                # Create backup
-                shutil.copy2(normalized_index_path, backup_path)
-
-            except Exception as e:
-                pass
+        for cache_path in cache_files:
+            if os.path.exists(cache_path):
+                backup_path = cache_path + ".old"
+                try:
+                    if os.path.exists(backup_path):
+                        os.remove(backup_path)
+                    shutil.copy2(cache_path, backup_path)
+                except OSError as e:
+                    logging.warning(f"Failed to backup {cache_path}: {e}")
