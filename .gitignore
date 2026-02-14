@@ -15,7 +15,8 @@ mediacenter*
 *.amgp
 *.cfg
 *.log
-*.spec
+Launcher.spec
+anattagen.spec
 *.example
 deploy_ui.ini
 site_values.ini
