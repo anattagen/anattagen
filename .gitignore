@@ -7,6 +7,10 @@ test_plugin_system.py
 *.pyc
 *.cache
 *.old
+currentmon*
+gamingmon*
+desktop*
+mediacenter*
 *.code-workspace
 *.amgp
 *.cfg
