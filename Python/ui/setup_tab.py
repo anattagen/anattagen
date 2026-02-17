@@ -1059,7 +1059,7 @@ class SetupTab(QWidget):
         if success:
             self._write_exe_path_to_config("wincdemu", result_path)
             self._generate_mount_scripts_files(bin_dir, "wincdemu")
-            # Script generation complete - no auto-assignment
+            self._refresh_tool_paths()  # Refresh all tool paths
             
             QMessageBox.information(self, "Download Complete", f"Successfully downloaded to:\n{result_path}")
         else:
@@ -1076,7 +1076,7 @@ class SetupTab(QWidget):
             exe_path = os.path.join(bin_dir, "imgdrive.exe")
             self._write_exe_path_to_config("imgdrive", exe_path)
             self._generate_mount_scripts_files(bin_dir, "imgdrive")
-            # Script generation complete - no auto-assignment
+            self._refresh_tool_paths()  # Refresh all tool paths
             
             QMessageBox.information(self, "Download Complete", f"Successfully downloaded to:\n{result_path}")
         else:
@@ -1084,6 +1084,7 @@ class SetupTab(QWidget):
 
         self.active_download_row = None
         self._current_download_tool_name = None
+        
     def _on_cdmage_download_finished(self, success, message, result_path, bin_dir):
         if hasattr(self, 'progress_dialog'):
             self.progress_dialog.close()
@@ -1092,7 +1093,7 @@ class SetupTab(QWidget):
             exe_path = os.path.join(bin_dir, "cdmage.exe")
             self._write_exe_path_to_config("cdmage", exe_path)
             self._generate_mount_scripts_files(bin_dir, "cdmage")
-            # Script generation complete - no auto-assignment
+            self._refresh_tool_paths()  # Refresh all tool paths
             
             QMessageBox.information(self, "Download Complete", f"Successfully downloaded to:\n{result_path}")
         else:
@@ -1109,7 +1110,7 @@ class SetupTab(QWidget):
             exe_path = os.path.join(bin_dir, "osf.exe")
             self._write_exe_path_to_config("osf", exe_path)
             self._generate_mount_scripts_files(bin_dir, "osf")
-            # Script generation complete - no auto-assignment
+            self._refresh_tool_paths()  # Refresh all tool paths
             
             QMessageBox.information(self, "Download Complete", f"Successfully downloaded to:\n{result_path}")
         else:
@@ -1249,16 +1250,23 @@ exit 1
                     content = f.read()
 
                 # Replace variables in brackets with config values
+                # Pattern matches [$VARIABLE_NAME] tags
                 def replace_var(match):
                     var_name = match.group(1)
                     # Convert to a config key, e.g., 'WINCDEMU_EXE_PATH' -> 'wincdemu_exe_path'
                     config_key = var_name.lower()
                     if self.main_window and hasattr(self.main_window, 'config'):
                         # Return the value if found, otherwise return an empty string to remove the tag
-                        return getattr(self.main_window.config, config_key, "")
+                        value = getattr(self.main_window.config, config_key, "")
+                        if value:
+                            logging.info(f"Replaced [{var_name}] with: {value}")
+                        else:
+                            logging.warning(f"No value found for [{var_name}] (config key: {config_key})")
+                        return value
                     return ""
 
-                content = re.sub(r'\[\$\_\$(.*?)\]', replace_var, content)
+                # Match [$VARIABLE_NAME] pattern
+                content = re.sub(r'\[\$([A-Z_]+)\]', replace_var, content)
 
                 with open(dest_path, 'w', encoding='utf-8') as f:
                     f.write(content)
@@ -1267,6 +1275,7 @@ exit 1
                 if dest_path.endswith('.set'):
                     final_path = dest_path[:-4]
                     os.rename(dest_path, final_path)
+                    logging.info(f"Generated mount script: {final_path}")
             else:
                 logging.warning(f"Template not found: {template_path}")
         except Exception as e:
@@ -1286,6 +1295,9 @@ exit 1
                     tool_name = self._current_download_tool_name
                     # Use the helper method to ensure consistent config writing and safety checks
                     self._write_exe_path_to_config(tool_name, result_path)
+            
+            # Refresh all tool paths from bin directory after successful download
+            self._refresh_tool_paths()
                 
             QMessageBox.information(self, "Download Complete", f"Successfully downloaded to:\n{result_path}")
         else:
@@ -1293,6 +1305,15 @@ exit 1
         self.active_download_row = None
         if hasattr(self, '_current_download_tool_name'):
             self._current_download_tool_name = None
+    
+    def _refresh_tool_paths(self):
+        """Refresh tool paths by re-scanning the bin directory and updating config."""
+        if hasattr(self.main_window, 'config_manager') and hasattr(self.main_window, 'config'):
+            logging.info("Refreshing tool paths after download...")
+            self.main_window.config_manager.refresh_tool_paths(self.main_window.config)
+            # Re-sync UI to show updated paths
+            self.main_window.sync_ui_from_config()
+            logging.info("Tool paths refreshed and UI updated.")
 
     def _reset_to_defaults(self):
         """Reset the application's configuration to the shipped defaults."""

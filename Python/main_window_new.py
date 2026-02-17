@@ -254,6 +254,12 @@ class MainWindow(QMainWindow):
         
         # Update the status bar
         self.statusBar().showMessage("Editor table updated and saved", 3000)
+    
+    def _on_editor_table_cell_left_click(self, row, column):
+        """Called when a cell in the editor table is left-clicked"""
+        # This method can be used to handle cell click events
+        # Currently just a placeholder for future functionality
+        pass
 
     def _save_editor_table_to_index(self):
         """Saves the current editor table to the default index file."""

@@ -144,6 +144,11 @@ class PathConfigRow(QWidget):
                 exe_name = data['exe_name']
                 exe_names_to_find[exe_name.lower()] = exe_name
             
+            # Debug logging for rclone/ludusavi
+            import logging
+            if self.config_key in ['rclone_path', 'ludusavi_path']:
+                logging.info(f"[DEBUG] PathConfigRow({self.config_key}): exe_names_to_find = {exe_names_to_find}")
+            
             # Scan /bin directory recursively for all executables (case-insensitive)
             found_paths = []
             if os.path.exists(bin_dir):
@@ -168,6 +173,10 @@ class PathConfigRow(QWidget):
                         if os.path.isfile(potential_path) and potential_path not in found_paths:
                             found_paths.append(potential_path)
                             break  # Only add first occurrence from PATH
+            
+            # Debug logging for rclone/ludusavi
+            if self.config_key in ['rclone_path', 'ludusavi_path']:
+                logging.info(f"[DEBUG] PathConfigRow({self.config_key}): found_paths = {found_paths}")
             
             # Add all found paths to combobox
             for path in found_paths:

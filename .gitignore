@@ -3,7 +3,7 @@
 Python/*/__pycache__/
 *.index
 config.json
-test_plugin_system.py
+test*.py
 *.pyc
 *.cache
 *.old
@@ -18,8 +18,7 @@ mediacenter*
 Launcher.spec
 anattagen.spec
 *.example
-deploy_ui.ini
-site_values.ini
+*.ini
 clean.bat
 uclean.bat
 python.lnk
@@ -34,12 +33,12 @@ bin/*
 !bin/7z.exe
 !bin/Shortcut.exe
 !bin/Shortcut.txt
-Python/app.log
-assets/splash.png
-assets/logo.png
 build/
 saves/
 cache/
 dist/
 Profiles/
 Launchers/
+docs/
+linux/
+saves/

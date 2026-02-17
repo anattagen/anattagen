@@ -22,22 +22,22 @@ if /I "%SCRIPT_NAME%"=="nativemount" (
 )
 
 if /I "%SCRIPT_NAME%"=="cdemu" (
-    "[$_$(WINCDEMU_EXE_PATH)]" "%ISO%"
+    "[$WINCDEMU_EXE_PATH]" "%ISO%"
     goto :eof
 )
 
 if /I "%SCRIPT_NAME%"=="osf" (
-    "[$_$(OSF_EXE_PATH)]" /mount "%ISO%"
+    "[$OSF_EXE_PATH]" /mount "%ISO%"
     goto :eof
 )
 
 if /I "%SCRIPT_NAME%"=="cdmage" (
-    "[$_$(CDMAGE_EXE_PATH)]" /mount "%ISO%"
+    "[$CDMAGE_EXE_PATH]" /mount "%ISO%"
     goto :eof
 )
 
 if /I "%SCRIPT_NAME%"=="imgdrive" (
-    "[$_$(IMGDRIVE_EXE_PATH)]" /mount "%ISO%"
+    "[$IMGDRIVE_EXE_PATH]" /mount "%ISO%"
     goto :eof
 )
 
@@ -53,26 +53,26 @@ powershell -command "Dismount-DiskImage -ImagePath '%ISO%'" >nul 2>&1
 if %ERRORLEVEL%==0 goto :eof
 
 :: Try WinCDEmu
-if not "[$_$(WINCDEMU_EXE_PATH)]"=="" (
-    "[$_$(WINCDEMU_EXE_PATH)]" /unmount "%ISO%" >nul 2>&1
+if not "[$WINCDEMU_EXE_PATH]"=="" (
+    "[$WINCDEMU_EXE_PATH]" /unmount "%ISO%" >nul 2>&1
     if %ERRORLEVEL%==0 goto :eof
 )
 
 :: Try OSF
-if not "[$_$(OSF_EXE_PATH)]"=="" (
-    "[$_$(OSF_EXE_PATH)]" -unmount "%ISO%" >nul 2>&1
+if not "[$OSF_EXE_PATH]"=="" (
+    "[$OSF_EXE_PATH]" -unmount "%ISO%" >nul 2>&1
     if %ERRORLEVEL%==0 goto :eof
 )
 
 :: Try CDMage
-if not "[$_$(CDMAGE_EXE_PATH)]"=="" (
-    "[$_$(CDMAGE_EXE_PATH)]" -eject >nul 2>&1
+if not "[$CDMAGE_EXE_PATH]"=="" (
+    "[$CDMAGE_EXE_PATH]" -eject >nul 2>&1
     if %ERRORLEVEL%==0 goto :eof
 )
 
 :: Try ImgDrive
-if not "[$_$(IMGDRIVE_EXE_PATH)]"=="" (
-    "[$_$(IMGDRIVE_EXE_PATH)]" -u "%ISO%" >nul 2>&1
+if not "[$IMGDRIVE_EXE_PATH]"=="" (
+    "[$IMGDRIVE_EXE_PATH]" -u "%ISO%" >nul 2>&1
     if %ERRORLEVEL%==0 goto :eof
 )
 

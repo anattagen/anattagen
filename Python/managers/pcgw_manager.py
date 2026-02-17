@@ -54,7 +54,7 @@ class PCGWManager:
                 params = {
                     'action': 'cargoquery',
                     'tables': 'Infobox_game',
-                    'fields': 'Infobox_game._pageID=PageID,Infobox_game._pageName=Page,Infobox_game.Developers,Infobox_game.Publishers,Infobox_game.Engines,Infobox_game.Released',
+                    'fields': 'Infobox_game._pageID=PageID,Infobox_game._pageName=Page,Infobox_game.Developers,Infobox_game.Publishers,Infobox_game.Engines,Infobox_game.Released,Infobox_game.Genres,Infobox_game.Modes,Infobox_game.Series,Infobox_game.Monetization,Infobox_game.Microtransactions,Infobox_game.DRM,Infobox_game.Steam_AppID',
                     'where': f'Infobox_game.Steam_AppID HOLDS "{steam_id}"',
                     'format': 'json',
                     'limit': '1'
@@ -72,6 +72,13 @@ class PCGWManager:
                         pcgw_data['Publishers'] = result.get('Publishers', '')
                         pcgw_data['Engines'] = result.get('Engines', '')
                         pcgw_data['Released'] = result.get('Released', '')
+                        pcgw_data['Genres'] = result.get('Genres', '')
+                        pcgw_data['Modes'] = result.get('Modes', '')
+                        pcgw_data['Series'] = result.get('Series', '')
+                        pcgw_data['Monetization'] = result.get('Monetization', '')
+                        pcgw_data['Microtransactions'] = result.get('Microtransactions', '')
+                        pcgw_data['DRM'] = result.get('DRM', '')
+                        pcgw_data['Steam_AppID'] = result.get('Steam AppID', '')
                         logging.info(f"Found PCGW data via Steam AppID {steam_id}: {page_name}")
                     else:
                         logging.warning(f"No PCGW data found for Steam AppID {steam_id}")
@@ -87,7 +94,7 @@ class PCGWManager:
                 params = {
                     'action': 'cargoquery',
                     'tables': 'Infobox_game',
-                    'fields': 'Infobox_game._pageID=PageID,Infobox_game._pageName=Page,Infobox_game.Developers,Infobox_game.Publishers,Infobox_game.Engines,Infobox_game.Released',
+                    'fields': 'Infobox_game._pageID=PageID,Infobox_game._pageName=Page,Infobox_game.Developers,Infobox_game.Publishers,Infobox_game.Engines,Infobox_game.Released,Infobox_game.Genres,Infobox_game.Modes,Infobox_game.Series,Infobox_game.Monetization,Infobox_game.Microtransactions,Infobox_game.DRM,Infobox_game.Steam_AppID',
                     'where': f'Infobox_game._pageName="{game_name}"',
                     'format': 'json',
                     'limit': '1'
@@ -105,76 +112,186 @@ class PCGWManager:
                         pcgw_data['Publishers'] = result.get('Publishers', '')
                         pcgw_data['Engines'] = result.get('Engines', '')
                         pcgw_data['Released'] = result.get('Released', '')
+                        pcgw_data['Genres'] = result.get('Genres', '')
+                        pcgw_data['Modes'] = result.get('Modes', '')
+                        pcgw_data['Series'] = result.get('Series', '')
+                        pcgw_data['Monetization'] = result.get('Monetization', '')
+                        pcgw_data['Microtransactions'] = result.get('Microtransactions', '')
+                        pcgw_data['DRM'] = result.get('DRM', '')
+                        pcgw_data['Steam_AppID'] = result.get('Steam AppID', '')
                         logging.info(f"Found PCGW data by name: {page_name}")
             except Exception as e:
                 logging.error(f"PCGW Cargo query by name failed: {e}")
 
-        # 3. Get save/config locations by parsing the page HTML
-        if page_id:
-            try:
-                time.sleep(0.5)
-                params = {
-                    'action': 'parse',
-                    'pageid': page_id,
-                    'format': 'json',
-                    'prop': 'text'
-                }
-                
-                response = self.session.get(self.api_url, params=params, timeout=10)
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    if 'parse' in data and 'text' in data['parse']:
-                        html_content = data['parse']['text']['*']
-                        soup = BeautifulSoup(html_content, 'html.parser')
-                        self._parse_locations_from_soup(soup, pcgw_data)
-            except Exception as e:
-                logging.error(f"Failed to parse PCGW page HTML: {e}")
+        # 3. Get save/config locations from Cargo tables
+        if page_name:
+            self._fetch_save_locations(page_name, pcgw_data)
+            self._fetch_config_locations(page_name, pcgw_data)
+            self._fetch_video_settings(page_name, pcgw_data)
+            self._fetch_input_settings(page_name, pcgw_data)
 
         return pcgw_data if pcgw_data else None
 
-    def _parse_locations_from_soup(self, soup, pcgw_data):
-        """Parse save and config locations from the page HTML."""
-        save_locations = {}
-        config_locations = {}
-        
-        content = soup.find('div', class_='mw-parser-output')
-        if content:
-            headers = content.find_all(['h2', 'h3', 'h4'])
-            for header in headers:
-                header_text = header.get_text(strip=True)
-                if 'Save game data location' in header_text:
-                    next_elem = header.find_next(['ul', 'table'])
-                    if next_elem:
-                        self._parse_locations(next_elem, save_locations)
-                elif 'Configuration file' in header_text or 'Config file' in header_text:
-                    next_elem = header.find_next(['ul', 'table'])
-                    if next_elem:
-                        self._parse_locations(next_elem, config_locations)
-        
-        pcgw_data['save_locations'] = save_locations
-        pcgw_data['config_locations'] = config_locations
+    def _fetch_save_locations(self, page_name, pcgw_data):
+        """Fetch save game locations from Cargo API."""
+        try:
+            time.sleep(0.5)
+            params = {
+                'action': 'cargoquery',
+                'tables': 'Saves',
+                'fields': 'Saves.System,Saves.Location,Saves.Cloud',
+                'where': f'Saves._pageName="{page_name}"',
+                'format': 'json',
+                'limit': '50'
+            }
+            
+            response = self.session.get(self.api_url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                save_locations = {}
+                
+                if 'cargoquery' in data and len(data['cargoquery']) > 0:
+                    for item in data['cargoquery']:
+                        result = item['title']
+                        system = result.get('System', 'Unknown')
+                        location = result.get('Location', '')
+                        cloud = result.get('Cloud', '')
+                        
+                        if location:
+                            if system not in save_locations:
+                                save_locations[system] = []
+                            
+                            save_entry = {'path': location}
+                            if cloud:
+                                save_entry['cloud'] = cloud
+                            
+                            save_locations[system].append(save_entry)
+                    
+                    logging.info(f"Found {len(data['cargoquery'])} save locations for {page_name}")
+                
+                pcgw_data['save_locations'] = save_locations
+            else:
+                logging.warning(f"PCGW save locations query returned status {response.status_code}")
+                pcgw_data['save_locations'] = {}
+                
+        except Exception as e:
+            logging.error(f"Failed to fetch save locations: {e}")
+            pcgw_data['save_locations'] = {}
 
-    def _parse_locations(self, element, locations_dict):
-        """Helper to parse location lists or tables."""
-        if element.name == 'ul':
-            lis = element.find_all('li')
-            for li in lis:
-                text = li.get_text(strip=True)
-                if ':' in text:
-                    platform, path = text.split(':', 1)
-                    platform = platform.strip()
-                    path = path.strip()
-                    if platform not in locations_dict:
-                        locations_dict[platform] = []
-                    locations_dict[platform].append(path)
-        elif element.name == 'table':
-            rows = element.find_all('tr')
-            for row in rows:
-                cells = row.find_all('td')
-                if len(cells) >= 2:
-                    platform = cells[0].get_text(strip=True)
-                    path = cells[1].get_text(strip=True)
-                    if platform not in locations_dict:
-                        locations_dict[platform] = []
-                    locations_dict[platform].append(path)
+    def _fetch_config_locations(self, page_name, pcgw_data):
+        """Fetch config file locations from Cargo API."""
+        try:
+            time.sleep(0.5)
+            params = {
+                'action': 'cargoquery',
+                'tables': 'Config',
+                'fields': 'Config.System,Config.Location,Config.Cloud',
+                'where': f'Config._pageName="{page_name}"',
+                'format': 'json',
+                'limit': '50'
+            }
+            
+            response = self.session.get(self.api_url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                config_locations = {}
+                
+                if 'cargoquery' in data and len(data['cargoquery']) > 0:
+                    for item in data['cargoquery']:
+                        result = item['title']
+                        system = result.get('System', 'Unknown')
+                        location = result.get('Location', '')
+                        cloud = result.get('Cloud', '')
+                        
+                        if location:
+                            if system not in config_locations:
+                                config_locations[system] = []
+                            
+                            config_entry = {'path': location}
+                            if cloud:
+                                config_entry['cloud'] = cloud
+                            
+                            config_locations[system].append(config_entry)
+                    
+                    logging.info(f"Found {len(data['cargoquery'])} config locations for {page_name}")
+                
+                pcgw_data['config_locations'] = config_locations
+            else:
+                logging.warning(f"PCGW config locations query returned status {response.status_code}")
+                pcgw_data['config_locations'] = {}
+                
+        except Exception as e:
+            logging.error(f"Failed to fetch config locations: {e}")
+            pcgw_data['config_locations'] = {}
+
+    def _fetch_video_settings(self, page_name, pcgw_data):
+        """Fetch video settings from Cargo API."""
+        try:
+            time.sleep(0.5)
+            params = {
+                'action': 'cargoquery',
+                'tables': 'Video_settings',
+                'fields': 'Video_settings.Widescreen_resolution,Video_settings.Multimonitor,Video_settings.Ultra_widescreen,Video_settings.4K_ultra_HD,Video_settings.Field_of_view,Video_settings.Windowed,Video_settings.Borderless_fullscreen_windowed,Video_settings.Anisotropic_filtering,Video_settings.Anti_aliasing,Video_settings.Vertical_sync,Video_settings.FPS_limit',
+                'where': f'Video_settings._pageName="{page_name}"',
+                'format': 'json',
+                'limit': '1'
+            }
+            
+            response = self.session.get(self.api_url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                if 'cargoquery' in data and len(data['cargoquery']) > 0:
+                    result = data['cargoquery'][0]['title']
+                    video_settings = {}
+                    
+                    for key, value in result.items():
+                        if value:
+                            # Clean up key names
+                            clean_key = key.replace('Video settings.', '').replace('_', ' ')
+                            video_settings[clean_key] = value
+                    
+                    if video_settings:
+                        pcgw_data['video_settings'] = video_settings
+                        logging.info(f"Found video settings for {page_name}")
+                
+        except Exception as e:
+            logging.error(f"Failed to fetch video settings: {e}")
+
+    def _fetch_input_settings(self, page_name, pcgw_data):
+        """Fetch input settings from Cargo API."""
+        try:
+            time.sleep(0.5)
+            params = {
+                'action': 'cargoquery',
+                'tables': 'Input',
+                'fields': 'Input.Remapping,Input.Mouse_acceleration,Input.Controller_support,Input.Full_controller_support,Input.Controller_remapping,Input.Tracked_controllers_support,Input.VR_motion_controllers_support',
+                'where': f'Input._pageName="{page_name}"',
+                'format': 'json',
+                'limit': '1'
+            }
+            
+            response = self.session.get(self.api_url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                if 'cargoquery' in data and len(data['cargoquery']) > 0:
+                    result = data['cargoquery'][0]['title']
+                    input_settings = {}
+                    
+                    for key, value in result.items():
+                        if value:
+                            # Clean up key names
+                            clean_key = key.replace('Input.', '').replace('_', ' ')
+                            input_settings[clean_key] = value
+                    
+                    if input_settings:
+                        pcgw_data['input_settings'] = input_settings
+                        logging.info(f"Found input settings for {page_name}")
+                
+        except Exception as e:
+            logging.error(f"Failed to fetch input settings: {e}")

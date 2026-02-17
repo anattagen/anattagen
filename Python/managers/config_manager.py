@@ -83,10 +83,11 @@ class ConfigManager(QObject):
         self._detect_controller_mapper(config)
         self._detect_multimonitor_tool(config)
         self._detect_borderless_gaming(config)
+        self._detect_all_bin_tools(config)  # Auto-detect all tools in bin directory
 
         # Set default sequences
-        config.launch_sequence = ["Kill-Game", "Kill-List", "Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Borderless", "Pre2", "Pre3"]
-        config.exit_sequence = ["Kill-Game", "Kill-List", "Monitor-Config", "Taskbar", "Post1", "Controller-Mapper", "Post2", "Borderless", "Post3"]
+        config.launch_sequence = ["Cloud-Sync", "mount-disc", "Kill-Game", "Kill-List", "Controller-Mapper", "Monitor-Config", "No-TB", "Pre1", "Borderless", "Pre2", "Pre3"]
+        config.exit_sequence = ["Kill-Game", "Kill-List", "Monitor-Config", "Taskbar", "Post1", "Controller-Mapper", "Post2", "Borderless", "Post3", "Unmount-disc", "Cloud-Sync"]
 
         # Set default enabled states
         config.defaults = {
@@ -106,6 +107,12 @@ class ConfigManager(QObject):
             'mediacenter_profile_path_enabled': True,
             'multimonitor_gaming_path_enabled': True,
             'multimonitor_media_path_enabled': True,
+            'profiles_dir_enabled': True,
+            'launchers_dir_enabled': True,
+            'disc_mount_path_enabled': True,
+            'disc_unmount_path_enabled': True,
+            'rclone_path_enabled': True,
+            'ludusavi_path_enabled': True,
         }
 
         # Set default run-wait states
@@ -118,6 +125,10 @@ class ConfigManager(QObject):
             'pre1_path_run_wait': False, 'post1_path_run_wait': False,
             'pre2_path_run_wait': False, 'post2_path_run_wait': False,
             'pre3_path_run_wait': False, 'post3_path_run_wait': False,
+            'disc_mount_path_run_wait': False,
+            'disc_unmount_path_run_wait': False,
+            'rclone_path_run_wait': False,
+            'ludusavi_path_run_wait': False,
         }
 
         # Set default overwrite states (Deployment Tab -> Creation)
@@ -283,6 +294,58 @@ class ConfigManager(QObject):
         if bg_path:
             config.borderless_gaming_path = bg_path
             logging.info(f"Found Borderless Gaming: {bg_path}")
+
+    def _detect_all_bin_tools(self, config: AppConfig):
+        """
+        Auto-detect all tools in the bin directory and populate config paths.
+        This scans recursively for known executables and updates the config.
+        """
+        project_dir = Path(constants.APP_ROOT_DIR)
+        bin_dir = project_dir / "bin"
+        
+        if not bin_dir.exists():
+            logging.warning(f"Bin directory not found: {bin_dir}")
+            return
+        
+        # Define tool mappings: config_attribute -> list of possible exe names
+        tool_mappings = {
+            'rclone_path': ['rclone.exe', 'rclone'],
+            'ludusavi_path': ['ludusavi.exe', 'ludusavi'],
+            'disc_mount_path': ['imgdrive.exe', 'wincdemu.exe', 'osfmount.exe'],
+            'disc_unmount_path': ['imgdrive.exe', 'wincdemu.exe', 'osfmount.exe'],
+            'wincdemu_exe_path': ['wincdemu.exe'],
+            'imgdrive_exe_path': ['imgdrive.exe'],
+            'osf_exe_path': ['osfmount.exe', 'osfmount'],
+            'cdmage_exe_path': ['cdmage.exe'],
+        }
+        
+        logging.info("Auto-detecting tools in bin directory...")
+        
+        for config_attr, exe_names in tool_mappings.items():
+            # Skip if already set
+            current_value = getattr(config, config_attr, "")
+            if current_value and os.path.exists(current_value):
+                logging.info(f"{config_attr} already set to: {current_value}")
+                continue
+            
+            # Search for the executable
+            found_path = self._find_executable_recursive(bin_dir, exe_names)
+            if found_path:
+                setattr(config, config_attr, found_path)
+                logging.info(f"Auto-detected {config_attr}: {found_path}")
+            else:
+                logging.debug(f"Could not find executable for {config_attr} (looking for: {exe_names})")
+    
+    def refresh_tool_paths(self, config: AppConfig):
+        """
+        Refresh tool paths by re-scanning the bin directory.
+        This can be called from the UI to update paths after downloading tools.
+        """
+        logging.info("Refreshing tool paths from bin directory...")
+        self._detect_all_bin_tools(config)
+        self.save_config(config)
+        logging.info("Tool paths refreshed and saved.")
+        return config
 
     def reset_to_defaults(self, main_window):
         """Resets the configuration to defaults and re-syncs the UI."""

@@ -625,12 +625,50 @@ class CreationController:
                 config.add_section(section_name)
                 
                 if platform in save_locations:
-                    save_paths = '|'.join(save_locations[platform])
-                    config.set(section_name, 'SAVE', save_paths)
+                    # Handle both old format (list of strings) and new format (list of dicts)
+                    save_entries = save_locations[platform]
+                    save_paths = []
+                    save_clouds = []
+                    
+                    for idx, entry in enumerate(save_entries, 1):
+                        if isinstance(entry, dict):
+                            path = entry.get('path', '')
+                            cloud = entry.get('cloud', '')
+                            if path:
+                                save_paths.append(path)
+                                if cloud:
+                                    config.set(section_name, f'SaveCloud{idx}', cloud)
+                        else:
+                            # Old format: just a string
+                            save_paths.append(str(entry))
+                    
+                    if save_paths:
+                        # Use numbered entries for multiple paths
+                        for idx, path in enumerate(save_paths, 1):
+                            config.set(section_name, f'SavePath{idx}', path)
                 
                 if platform in config_locations:
-                    config_paths = '|'.join(config_locations[platform])
-                    config.set(section_name, 'CONFIG', config_paths)
+                    # Handle both old format (list of strings) and new format (list of dicts)
+                    config_entries = config_locations[platform]
+                    config_paths = []
+                    config_clouds = []
+                    
+                    for idx, entry in enumerate(config_entries, 1):
+                        if isinstance(entry, dict):
+                            path = entry.get('path', '')
+                            cloud = entry.get('cloud', '')
+                            if path:
+                                config_paths.append(path)
+                                if cloud:
+                                    config.set(section_name, f'ConfigCloud{idx}', cloud)
+                        else:
+                            # Old format: just a string
+                            config_paths.append(str(entry))
+                    
+                    if config_paths:
+                        # Use numbered entries for multiple paths
+                        for idx, path in enumerate(config_paths, 1):
+                            config.set(section_name, f'ConfigPath{idx}', path)
 
         # Write the INI file
         with open(ini_path, 'w', encoding='utf-8') as configfile:
