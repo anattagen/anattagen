@@ -58,8 +58,8 @@ def read_file(path: Path) -> str:
 
 
 def find_tags_in_text(text: str) -> Set[str]:
-    # Find bracketed tokens like [TAG]
-    tokens = re.findall(r"\[([^\]]+)\]", text)
+    # Find double-curly-brace tokens like {{TAG}}
+    tokens = re.findall(r"\{\{([^\}]+)\}\}", text)
     return set(token.strip() for token in tokens)
 
 
@@ -97,8 +97,8 @@ def apply_replacements(tag_values: Dict[str, str]) -> None:
     readme_text = read_file(README_SET)
     index_text = read_file(SITE_SET)
     for k, v in tag_values.items():
-        readme_text = readme_text.replace(f"[{k}]", v)
-        index_text = index_text.replace(f"[{k}]", v)
+        readme_text = readme_text.replace(f"{{{{{k}}}}}", v)
+        index_text = index_text.replace(f"{{{{{k}}}}}", v)
 
     # Ensure site dir exists
     OUT_README.write_text(readme_text, encoding="utf-8")

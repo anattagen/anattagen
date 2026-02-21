@@ -111,8 +111,8 @@ class ConfigManager(QObject):
             'launchers_dir_enabled': True,
             'disc_mount_path_enabled': True,
             'disc_unmount_path_enabled': True,
-            'rclone_path_enabled': True,
-            'ludusavi_path_enabled': True,
+            'cloud_sync_path_enabled': True,
+            'local_backup_path_enabled': True,
         }
 
         # Set default run-wait states
@@ -127,8 +127,8 @@ class ConfigManager(QObject):
             'pre3_path_run_wait': False, 'post3_path_run_wait': False,
             'disc_mount_path_run_wait': False,
             'disc_unmount_path_run_wait': False,
-            'rclone_path_run_wait': False,
-            'ludusavi_path_run_wait': False,
+            'cloud_sync_path_run_wait': False,
+            'local_backup_path_run_wait': False,
         }
 
         # Set default overwrite states (Deployment Tab -> Creation)
@@ -309,8 +309,8 @@ class ConfigManager(QObject):
         
         # Define tool mappings: config_attribute -> list of possible exe names
         tool_mappings = {
-            'rclone_path': ['rclone.exe', 'rclone'],
-            'ludusavi_path': ['ludusavi.exe', 'ludusavi'],
+            'cloud_sync_path': ['rclone.exe', 'rclone', 'ludusavi.exe', 'ludusavi', 'syncthing.exe', 'syncthing', 'emusync.exe', 'emusync'],
+            'local_backup_path': ['gamebackupmonitor.exe', 'GameBackupMonitor.exe', 'gamesavemanager.exe', 'GameSaveManager.exe', 'savestate.exe', 'SaveState.exe'],
             'disc_mount_path': ['imgdrive.exe', 'wincdemu.exe', 'osfmount.exe'],
             'disc_unmount_path': ['imgdrive.exe', 'wincdemu.exe', 'osfmount.exe'],
             'wincdemu_exe_path': ['wincdemu.exe'],

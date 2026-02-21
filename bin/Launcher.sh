@@ -119,9 +119,27 @@ JUSTBEFOREWAIT=$(read_ini "$GAMEINI" "PostLaunch" "JustBeforeExitWait")
 LAUNCHSEQ=$(read_ini "$GAMEINI" "Sequences" "LaunchSequence")
 EXITSEQ=$(read_ini "$GAMEINI" "Sequences" "ExitSequence")
 
+# CloudSync section
+CLOUDENABLED=$(read_ini "$GAMEINI" "CloudSync" "Enabled")
+CLOUDAPP=$(read_ini "$GAMEINI" "CloudSync" "App")
+CLOUDOPTS=$(read_ini "$GAMEINI" "CloudSync" "Options")
+CLOUDARGS=$(read_ini "$GAMEINI" "CloudSync" "Arguments")
+CLOUDWAIT=$(read_ini "$GAMEINI" "CloudSync" "Wait")
+CLOUDBACKUPONLAUNCH=$(read_ini "$GAMEINI" "CloudSync" "BackupOnLaunch")
+CLOUDUPLOADONEXIT=$(read_ini "$GAMEINI" "CloudSync" "UploadOnExit")
+
+# LocalBackup section
+BACKUPENABLED=$(read_ini "$GAMEINI" "LocalBackup" "Enabled")
+BACKUPAPP=$(read_ini "$GAMEINI" "LocalBackup" "App")
+BACKUPOPTS=$(read_ini "$GAMEINI" "LocalBackup" "Options")
+BACKUPARGS=$(read_ini "$GAMEINI" "LocalBackup" "Arguments")
+BACKUPWAIT=$(read_ini "$GAMEINI" "LocalBackup" "Wait")
+BACKUPBACKUPONLAUNCH=$(read_ini "$GAMEINI" "LocalBackup" "BackupOnLaunch")
+BACKUPBACKUPONEXIT=$(read_ini "$GAMEINI" "LocalBackup" "BackupOnExit")
+
 # Set defaults
-[ -z "$LAUNCHSEQ" ] && LAUNCHSEQ="Controller-Mapper,Monitor-Config,mount-disc,Pre1,Pre2,Pre3,Borderless"
-[ -z "$EXITSEQ" ] && EXITSEQ="Post1,Post2,Post3,Unmount-disc,Monitor-Config,Controller-Mapper"
+[ -z "$LAUNCHSEQ" ] && LAUNCHSEQ="Cloud-Sync,Local-Backup,Controller-Mapper,Monitor-Config,mount-disc,Pre1,Pre2,Pre3,Borderless"
+[ -z "$EXITSEQ" ] && EXITSEQ="Post1,Post2,Post3,Unmount-disc,Monitor-Config,Controller-Mapper,Local-Backup,Cloud-Sync"
 [ -n "$GAMENAME_INI" ] && GAMENAME="$GAMENAME_INI"
 [ -z "$GAMEPATH" ] && GAMEPATH="$PLINK"
 [ -z "$GAMEDIR" ] && GAMEDIR="$(dirname "$GAMEPATH")"
@@ -179,6 +197,30 @@ execute_sequence_item() {
             [ -n "$POSTAPP2" ] && echo "    Running Post-Launch App 2..." && run_app "$POSTAPP2" "$POSTAPP2OPTS" "$POSTAPP2ARGS" "$POSTAPP2WAIT" ;;
         "Post3")
             [ -n "$POSTAPP3" ] && echo "    Running Post-Launch App 3..." && run_app "$POSTAPP3" "$POSTAPP3OPTS" "$POSTAPP3ARGS" "$POSTAPP3WAIT" ;;
+        "Cloud-Sync")
+            if [[ "$CLOUDENABLED" =~ ^[1Tt] ]]; then
+                if [ "$phase" = "launch" ]; then
+                    if [[ "$CLOUDBACKUPONLAUNCH" =~ ^[1Tt] ]]; then
+                        [ -n "$CLOUDAPP" ] && echo "    Running Cloud Sync (download)..." && run_app "$CLOUDAPP" "$CLOUDOPTS" "$CLOUDARGS" "$CLOUDWAIT"
+                    fi
+                else
+                    if [[ "$CLOUDUPLOADONEXIT" =~ ^[1Tt] ]]; then
+                        [ -n "$CLOUDAPP" ] && echo "    Running Cloud Sync (upload)..." && run_app "$CLOUDAPP" "$CLOUDOPTS" "$CLOUDARGS" "$CLOUDWAIT"
+                    fi
+                fi
+            fi ;;
+        "Local-Backup")
+            if [[ "$BACKUPENABLED" =~ ^[1Tt] ]]; then
+                if [ "$phase" = "launch" ]; then
+                    if [[ "$BACKUPBACKUPONLAUNCH" =~ ^[1Tt] ]]; then
+                        [ -n "$BACKUPAPP" ] && echo "    Running Local Backup (pre-launch)..." && run_app "$BACKUPAPP" "$BACKUPOPTS" "$BACKUPARGS" "$BACKUPWAIT"
+                    fi
+                else
+                    if [[ "$BACKUPBACKUPONEXIT" =~ ^[1Tt] ]]; then
+                        [ -n "$BACKUPAPP" ] && echo "    Running Local Backup (post-exit)..." && run_app "$BACKUPAPP" "$BACKUPOPTS" "$BACKUPARGS" "$BACKUPWAIT"
+                    fi
+                fi
+            fi ;;
     esac
 }
 

@@ -16,6 +16,13 @@ PCGWURL = https://www.pcgamingwiki.com/wiki/
 PCGWAPI = https://www.pcgamingwiki.com/api/appid.php?appid=
 STEAMDBI = https://steamdb.info/app/
 
+# Format: url|extract_dir|exe_name|flags
+# Flags (optional 4th field):
+#   INSTALLER - Extracted file is an installer that must be run
+#   INSTALLER:path/to/installed.exe - Installer with specific installed exe path
+#   SILENT - Run installer silently (use with INSTALLER)
+#   PORTABLE - Portable executable (default, no installation needed)
+
 
 [MAPPERS]
 antimicrox = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
@@ -40,6 +47,13 @@ displaychanger = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|
 opencloudsave = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 rclone = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 ludusavi = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+syncthing = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+emusync = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+
+[LOCAL_BACKUP]
+gamebackupmonitor = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+gamesavemanager = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+savestate = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 
 
 [AUDIO]
@@ -49,7 +63,7 @@ soundvolumeview = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC
 swre = $SOURCEHOST/$ITEMNAME/releases/download/$ITEMNAME/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 
 [DISCS]
-wincdemu = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
+wincdemu = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe|INSTALLER:C:\Program Files\WinCDEmu\$ITEMNAME.exe
 osf = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAMEMount.exe
 cdmage = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe
 imgdrive = $EXHOST/$ITEMNAME/raw/refs/heads/main/$ITEMNAME.7z|$EXTRACTLOC|$ITEMNAME.exe

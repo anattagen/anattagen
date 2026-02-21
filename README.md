@@ -44,12 +44,12 @@ Creates a specialized launcher and profile-folder (jacket) for each game which h
  keyboad-mapping and monitor layout.  Tools which automate the process of creating and loading presets for devices, games and settings at 
  a granular level are downloaded and installed directly from within the program.
 
-AntimicroX, keySticks, multimonitortool.
+AntimicroX, keySticks, multimonitortool,  borderless-gaming,  borderless ,  rclone,  ludusavi,  WinCDEmu,  OSFMount,  imgdrive
 
 
 ## Installation
 
-0.99.45.58
+[VERSION]
 
 Run the installer or extract the binary to a location of your choice, **or** download and build and run the source files and executables.
 ```
@@ -180,22 +180,19 @@ The application now features a comprehensive plugin system with cloud backup sup
 
 # Setup
 
-
 ## Ubuntu Users should :
 ### For now clone the repo, setup a virtual environment in python and install the requirements via pip
 ## Copy this code and you should be GUD
 ```
 		sudo apt install python3-venv python3-pip
 		cd ~
-		git clone --recursive https://github.com/[RJ_PROJ]/[RJ_PROJ]/[RJ_PROJ].git
+		git clone --recursive https://[GIT_SRC]/[RJ_PROJ].git
 		cd [RJ_PROJ]
 		python3 -m venv .venv
 		source .venv/bin/activate
 		python -m pip install -r requirements.txt
 		python -m Python/main.py
 ```
-
-
 
 win
 ## Windows 11 / winget users can copy/paste this to install python very quickly:
@@ -205,8 +202,8 @@ win
 ### Now you can clone or download the repo, and install the requirements via pip
 ```
 		cd %userprofile%/Downloads
-		git clone --recursive https://https://github.com/[RJ_PROJ]/[RJ_PROJ]/[RJ_PROJ]
-		cd [RJ_PROJ]
+		git clone --recursive https://https://github.com/anattagen/anattagen/anattagen
+		cd anattagen
 		python -m pip install -r requirements_win.txt
 		python -m Python\main.py
 ```
@@ -238,5 +235,5 @@ win
 ## Apple Mac Users
 ```
 		  Update iTunes to enable auto-deduction from your ApplePay account. 
-Upgrade your monitor-stand and do not look directly at [RJ_PROJ]. Carefully replace the stickers and reattatch any modification-detection components before initializing apology-procedures. Disconnect your keyboard and press the button to authorize Thought-Coin permissions.
+Upgrade your monitor-stand and do not look directly at anattagen. Carefully replace the stickers and reattatch any modification-detection components before initializing apology-procedures. Disconnect your keyboard and press the button to authorize Thought-Coin permissions.
 ```

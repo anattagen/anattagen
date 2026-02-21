@@ -190,11 +190,54 @@ class DataManager(QObject):
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 games_data = json.load(f)
+            
+            # Sanitize loaded data - clear paths for disabled items
+            games_data = self._sanitize_game_data(games_data)
+            
             self.index_data_loaded.emit(games_data)
             self.status_updated.emit(f"Loaded {len(games_data)} games from {os.path.basename(file_path)}", 3000)
         except Exception as e:
             logging.error(f"Failed to load index file {file_path}: {e}")
             self.status_updated.emit(f"Failed to load index file: {e}", 5000)
+    
+    def _sanitize_game_data(self, games_data):
+        """Sanitize game data by clearing paths for disabled items."""
+        import copy
+        sanitized_data = copy.deepcopy(games_data)
+        
+        # Define path fields and their corresponding enabled flags
+        path_enabled_pairs = [
+            ('controller_mapper_path', 'controller_mapper_enabled'),
+            ('borderless_windowing_path', 'borderless_windowing_enabled'),
+            ('multi_monitor_app_path', 'multi_monitor_app_enabled'),
+            ('just_after_launch_path', 'just_after_launch_enabled'),
+            ('just_before_exit_path', 'just_before_exit_enabled'),
+            ('pre1_path', 'pre_1_enabled'),
+            ('pre2_path', 'pre_2_enabled'),
+            ('pre3_path', 'pre_3_enabled'),
+            ('post1_path', 'post_1_enabled'),
+            ('post2_path', 'post_2_enabled'),
+            ('post3_path', 'post_3_enabled'),
+            ('player1_profile', 'player1_profile_enabled'),
+            ('player2_profile', 'player2_profile_enabled'),
+            ('mediacenter_profile', 'mediacenter_profile_enabled'),
+            ('mm_game_profile', 'mm_game_profile_enabled'),
+            ('mm_desktop_profile', 'mm_desktop_profile_enabled'),
+            ('launcher_executable', 'launcher_executable_enabled'),
+            ('disc_mount_path', 'disc_mount_enabled'),
+            ('disc_unmount_path', 'disc_unmount_enabled'),
+            ('cloud_app_path', 'cloud_app_enabled'),
+            ('backup_app_path', 'backup_app_enabled'),
+        ]
+        
+        # Sanitize each game's data
+        for game in sanitized_data:
+            for path_key, enabled_key in path_enabled_pairs:
+                # If the enabled flag is False, clear the path
+                if not game.get(enabled_key, True):
+                    game[path_key] = ""
+        
+        return sanitized_data
 
     def save_editor_table_to_index(self, data, file_path):
         """Saves the current editor table data to a .index file."""

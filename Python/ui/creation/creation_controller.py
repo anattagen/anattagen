@@ -268,17 +268,31 @@ class CreationController:
                             logging.error(f"Failed to copy launcher executable: {e}")
                     target_launcher_exe = dest_path
 
-            # 3. Create the Game.ini file
+            # 3. Create the Game.ini file (will be updated with PCGW data later if needed)
             ini_path = game_profile_dir / "Game.ini"
-            self._create_game_ini(ini_path, game_data, app_config, game_profile_dir, launcher_shortcut_path, target_launcher_exe)
             
-            # 3b. Download Game.json if enabled
+            # 3a. Download Game.json if enabled (before creating INI)
             if app_config.download_game_json:
                 self._download_game_json(game_data, game_profile_dir)
 
-            # 3c. Download PCGW if enabled
+            # 3b. Load or download PCGW data (before creating INI so data is available)
+            # Always try to load existing pcgw.json, download if enabled
+            pcgw_path = game_profile_dir / "pcgw.json"
+            if pcgw_path.exists():
+                # Load existing PCGW data
+                try:
+                    with open(pcgw_path, 'r', encoding='utf-8') as f:
+                        game_data['pcgw_data'] = json.load(f)
+                    logging.info(f"Loaded existing PCGW data for {game_name_override}")
+                except Exception as e:
+                    logging.warning(f"Failed to load existing pcgw.json: {e}")
+            
+            # Download new PCGW data if enabled (may overwrite existing)
             if app_config.download_pcgw_metadata:
                 self._download_pcgw_data(game_data, game_profile_dir)
+            
+            # 3c. Now create Game.ini with all available data including PCGW
+            self._create_game_ini(ini_path, game_data, app_config, game_profile_dir, launcher_shortcut_path, target_launcher_exe)
 
             # 3d. Download Artwork if enabled
             if app_config.download_artwork:
@@ -453,11 +467,65 @@ class CreationController:
         except Exception as e:
             logging.error(f"Failed to download image {url}: {e}")
 
+    def _expand_pcgw_path(self, template_path, game_data):
+        """
+        Expand PCGW template variables in a path.
+        
+        Supported variables:
+        - <path-to-game> → Game directory
+        - <Steam-folder> → Steam installation path
+        - <user-id> → Steam user ID from game_data
+        - %LOCALAPPDATA%, %APPDATA%, etc. → Windows environment variables
+        
+        Args:
+            template_path: Path with template variables
+            game_data: Game data dictionary containing steam_id and directory
+            
+        Returns:
+            Expanded path string
+        """
+        expanded = template_path
+        
+        # Replace game-specific variables
+        if '<path-to-game>' in expanded:
+            game_dir = game_data.get('directory', '')
+            expanded = expanded.replace('<path-to-game>', game_dir)
+        
+        # Replace Steam variables
+        if '<Steam-folder>' in expanded or '<steam-folder>' in expanded:
+            # Common Steam installation paths
+            steam_paths = [
+                r'C:\Program Files (x86)\Steam',
+                r'C:\Program Files\Steam',
+                os.path.expandvars(r'%PROGRAMFILES(X86)%\Steam'),
+                os.path.expandvars(r'%PROGRAMFILES%\Steam'),
+            ]
+            steam_path = None
+            for path in steam_paths:
+                if os.path.exists(path):
+                    steam_path = path
+                    break
+            
+            if steam_path:
+                expanded = expanded.replace('<Steam-folder>', steam_path)
+                expanded = expanded.replace('<steam-folder>', steam_path)
+        
+        # Replace <user-id> with steam_id from game_data
+        if '<user-id>' in expanded:
+            steam_id = game_data.get('steam_id', '')
+            if steam_id and steam_id not in ['NOT_FOUND_IN_DATA', 'ITEM_IS_NONE', '']:
+                expanded = expanded.replace('<user-id>', str(steam_id))
+        
+        # Replace Windows environment variables
+        expanded = os.path.expandvars(expanded)
+        
+        return expanded
+
     def _create_game_ini(self, ini_path, game_data, app_config, game_profile_dir, launcher_shortcut_path, launcher_executable_path=None):
         """
         Generates and saves the Game.ini file based on game-specific and global settings.
         """
-        config = configparser.ConfigParser()
+        config = configparser.ConfigParser(interpolation=None)
 
         # --- [Game] Section ---
         config.add_section('Game')
@@ -465,6 +533,7 @@ class CreationController:
         config.set('Game', 'Directory', game_data.get('directory', ''))
         config.set('Game', 'Name', game_data.get('name_override', ''))
         config.set('Game', 'IsoPath', game_data.get('iso_path', ''))
+        config.set('Game', 'SteamID', str(game_data.get('steam_id', '')))
 
         # --- [Paths] Section ---
         config.add_section('Paths')
@@ -613,62 +682,107 @@ class CreationController:
                 resolved_source = self._transform_path(clean_path, game_data, extra_context)
                 config.set('SourcePaths', ini_key, resolved_source)
 
-        # --- [Platform_CLOUD] Sections for save and config paths ---
+        # --- [SYSTEM], [SAVE], and [CONFIG] Sections for PCGW data ---
         pcgw_data = game_data.get('pcgw_data', {})
         if pcgw_data:
             save_locations = pcgw_data.get('save_locations', {})
             config_locations = pcgw_data.get('config_locations', {})
             
+            # Create sections
+            if save_locations or config_locations:
+                config.add_section('SYSTEM')
+                config.add_section('SAVE')
+                config.add_section('CONFIG')
+            
+            # Process each platform
             all_platforms = set(save_locations.keys()) | set(config_locations.keys())
             for platform in all_platforms:
-                section_name = f"{platform}_CLOUD"
-                config.add_section(section_name)
+                # Normalize platform name for keys (replace spaces with underscores)
+                platform_key = platform.replace(' ', '_').replace('(', '').replace(')', '')
                 
+                # Process save locations
                 if platform in save_locations:
-                    # Handle both old format (list of strings) and new format (list of dicts)
                     save_entries = save_locations[platform]
-                    save_paths = []
-                    save_clouds = []
+                    template_paths = []
+                    expanded_paths = []
                     
-                    for idx, entry in enumerate(save_entries, 1):
+                    for entry in save_entries:
                         if isinstance(entry, dict):
                             path = entry.get('path', '')
-                            cloud = entry.get('cloud', '')
                             if path:
-                                save_paths.append(path)
-                                if cloud:
-                                    config.set(section_name, f'SaveCloud{idx}', cloud)
+                                template_paths.append(path)
+                                # Expand template variables for SAVE section
+                                expanded = self._expand_pcgw_path(path, game_data)
+                                expanded_paths.append(expanded)
                         else:
-                            # Old format: just a string
-                            save_paths.append(str(entry))
+                            template_paths.append(str(entry))
+                            expanded = self._expand_pcgw_path(str(entry), game_data)
+                            expanded_paths.append(expanded)
                     
-                    if save_paths:
-                        # Use numbered entries for multiple paths
-                        for idx, path in enumerate(save_paths, 1):
-                            config.set(section_name, f'SavePath{idx}', path)
+                    if template_paths:
+                        # Write templates to [SYSTEM] section: {platform}_save=path1|path2|path3
+                        pipe_delimited = '|'.join(template_paths)
+                        config.set('SYSTEM', f'{platform_key}_save', pipe_delimited)
+                        
+                        # Write expanded paths to [SAVE] section: {platform}=path1|path2|path3
+                        expanded_delimited = '|'.join(expanded_paths)
+                        config.set('SAVE', platform_key, expanded_delimited)
                 
+                # Process config locations
                 if platform in config_locations:
-                    # Handle both old format (list of strings) and new format (list of dicts)
                     config_entries = config_locations[platform]
-                    config_paths = []
-                    config_clouds = []
+                    template_paths = []
+                    expanded_paths = []
                     
-                    for idx, entry in enumerate(config_entries, 1):
+                    for entry in config_entries:
                         if isinstance(entry, dict):
                             path = entry.get('path', '')
-                            cloud = entry.get('cloud', '')
                             if path:
-                                config_paths.append(path)
-                                if cloud:
-                                    config.set(section_name, f'ConfigCloud{idx}', cloud)
+                                template_paths.append(path)
+                                # Expand template variables for CONFIG section
+                                expanded = self._expand_pcgw_path(path, game_data)
+                                expanded_paths.append(expanded)
                         else:
-                            # Old format: just a string
-                            config_paths.append(str(entry))
+                            template_paths.append(str(entry))
+                            expanded = self._expand_pcgw_path(str(entry), game_data)
+                            expanded_paths.append(expanded)
                     
-                    if config_paths:
-                        # Use numbered entries for multiple paths
-                        for idx, path in enumerate(config_paths, 1):
-                            config.set(section_name, f'ConfigPath{idx}', path)
+                    if template_paths:
+                        # Write templates to [SYSTEM] section: {platform}_config=path1|path2|path3
+                        pipe_delimited = '|'.join(template_paths)
+                        config.set('SYSTEM', f'{platform_key}_config', pipe_delimited)
+                        
+                        # Write expanded paths to [CONFIG] section: {platform}=path1|path2|path3
+                        expanded_delimited = '|'.join(expanded_paths)
+                        config.set('CONFIG', platform_key, expanded_delimited)
+
+        # --- [CloudSync] Section ---
+        if game_data.get('cloud_enabled', False):
+            config.add_section('CloudSync')
+            config.set('CloudSync', 'Enabled', str(game_data.get('cloud_enabled', False)))
+            config.set('CloudSync', 'App', game_data.get('cloud_app_path', ''))
+            config.set('CloudSync', 'Options', game_data.get('cloud_options', ''))
+            config.set('CloudSync', 'Arguments', game_data.get('cloud_arguments', ''))
+            config.set('CloudSync', 'Wait', str(game_data.get('cloud_run_wait', False)))
+            config.set('CloudSync', 'RemoteName', game_data.get('cloud_remote_name', ''))
+            config.set('CloudSync', 'UserPrefix', game_data.get('cloud_user_prefix', ''))
+            config.set('CloudSync', 'SavePath', game_data.get('cloud_local_save_path', ''))
+            config.set('CloudSync', 'BackupOnLaunch', str(game_data.get('cloud_backup_on_launch', False)))
+            config.set('CloudSync', 'UploadOnExit', str(game_data.get('cloud_upload_on_exit', True)))
+
+        # --- [LocalBackup] Section ---
+        if game_data.get('backup_enabled', False):
+            config.add_section('LocalBackup')
+            config.set('LocalBackup', 'Enabled', str(game_data.get('backup_enabled', False)))
+            config.set('LocalBackup', 'App', game_data.get('backup_app_path', ''))
+            config.set('LocalBackup', 'Options', game_data.get('backup_options', ''))
+            config.set('LocalBackup', 'Arguments', game_data.get('backup_arguments', ''))
+            config.set('LocalBackup', 'Wait', str(game_data.get('backup_run_wait', False)))
+            config.set('LocalBackup', 'LocalPrefix', game_data.get('backup_local_prefix', ''))
+            config.set('LocalBackup', 'SavePath', game_data.get('backup_local_save_path', ''))
+            config.set('LocalBackup', 'BackupOnLaunch', str(game_data.get('backup_on_launch', False)))
+            config.set('LocalBackup', 'BackupOnExit', str(game_data.get('backup_on_exit', True)))
+            config.set('LocalBackup', 'MaxBackups', str(game_data.get('backup_max_backups', 5)))
 
         # Write the INI file
         with open(ini_path, 'w', encoding='utf-8') as configfile:

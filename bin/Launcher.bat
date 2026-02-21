@@ -81,6 +81,24 @@ call :ReadINI "%GAMEINI%" "Paths" "DiscUnmountApp" UNMOUNTAPP
 call :ReadINI "%GAMEINI%" "Paths" "DiscUnmountOptions" UNMOUNTOPTS
 call :ReadINI "%GAMEINI%" "Paths" "DiscUnmountArguments" UNMOUNTARGS
 
+REM Parse INI file - CloudSync section
+call :ReadINI "%GAMEINI%" "CloudSync" "Enabled" CLOUDENABLED
+call :ReadINI "%GAMEINI%" "CloudSync" "App" CLOUDAPP
+call :ReadINI "%GAMEINI%" "CloudSync" "Options" CLOUDOPTS
+call :ReadINI "%GAMEINI%" "CloudSync" "Arguments" CLOUDARGS
+call :ReadINI "%GAMEINI%" "CloudSync" "Wait" CLOUDWAIT
+call :ReadINI "%GAMEINI%" "CloudSync" "BackupOnLaunch" CLOUDBACKUPONLAUNCH
+call :ReadINI "%GAMEINI%" "CloudSync" "UploadOnExit" CLOUDUPLOADONEXIT
+
+REM Parse INI file - LocalBackup section
+call :ReadINI "%GAMEINI%" "LocalBackup" "Enabled" BACKUPENABLED
+call :ReadINI "%GAMEINI%" "LocalBackup" "App" BACKUPAPP
+call :ReadINI "%GAMEINI%" "LocalBackup" "Options" BACKUPOPTS
+call :ReadINI "%GAMEINI%" "LocalBackup" "Arguments" BACKUPARGS
+call :ReadINI "%GAMEINI%" "LocalBackup" "Wait" BACKUPWAIT
+call :ReadINI "%GAMEINI%" "LocalBackup" "BackupOnLaunch" BACKUPBACKUPONLAUNCH
+call :ReadINI "%GAMEINI%" "LocalBackup" "BackupOnExit" BACKUPBACKUPONEXIT
+
 REM Parse INI file - PreLaunch section
 call :ReadINI "%GAMEINI%" "PreLaunch" "App1" PREAPP1
 call :ReadINI "%GAMEINI%" "PreLaunch" "App1Options" PREAPP1OPTS
@@ -122,8 +140,8 @@ call :ReadINI "%GAMEINI%" "Sequences" "LaunchSequence" LAUNCHSEQ
 call :ReadINI "%GAMEINI%" "Sequences" "ExitSequence" EXITSEQ
 
 REM Set default sequences if not specified
-if "%LAUNCHSEQ%"=="" set "LAUNCHSEQ=Controller-Mapper,Monitor-Config,No-TB,mount-disc,Pre1,Pre2,Pre3,Borderless"
-if "%EXITSEQ%"=="" set "EXITSEQ=Post1,Post2,Post3,Unmount-disc,Monitor-Config,Taskbar,Controller-Mapper"
+if "%LAUNCHSEQ%"=="" set "LAUNCHSEQ=Cloud-Sync,Local-Backup,Controller-Mapper,Monitor-Config,No-TB,mount-disc,Pre1,Pre2,Pre3,Borderless"
+if "%EXITSEQ%"=="" set "EXITSEQ=Post1,Post2,Post3,Unmount-disc,Monitor-Config,Taskbar,Controller-Mapper,Local-Backup,Cloud-Sync"
 
 REM Override GAMENAME if found in INI
 if not "%GAMENAME_INI%"=="" set "GAMENAME=%GAMENAME_INI%"
@@ -310,6 +328,46 @@ if /i "%Item%"=="Post3" (
     if not "%POSTAPP3%"=="" (
         echo     Running Post-Launch App 3...
         call :RunApp "%POSTAPP3%" "%POSTAPP3OPTS%" "%POSTAPP3ARGS%" "%POSTAPP3WAIT%"
+    )
+)
+
+if /i "%Item%"=="Cloud-Sync" (
+    if /i "%CLOUDENABLED%"=="1" (
+        if "%Phase%"=="launch" (
+            if /i "%CLOUDBACKUPONLAUNCH%"=="1" (
+                if not "%CLOUDAPP%"=="" (
+                    echo     Running Cloud Sync (download)...
+                    call :RunApp "%CLOUDAPP%" "%CLOUDOPTS%" "%CLOUDARGS%" "%CLOUDWAIT%"
+                )
+            )
+        ) else (
+            if /i "%CLOUDUPLOADONEXIT%"=="1" (
+                if not "%CLOUDAPP%"=="" (
+                    echo     Running Cloud Sync (upload)...
+                    call :RunApp "%CLOUDAPP%" "%CLOUDOPTS%" "%CLOUDARGS%" "%CLOUDWAIT%"
+                )
+            )
+        )
+    )
+)
+
+if /i "%Item%"=="Local-Backup" (
+    if /i "%BACKUPENABLED%"=="1" (
+        if "%Phase%"=="launch" (
+            if /i "%BACKUPBACKUPONLAUNCH%"=="1" (
+                if not "%BACKUPAPP%"=="" (
+                    echo     Running Local Backup (pre-launch)...
+                    call :RunApp "%BACKUPAPP%" "%BACKUPOPTS%" "%BACKUPARGS%" "%BACKUPWAIT%"
+                )
+            )
+        ) else (
+            if /i "%BACKUPBACKUPONEXIT%"=="1" (
+                if not "%BACKUPAPP%"=="" (
+                    echo     Running Local Backup (post-exit)...
+                    call :RunApp "%BACKUPAPP%" "%BACKUPOPTS%" "%BACKUPARGS%" "%BACKUPWAIT%"
+                )
+            )
+        )
     )
 )
 

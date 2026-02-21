@@ -9,4 +9,6 @@ configparser
 psutil
 pygame
 pyinstaller 
-cloudscraper 
+cloudscraper
+pystray
+pillow

@@ -128,7 +128,7 @@ class SetupTab(QWidget):
         "multimonitor_media_path", "pre1_path", "pre2_path", "pre3_path",
         "just_after_launch_path", "just_before_exit_path",
         "post1_path", "post2_path", "post3_path",
-        "rclone_path", "ludusavi_path"
+        "cloud_sync_path", "local_backup_path"
     ]
 
     SEQUENCE_TOOLTIPS = {
@@ -382,14 +382,23 @@ class SetupTab(QWidget):
         self.path_rows["just_before_exit_path"].enabled_cb.setToolTip("Enable Just Before Exit App")
         self._add_path_row(app_paths_layout, "Just Before Exit:", "just_before_exit_path", self.path_rows["just_before_exit_path"])
         
-        # Cloud Backup / Sync Tools
-        self.path_rows["rclone_path"] = PathConfigRow("rclone_path", add_run_wait=True, add_cen_lc=True, add_enabled=True, repo_items=self.repos.get("SYNC"))
-        self.path_rows["rclone_path"].enabled_cb.setToolTip("Enable Rclone Cloud Backup")
-        self._add_path_row(app_paths_layout, "Rclone (Cloud Sync):", "rclone_path", self.path_rows["rclone_path"])
+        # Cloud Backup / Sync Tools (Unified)
+        cloud_sync_tools = {}
+        if "SYNC" in self.repos:
+            cloud_sync_tools.update(self.repos["SYNC"])
         
-        self.path_rows["ludusavi_path"] = PathConfigRow("ludusavi_path", add_run_wait=True, add_cen_lc=True, add_enabled=True, repo_items=self.repos.get("SYNC"))
-        self.path_rows["ludusavi_path"].enabled_cb.setToolTip("Enable Ludusavi Save Backup")
-        self._add_path_row(app_paths_layout, "Ludusavi (Save Backup):", "ludusavi_path", self.path_rows["ludusavi_path"])
+        self.path_rows["cloud_sync_path"] = PathConfigRow("cloud_sync_path", add_run_wait=True, add_cen_lc=True, add_enabled=True, repo_items=cloud_sync_tools)
+        self.path_rows["cloud_sync_path"].enabled_cb.setToolTip("Enable Cloud Sync/Backup")
+        self._add_path_row(app_paths_layout, "Cloud Sync:", "cloud_sync_path", self.path_rows["cloud_sync_path"])
+        
+        # Local Backup Tools (Unified)
+        local_backup_tools = {}
+        if "LOCAL_BACKUP" in self.repos:
+            local_backup_tools.update(self.repos["LOCAL_BACKUP"])
+        
+        self.path_rows["local_backup_path"] = PathConfigRow("local_backup_path", add_run_wait=True, add_cen_lc=True, add_enabled=True, repo_items=local_backup_tools)
+        self.path_rows["local_backup_path"].enabled_cb.setToolTip("Enable Local Backup")
+        self._add_path_row(app_paths_layout, "Local Backup:", "local_backup_path", self.path_rows["local_backup_path"])
         
         paths_tabs.addTab(app_paths_widget, "APPLICATIONS")
 
@@ -455,6 +464,70 @@ class SetupTab(QWidget):
         self.ludusavi_backup_on_exit_cb = QCheckBox("Backup on Exit")
         self.ludusavi_backup_on_exit_cb.setChecked(True)
         cloud_backup_layout.addRow("", self.ludusavi_backup_on_exit_cb)
+        
+        # Separator
+        cloud_backup_layout.addRow(QLabel(""))
+        
+        # Syncthing Configuration
+        cloud_backup_layout.addRow(QLabel("<b>Syncthing Configuration:</b>"))
+        self.syncthing_sync_folder_row = PathConfigRow("syncthing_sync_folder", is_directory=True)
+        cloud_backup_layout.addRow("Sync Folder:", self.syncthing_sync_folder_row)
+        
+        self.syncthing_auto_start_cb = QCheckBox("Auto Start with Game")
+        self.syncthing_auto_start_cb.setChecked(True)
+        cloud_backup_layout.addRow("", self.syncthing_auto_start_cb)
+        
+        # Separator
+        cloud_backup_layout.addRow(QLabel(""))
+        
+        # EmuSync Configuration
+        cloud_backup_layout.addRow(QLabel("<b>EmuSync Configuration:</b>"))
+        self.emusync_emulator_path_row = PathConfigRow("emusync_emulator_path", is_directory=True)
+        cloud_backup_layout.addRow("Emulator Directory:", self.emusync_emulator_path_row)
+        
+        self.emusync_sync_on_launch_cb = QCheckBox("Sync on Launch")
+        self.emusync_sync_on_launch_cb.setChecked(True)
+        cloud_backup_layout.addRow("", self.emusync_sync_on_launch_cb)
+        
+        self.emusync_sync_on_exit_cb = QCheckBox("Sync on Exit")
+        self.emusync_sync_on_exit_cb.setChecked(True)
+        cloud_backup_layout.addRow("", self.emusync_sync_on_exit_cb)
+        
+        # Separator
+        cloud_backup_layout.addRow(QLabel(""))
+        
+        # Game Backup Monitor Configuration
+        cloud_backup_layout.addRow(QLabel("<b>Game Backup Monitor Configuration:</b>"))
+        self.gbm_backup_path_row = PathConfigRow("gbm_backup_path", is_directory=True)
+        cloud_backup_layout.addRow("Backup Directory:", self.gbm_backup_path_row)
+        
+        self.gbm_monitor_on_launch_cb = QCheckBox("Monitor on Launch")
+        self.gbm_monitor_on_launch_cb.setChecked(True)
+        cloud_backup_layout.addRow("", self.gbm_monitor_on_launch_cb)
+        
+        # Separator
+        cloud_backup_layout.addRow(QLabel(""))
+        
+        # Game Save Manager Configuration
+        cloud_backup_layout.addRow(QLabel("<b>Game Save Manager Configuration:</b>"))
+        self.gsm_backup_path_row = PathConfigRow("gsm_backup_path", is_directory=True)
+        cloud_backup_layout.addRow("Backup Directory:", self.gsm_backup_path_row)
+        
+        self.gsm_backup_on_exit_cb = QCheckBox("Backup on Exit")
+        self.gsm_backup_on_exit_cb.setChecked(True)
+        cloud_backup_layout.addRow("", self.gsm_backup_on_exit_cb)
+        
+        # Separator
+        cloud_backup_layout.addRow(QLabel(""))
+        
+        # Save State Configuration
+        cloud_backup_layout.addRow(QLabel("<b>Save State Configuration:</b>"))
+        self.savestate_backup_path_row = PathConfigRow("savestate_backup_path", is_directory=True)
+        cloud_backup_layout.addRow("Backup Directory:", self.savestate_backup_path_row)
+        
+        self.savestate_auto_backup_cb = QCheckBox("Auto Backup")
+        self.savestate_auto_backup_cb.setChecked(True)
+        cloud_backup_layout.addRow("", self.savestate_auto_backup_cb)
         
         paths_tabs.addTab(cloud_backup_widget, "CLOUD BACKUP")
 
@@ -776,6 +849,10 @@ class SetupTab(QWidget):
             for key, value in config[section].items():
                 if section == "GLOBAL": continue
                 
+                # Skip comment lines
+                if key.startswith('#'):
+                    continue
+                
                 # Basic variable substitution
                 val = value
                 for var_name, var_val in global_vars.items():
@@ -792,11 +869,37 @@ class SetupTab(QWidget):
                     if "github.com" in url and "/raw/refs/heads/" in url:
                         url = url.replace("/raw/refs/heads/", "/raw/")
 
-                    repos[section.upper()][key] = {
+                    tool_data = {
                         'url': url,
                         'extract_dir': parts[1],
                         'exe_name': parts[2]
                     }
+                    
+                    # Parse flags (4th field)
+                    if len(parts) >= 4:
+                        flags = parts[3].strip()
+                        
+                        # Check for INSTALLER flag
+                        if flags.startswith('INSTALLER'):
+                            tool_data['is_installer'] = True
+                            
+                            # Check for specific installed path
+                            if ':' in flags:
+                                installed_path = flags.split(':', 1)[1].strip()
+                                tool_data['installed_path'] = installed_path
+                            else:
+                                tool_data['installed_path'] = None
+                        
+                        # Check for SILENT flag
+                        if 'SILENT' in flags:
+                            tool_data['silent_install'] = True
+                        else:
+                            tool_data['silent_install'] = False
+                    else:
+                        tool_data['is_installer'] = False
+                        tool_data['silent_install'] = False
+                    
+                    repos[section.upper()][key] = tool_data
         return repos
 
     def _parse_options_arguments_set(self):
@@ -874,6 +977,7 @@ class SetupTab(QWidget):
 
         self.active_download_row = self.sender() # Store the row that requested the download
         self._current_download_tool_name = tool_name  # Store the tool name for config writing
+        self._current_download_tool_data = tool_data  # Store tool data for installer detection
         
         # Use QProgressDialog instead of embedded bar
         self.progress_dialog = QProgressDialog(f"Downloading {tool_name}...", "Cancel", 0, 100, self)
@@ -1286,25 +1390,199 @@ exit 1
             self.progress_dialog.close()
             
         if success:
-            if hasattr(self, 'active_download_row') and self.active_download_row:
-                self.active_download_row.path = result_path
-                
-                # Write the executable path to config.json
-                # Format: "{$flyout_app_name}_exe_path": "{$flyout_app_name_Extraction_path}\\{$flyout_app_name}.exe"
-                if hasattr(self, '_current_download_tool_name') and self._current_download_tool_name:
-                    tool_name = self._current_download_tool_name
-                    # Use the helper method to ensure consistent config writing and safety checks
-                    self._write_exe_path_to_config(tool_name, result_path)
+            # Check if this is an installer
+            is_installer = False
+            installed_path = None
+            silent_install = False
             
-            # Refresh all tool paths from bin directory after successful download
-            self._refresh_tool_paths()
+            if hasattr(self, '_current_download_tool_data'):
+                tool_data = self._current_download_tool_data
+                is_installer = tool_data.get('is_installer', False)
+                installed_path = tool_data.get('installed_path')
+                silent_install = tool_data.get('silent_install', False)
+            
+            if is_installer:
+                # Handle installer
+                self._handle_installer(result_path, installed_path, silent_install)
+            else:
+                # Handle portable executable
+                if hasattr(self, 'active_download_row') and self.active_download_row:
+                    self.active_download_row.path = result_path
+                    
+                    # Write the executable path to config.json
+                    if hasattr(self, '_current_download_tool_name') and self._current_download_tool_name:
+                        tool_name = self._current_download_tool_name
+                        self._write_exe_path_to_config(tool_name, result_path)
                 
-            QMessageBox.information(self, "Download Complete", f"Successfully downloaded to:\n{result_path}")
+                # Refresh all tool paths from bin directory after successful download
+                self._refresh_tool_paths()
+                    
+                QMessageBox.information(self, "Download Complete", f"Successfully downloaded to:\n{result_path}")
         else:
             QMessageBox.critical(self, "Download Failed", f"Error: {message}")
+            
         self.active_download_row = None
         if hasattr(self, '_current_download_tool_name'):
             self._current_download_tool_name = None
+        if hasattr(self, '_current_download_tool_data'):
+            self._current_download_tool_data = None
+    
+    def _handle_installer(self, installer_path, installed_path, silent_install):
+        """Handle running an installer and tracking the installed executable."""
+        try:
+            # Ask user if they want to run the installer
+            reply = QMessageBox.question(
+                self, 
+                "Installer Detected",
+                f"This tool requires installation.\n\n"
+                f"Installer: {os.path.basename(installer_path)}\n\n"
+                f"Would you like to run the installer now?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes
+            )
+            
+            if reply != QMessageBox.StandardButton.Yes:
+                QMessageBox.information(
+                    self, 
+                    "Installation Skipped",
+                    f"You can manually run the installer later:\n{installer_path}\n\n"
+                    f"After installation, manually set the path in the configuration."
+                )
+                return
+            
+            # Build installer command
+            cmd = [installer_path]
+            if silent_install:
+                # Common silent install flags
+                cmd.extend(['/S', '/SILENT', '/VERYSILENT'])
+            
+            # Run installer
+            logging.info(f"Running installer: {' '.join(cmd)}")
+            
+            if silent_install:
+                # Run silently and wait
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    creationflags=0x08000000  # CREATE_NO_WINDOW
+                )
+                
+                # Show progress dialog
+                progress = QProgressDialog("Installing...", "Cancel", 0, 0, self)
+                progress.setWindowModality(Qt.WindowModality.WindowModal)
+                progress.setMinimumDuration(0)
+                progress.show()
+                
+                # Wait for installation to complete
+                while process.poll() is None:
+                    QApplication.processEvents()
+                    if progress.wasCanceled():
+                        process.terminate()
+                        QMessageBox.warning(self, "Installation Cancelled", "Installation was cancelled by user.")
+                        return
+                
+                progress.close()
+                
+                if process.returncode != 0:
+                    stderr = process.stderr.read().decode('utf-8', errors='ignore')
+                    logging.error(f"Installer failed with code {process.returncode}: {stderr}")
+                    QMessageBox.critical(
+                        self, 
+                        "Installation Failed",
+                        f"Installer returned error code {process.returncode}\n\n"
+                        f"You may need to run the installer manually:\n{installer_path}"
+                    )
+                    return
+            else:
+                # Run installer with UI (non-blocking)
+                subprocess.Popen(cmd)
+                
+                QMessageBox.information(
+                    self,
+                    "Installer Launched",
+                    f"The installer has been launched.\n\n"
+                    f"Please complete the installation, then click OK.\n\n"
+                    f"After installation, the tool path will be detected automatically."
+                )
+            
+            # Try to find the installed executable
+            if installed_path:
+                # Expand environment variables in installed path
+                expanded_path = os.path.expandvars(installed_path)
+                
+                # Check if installed executable exists
+                if os.path.exists(expanded_path):
+                    # Update the path row
+                    if hasattr(self, 'active_download_row') and self.active_download_row:
+                        self.active_download_row.path = expanded_path
+                    
+                    # Write to config
+                    if hasattr(self, '_current_download_tool_name') and self._current_download_tool_name:
+                        tool_name = self._current_download_tool_name
+                        self._write_exe_path_to_config(tool_name, expanded_path)
+                    
+                    # Refresh tool paths
+                    self._refresh_tool_paths()
+                    
+                    QMessageBox.information(
+                        self,
+                        "Installation Complete",
+                        f"Tool installed successfully!\n\nInstalled to: {expanded_path}"
+                    )
+                else:
+                    # Installed path not found - ask user to locate it
+                    QMessageBox.warning(
+                        self,
+                        "Installed Path Not Found",
+                        f"Expected installation path not found:\n{expanded_path}\n\n"
+                        f"Please manually locate the installed executable."
+                    )
+                    
+                    # Open file dialog to locate installed exe
+                    file_path, _ = QFileDialog.getOpenFileName(
+                        self,
+                        "Locate Installed Executable",
+                        "",
+                        "Executables (*.exe);;All Files (*.*)"
+                    )
+                    
+                    if file_path:
+                        if hasattr(self, 'active_download_row') and self.active_download_row:
+                            self.active_download_row.path = file_path
+                        
+                        if hasattr(self, '_current_download_tool_name') and self._current_download_tool_name:
+                            tool_name = self._current_download_tool_name
+                            self._write_exe_path_to_config(tool_name, file_path)
+                        
+                        self._refresh_tool_paths()
+                        
+                        QMessageBox.information(
+                            self,
+                            "Path Set",
+                            f"Tool path set to:\n{file_path}"
+                        )
+            else:
+                # No installed path specified - try to auto-detect
+                QMessageBox.information(
+                    self,
+                    "Installation Complete",
+                    f"Installation complete!\n\n"
+                    f"The tool path will be auto-detected if it's in a standard location.\n"
+                    f"Otherwise, please manually set the path in the configuration."
+                )
+                
+                # Refresh to try auto-detection
+                self._refresh_tool_paths()
+                
+        except Exception as e:
+            logging.error(f"Error handling installer: {e}", exc_info=True)
+            QMessageBox.critical(
+                self,
+                "Installer Error",
+                f"An error occurred while handling the installer:\n{str(e)}\n\n"
+                f"You may need to run the installer manually:\n{installer_path}"
+            )
     
     def _refresh_tool_paths(self):
         """Refresh tool paths by re-scanning the bin directory and updating config."""
@@ -1501,21 +1779,31 @@ exit 1
                 row = self.path_rows[attr_name]
                 path_value = getattr(config, attr_name, "")
                 
-                # Special handling for launcher_executable: if empty, keep the default selection
-                if attr_name == "launcher_executable" and not path_value:
-                    # Don't set the path, keep the default from _populate_launcher_combo
-                    pass
+                # Determine if this path should be enabled
+                if not path_value and attr_name not in ["profiles_dir", "launchers_dir"]:
+                    should_be_enabled = False
                 else:
-                    row.path = path_value
+                    should_be_enabled = config.defaults.get(f"{attr_name}_enabled", True)
+                
+                # Set enabled state FIRST before setting path
+                if row.enabled_cb:
+                    row.enabled = should_be_enabled
+                
+                # If disabled and using combobox, ensure blank option is prepended and selected
+                if not should_be_enabled and row.use_combobox:
+                    # Prepend blank option if not already there
+                    if row.combo.count() == 0 or row.combo.itemText(0) != "":
+                        row.combo.insertItem(0, "")
+                    row.combo.setCurrentIndex(0)
+                else:
+                    # Special handling for launcher_executable: if empty, keep the default selection
+                    if attr_name == "launcher_executable" and not path_value:
+                        # Don't set the path, keep the default from _populate_launcher_combo
+                        pass
+                    else:
+                        row.path = path_value
                 
                 row.mode = config.deployment_path_modes.get(attr_name, "CEN")
-                
-                # Default state logic: Uncheck if path is empty, unless it's a core directory
-                if not path_value and attr_name not in ["profiles_dir", "launchers_dir"]:
-                    row.enabled = False
-                else:
-                    row.enabled = config.defaults.get(f"{attr_name}_enabled", True)
-
                 row.run_wait = config.run_wait_states.get(f"{attr_name}_run_wait", False)
 
                 # Initialize last detected tool to prevent overwrite on load/sync
@@ -1580,6 +1868,27 @@ exit 1
         self.ludusavi_game_name_edit.setText(getattr(config, 'ludusavi_game_name', ''))
         self.ludusavi_backup_on_launch_cb.setChecked(getattr(config, 'ludusavi_backup_on_launch', False))
         self.ludusavi_backup_on_exit_cb.setChecked(getattr(config, 'ludusavi_backup_on_exit', True))
+        
+        # Syncthing Configuration
+        self.syncthing_sync_folder_row.path = getattr(config, 'syncthing_sync_folder', '')
+        self.syncthing_auto_start_cb.setChecked(getattr(config, 'syncthing_auto_start', True))
+        
+        # EmuSync Configuration
+        self.emusync_emulator_path_row.path = getattr(config, 'emusync_emulator_path', '')
+        self.emusync_sync_on_launch_cb.setChecked(getattr(config, 'emusync_sync_on_launch', True))
+        self.emusync_sync_on_exit_cb.setChecked(getattr(config, 'emusync_sync_on_exit', True))
+        
+        # Game Backup Monitor Configuration
+        self.gbm_backup_path_row.path = getattr(config, 'gbm_backup_path', '')
+        self.gbm_monitor_on_launch_cb.setChecked(getattr(config, 'gbm_monitor_on_launch', True))
+        
+        # Game Save Manager Configuration
+        self.gsm_backup_path_row.path = getattr(config, 'gsm_backup_path', '')
+        self.gsm_backup_on_exit_cb.setChecked(getattr(config, 'gsm_backup_on_exit', True))
+        
+        # Save State Configuration
+        self.savestate_backup_path_row.path = getattr(config, 'savestate_backup_path', '')
+        self.savestate_auto_backup_cb.setChecked(getattr(config, 'savestate_auto_backup', True))
 
         self.blockSignals(False)
 
@@ -1600,7 +1909,13 @@ exit 1
         for attr_name in self.PATH_ATTRIBUTES:
             if attr_name in self.path_rows:
                 row = self.path_rows[attr_name]
-                setattr(config, attr_name, row.path)
+                
+                # If disabled, save empty string; otherwise save the path
+                if row.enabled_cb and not row.enabled:
+                    setattr(config, attr_name, "")
+                else:
+                    setattr(config, attr_name, row.path)
+                
                 config.deployment_path_modes[attr_name] = row.mode
                 if row.enabled_cb:
                     config.defaults[f"{attr_name}_enabled"] = row.enabled
@@ -1622,6 +1937,27 @@ exit 1
         config.ludusavi_game_name = self.ludusavi_game_name_edit.text()
         config.ludusavi_backup_on_launch = self.ludusavi_backup_on_launch_cb.isChecked()
         config.ludusavi_backup_on_exit = self.ludusavi_backup_on_exit_cb.isChecked()
+        
+        # Syncthing Configuration
+        config.syncthing_sync_folder = self.syncthing_sync_folder_row.path
+        config.syncthing_auto_start = self.syncthing_auto_start_cb.isChecked()
+        
+        # EmuSync Configuration
+        config.emusync_emulator_path = self.emusync_emulator_path_row.path
+        config.emusync_sync_on_launch = self.emusync_sync_on_launch_cb.isChecked()
+        config.emusync_sync_on_exit = self.emusync_sync_on_exit_cb.isChecked()
+        
+        # Game Backup Monitor Configuration
+        config.gbm_backup_path = self.gbm_backup_path_row.path
+        config.gbm_monitor_on_launch = self.gbm_monitor_on_launch_cb.isChecked()
+        
+        # Game Save Manager Configuration
+        config.gsm_backup_path = self.gsm_backup_path_row.path
+        config.gsm_backup_on_exit = self.gsm_backup_on_exit_cb.isChecked()
+        
+        # Save State Configuration
+        config.savestate_backup_path = self.savestate_backup_path_row.path
+        config.savestate_auto_backup = self.savestate_auto_backup_cb.isChecked()
 
     def _on_path_text_changed(self, config_key, new_path):
         """Updates options and arguments if the new path matches a known tool."""

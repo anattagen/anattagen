@@ -173,7 +173,15 @@ class EditorTab(QWidget):
             "Exec Order", "Term Order",
             "ISO Path",
             "Disc-Mount", "DM-Opts", "DM-Args", "Wait",
-            "Disc-Unmount", "DU-Opts", "DU-Args", "Wait"
+            "Disc-Unmount", "DU-Opts", "DU-Args", "Wait",
+            # Cloud Sync columns
+            "Cloud-Enabled", "Cloud-App", "C-Opts", "C-Args", "C-Wait",
+            "Remote-Name", "Cloud-Prefix", "Cloud-Save-Path",
+            "Cloud-DL", "Cloud-UL",
+            # Local Backup columns
+            "Backup-Enabled", "Backup-App", "B-Opts", "B-Args", "B-Wait",
+            "Backup-Prefix", "Backup-Save-Path",
+            "Backup-Launch", "Backup-Exit", "Max-Backups"
         ]
         self.table.setHorizontalHeaderLabels(headers)
 
@@ -597,7 +605,7 @@ class EditorTab(QWidget):
             'terminate_borderless_on_exit': config.terminate_borderless_on_exit,
 
             # Controller Mapper
-            'controller_mapper_path': config.controller_mapper_path,
+            'controller_mapper_path': config.controller_mapper_path if config.defaults.get('controller_mapper_path_enabled', True) else "",
             'controller_mapper_enabled': config.defaults.get('controller_mapper_path_enabled', True),
             'controller_mapper_overwrite': config.overwrite_states.get('controller_mapper_path', True),
             'controller_mapper_run_wait': config.run_wait_states.get('controller_mapper_path_run_wait', False),
@@ -605,7 +613,7 @@ class EditorTab(QWidget):
             'controller_mapper_arguments': config.controller_mapper_path_arguments,
 
             # Borderless
-            'borderless_windowing_path': config.borderless_gaming_path,
+            'borderless_windowing_path': config.borderless_gaming_path if config.defaults.get('borderless_gaming_path_enabled', True) else "",
             'borderless_windowing_enabled': config.defaults.get('borderless_gaming_path_enabled', True),
             'borderless_windowing_overwrite': config.overwrite_states.get('borderless_gaming_path', True),
             'borderless_windowing_run_wait': config.run_wait_states.get('borderless_gaming_path_run_wait', False),
@@ -613,7 +621,7 @@ class EditorTab(QWidget):
             'borderless_windowing_arguments': config.borderless_gaming_path_arguments,
 
             # Multi Monitor
-            'multi_monitor_app_path': config.multi_monitor_tool_path,
+            'multi_monitor_app_path': config.multi_monitor_tool_path if config.defaults.get('multi_monitor_tool_path_enabled', True) else "",
             'multi_monitor_app_enabled': config.defaults.get('multi_monitor_tool_path_enabled', True),
             'multi_monitor_app_overwrite': config.overwrite_states.get('multi_monitor_tool_path', True),
             'multi_monitor_app_run_wait': config.run_wait_states.get('multi_monitor_tool_path_run_wait', False),
@@ -621,7 +629,7 @@ class EditorTab(QWidget):
             'multi_monitor_app_arguments': config.multi_monitor_tool_path_arguments,
 
             # Just After Launch
-            'just_after_launch_path': config.just_after_launch_path,
+            'just_after_launch_path': config.just_after_launch_path if config.defaults.get('just_after_launch_path_enabled', True) else "",
             'just_after_launch_enabled': config.defaults.get('just_after_launch_path_enabled', True),
             'just_after_launch_overwrite': config.overwrite_states.get('just_after_launch_path', True),
             'just_after_launch_run_wait': config.run_wait_states.get('just_after_launch_path_run_wait', False),
@@ -629,7 +637,7 @@ class EditorTab(QWidget):
             'just_after_launch_arguments': config.just_after_launch_path_arguments,
 
             # Just Before Exit
-            'just_before_exit_path': config.just_before_exit_path,
+            'just_before_exit_path': config.just_before_exit_path if config.defaults.get('just_before_exit_path_enabled', True) else "",
             'just_before_exit_enabled': config.defaults.get('just_before_exit_path_enabled', True),
             'just_before_exit_overwrite': config.overwrite_states.get('just_before_exit_path', True),
             'just_before_exit_run_wait': config.run_wait_states.get('just_before_exit_path_run_wait', False),
@@ -637,42 +645,42 @@ class EditorTab(QWidget):
             'just_before_exit_arguments': config.just_before_exit_path_arguments,
 
             # Pre/Post Scripts
-            'pre1_path': config.pre1_path,
+            'pre1_path': config.pre1_path if config.defaults.get('pre1_path_enabled', True) else "",
             'pre_1_enabled': config.defaults.get('pre1_path_enabled', True),
             'pre_1_overwrite': config.overwrite_states.get('pre1_path', True),
             'pre_1_run_wait': config.run_wait_states.get('pre1_path_run_wait', False),
             'pre1_options': config.pre1_path_options,
             'pre1_arguments': config.pre1_path_arguments,
 
-            'pre2_path': config.pre2_path,
+            'pre2_path': config.pre2_path if config.defaults.get('pre2_path_enabled', True) else "",
             'pre_2_enabled': config.defaults.get('pre2_path_enabled', True),
             'pre_2_overwrite': config.overwrite_states.get('pre2_path', True),
             'pre_2_run_wait': config.run_wait_states.get('pre2_path_run_wait', False),
             'pre2_options': config.pre2_path_options,
             'pre2_arguments': config.pre2_path_arguments,
 
-            'pre3_path': config.pre3_path,
+            'pre3_path': config.pre3_path if config.defaults.get('pre3_path_enabled', True) else "",
             'pre_3_enabled': config.defaults.get('pre3_path_enabled', True),
             'pre_3_overwrite': config.overwrite_states.get('pre3_path', True),
             'pre_3_run_wait': config.run_wait_states.get('pre3_path_run_wait', False),
             'pre3_options': config.pre3_path_options,
             'pre3_arguments': config.pre3_path_arguments,
 
-            'post1_path': config.post1_path,
+            'post1_path': config.post1_path if config.defaults.get('post1_path_enabled', True) else "",
             'post_1_enabled': config.defaults.get('post1_path_enabled', True),
             'post_1_overwrite': config.overwrite_states.get('post1_path', True),
             'post_1_run_wait': config.run_wait_states.get('post1_path_run_wait', False),
             'post1_options': config.post1_path_options,
             'post1_arguments': config.post1_path_arguments,
 
-            'post2_path': config.post2_path,
+            'post2_path': config.post2_path if config.defaults.get('post2_path_enabled', True) else "",
             'post_2_enabled': config.defaults.get('post2_path_enabled', True),
             'post_2_overwrite': config.overwrite_states.get('post2_path', True),
             'post_2_run_wait': config.run_wait_states.get('post2_path_run_wait', False),
             'post2_options': config.post2_path_options,
             'post2_arguments': config.post2_path_arguments,
 
-            'post3_path': config.post3_path,
+            'post3_path': config.post3_path if config.defaults.get('post3_path_enabled', True) else "",
             'post_3_enabled': config.defaults.get('post3_path_enabled', True),
             'post_3_overwrite': config.overwrite_states.get('post3_path', True),
             'post_3_run_wait': config.run_wait_states.get('post3_path_run_wait', False),
@@ -680,22 +688,22 @@ class EditorTab(QWidget):
             'post3_arguments': config.post3_path_arguments,
 
             # Profiles
-            'player1_profile': config.p1_profile_path, 'player1_profile_enabled': config.defaults.get('p1_profile_path_enabled', True), 'player1_profile_overwrite': config.overwrite_states.get('p1_profile_path', True),
-            'player2_profile': config.p2_profile_path, 'player2_profile_enabled': config.defaults.get('p2_profile_path_enabled', True), 'player2_profile_overwrite': config.overwrite_states.get('p2_profile_path', True),
-            'mediacenter_profile': config.mediacenter_profile_path, 'mediacenter_profile_enabled': config.defaults.get('mediacenter_profile_path_enabled', True), 'mediacenter_profile_overwrite': config.overwrite_states.get('mediacenter_profile_path', True),
-            'mm_game_profile': config.multimonitor_gaming_path, 'mm_game_profile_enabled': config.defaults.get('multimonitor_gaming_path_enabled', True), 'mm_game_profile_overwrite': config.overwrite_states.get('multimonitor_gaming_path', True),
-            'mm_desktop_profile': config.multimonitor_media_path, 'mm_desktop_profile_enabled': config.defaults.get('multimonitor_media_path_enabled', True), 'mm_desktop_profile_overwrite': config.overwrite_states.get('multimonitor_media_path', True),
+            'player1_profile': config.p1_profile_path if config.defaults.get('p1_profile_path_enabled', True) else "", 'player1_profile_enabled': config.defaults.get('p1_profile_path_enabled', True), 'player1_profile_overwrite': config.overwrite_states.get('p1_profile_path', True),
+            'player2_profile': config.p2_profile_path if config.defaults.get('p2_profile_path_enabled', True) else "", 'player2_profile_enabled': config.defaults.get('p2_profile_path_enabled', True), 'player2_profile_overwrite': config.overwrite_states.get('p2_profile_path', True),
+            'mediacenter_profile': config.mediacenter_profile_path if config.defaults.get('mediacenter_profile_path_enabled', True) else "", 'mediacenter_profile_enabled': config.defaults.get('mediacenter_profile_path_enabled', True), 'mediacenter_profile_overwrite': config.overwrite_states.get('mediacenter_profile_path', True),
+            'mm_game_profile': config.multimonitor_gaming_path if config.defaults.get('multimonitor_gaming_path_enabled', True) else "", 'mm_game_profile_enabled': config.defaults.get('multimonitor_gaming_path_enabled', True), 'mm_game_profile_overwrite': config.overwrite_states.get('multimonitor_gaming_path', True),
+            'mm_desktop_profile': config.multimonitor_media_path if config.defaults.get('multimonitor_media_path_enabled', True) else "", 'mm_desktop_profile_enabled': config.defaults.get('multimonitor_media_path_enabled', True), 'mm_desktop_profile_overwrite': config.overwrite_states.get('multimonitor_media_path', True),
 
             # Launcher Executable
-            'launcher_executable': config.launcher_executable if config.launcher_executable else constants.LAUNCHER_EXECUTABLE, 'launcher_executable_enabled': config.defaults.get('launcher_executable_enabled', True), 'launcher_executable_overwrite': config.overwrite_states.get('launcher_executable', True),
+            'launcher_executable': (config.launcher_executable if config.launcher_executable else constants.LAUNCHER_EXECUTABLE) if config.defaults.get('launcher_executable_enabled', True) else "", 'launcher_executable_enabled': config.defaults.get('launcher_executable_enabled', True), 'launcher_executable_overwrite': config.overwrite_states.get('launcher_executable', True),
             'launcher_executable_options': config.launcher_executable_options, 'launcher_executable_arguments': config.launcher_executable_arguments,
 
             # Disc Mount
-            'disc_mount_path': config.disc_mount_path, 'disc_mount_enabled': config.defaults.get('disc_mount_path_enabled', True), 'disc_mount_overwrite': config.overwrite_states.get('disc_mount_path', True),
+            'disc_mount_path': config.disc_mount_path if config.defaults.get('disc_mount_path_enabled', True) else "", 'disc_mount_enabled': config.defaults.get('disc_mount_path_enabled', True), 'disc_mount_overwrite': config.overwrite_states.get('disc_mount_path', True),
             'disc_mount_options': config.disc_mount_path_options, 'disc_mount_arguments': config.disc_mount_path_arguments, 'disc_mount_run_wait': config.run_wait_states.get('disc_mount_path_run_wait', False),
 
             # Disc Unmount
-            'disc_unmount_path': config.disc_unmount_path, 'disc_unmount_enabled': config.defaults.get('disc_unmount_path_enabled', True), 'disc_unmount_overwrite': config.overwrite_states.get('disc_unmount_path', True),
+            'disc_unmount_path': config.disc_unmount_path if config.defaults.get('disc_unmount_path_enabled', True) else "", 'disc_unmount_enabled': config.defaults.get('disc_unmount_path_enabled', True), 'disc_unmount_overwrite': config.overwrite_states.get('disc_unmount_path', True),
             'disc_unmount_options': config.disc_unmount_path_options, 'disc_unmount_arguments': config.disc_unmount_path_arguments, 'disc_unmount_run_wait': config.run_wait_states.get('disc_unmount_path_run_wait', False),
         }
         
@@ -1749,10 +1757,10 @@ class EditorTab(QWidget):
         cb_enabled = QCheckBox()
         cb_enabled.setChecked(enabled)
         cb_enabled.setToolTip("Enable")
-        cb_enabled.stateChanged.connect(lambda state: self._on_merged_widget_changed(row, col))
         
-        line_edit = QLineEdit(path_text)
-        line_edit.setToolTip(path_text)
+        line_edit = QLineEdit(path_text if enabled else "")  # Show empty if disabled
+        line_edit.setToolTip(path_text if enabled else "")
+        line_edit.setEnabled(enabled)  # Disable line edit when checkbox is unchecked
         line_edit.textChanged.connect(lambda: self._sanitize_widget_text(line_edit))
         line_edit.textChanged.connect(lambda text: self._on_merged_widget_changed(row, col))
         line_edit.textChanged.connect(lambda: self._apply_merged_widget_styling(line_edit))
@@ -1760,7 +1768,30 @@ class EditorTab(QWidget):
         cb_overwrite = QCheckBox()
         cb_overwrite.setChecked(overwrite)
         cb_overwrite.setToolTip("Overwrite")
+        cb_overwrite.setEnabled(enabled)  # Disable overwrite checkbox when main checkbox is unchecked
         cb_overwrite.stateChanged.connect(lambda state: self._on_merged_widget_changed(row, col))
+        
+        # Store original path in widget property for restoration
+        widget.setProperty('original_path', path_text)
+        
+        # Connect enabled checkbox with special handler
+        def on_enabled_changed(state):
+            is_enabled = state == Qt.CheckState.Checked.value
+            line_edit.setEnabled(is_enabled)
+            cb_overwrite.setEnabled(is_enabled)
+            
+            if is_enabled:
+                # Restore original path when re-enabled
+                original = widget.property('original_path')
+                if original:
+                    line_edit.setText(original)
+            else:
+                # Clear path when disabled
+                line_edit.setText("")
+            
+            self._on_merged_widget_changed(row, col)
+        
+        cb_enabled.stateChanged.connect(on_enabled_changed)
         
         layout.addWidget(cb_enabled)
         layout.addWidget(line_edit, 1)
@@ -1770,6 +1801,50 @@ class EditorTab(QWidget):
         self._apply_merged_widget_styling(line_edit)
         
         return widget
+    
+    def _create_save_path_combo_widget(self, current_value: str, game_data: dict, row: int, col: int) -> QComboBox:
+        """Create a combobox populated with discovered save paths from Game.ini."""
+        from PyQt6.QtWidgets import QComboBox
+        
+        combo = QComboBox()
+        combo.setEditable(True)
+        
+        # Get discovered save paths from game data (if available)
+        discovered_saves = []
+        
+        # Try to get from pcgw_data if available
+        pcgw_data = game_data.get('pcgw_data', {})
+        if pcgw_data:
+            save_locations = pcgw_data.get('save_locations', {})
+            # Get Windows saves (could be extended to other platforms)
+            windows_saves = save_locations.get('Windows', [])
+            for save_entry in windows_saves:
+                if isinstance(save_entry, dict):
+                    path = save_entry.get('path', '')
+                    if path:
+                        discovered_saves.append(path)
+        
+        # Add empty option first
+        combo.addItem("")
+        
+        # Add discovered paths
+        for save_path in discovered_saves:
+            combo.addItem(save_path)
+        
+        # Set current value
+        if current_value:
+            # Try to find exact match
+            index = combo.findText(current_value)
+            if index >= 0:
+                combo.setCurrentIndex(index)
+            else:
+                # Set as custom value
+                combo.setEditText(current_value)
+        
+        # Connect change signal
+        combo.currentTextChanged.connect(lambda: self._on_merged_widget_changed(row, col))
+        
+        return combo
 
     def _apply_merged_widget_styling(self, line_edit):
         """Apply styling removed - no visual indicators."""
@@ -1806,6 +1881,16 @@ class EditorTab(QWidget):
             (constants.EditorCols.POST2_PATH, [constants.EditorCols.POST2_OPTIONS, constants.EditorCols.POST2_ARGUMENTS, constants.EditorCols.POST2_RUN_WAIT]),
             (constants.EditorCols.PRE3_PATH, [constants.EditorCols.PRE3_OPTIONS, constants.EditorCols.PRE3_ARGUMENTS, constants.EditorCols.PRE3_RUN_WAIT]),
             (constants.EditorCols.POST3_PATH, [constants.EditorCols.POST3_OPTIONS, constants.EditorCols.POST3_ARGUMENTS, constants.EditorCols.POST3_RUN_WAIT]),
+            # Cloud Sync group
+            (constants.EditorCols.CLOUD_APP_PATH, [constants.EditorCols.CLOUD_OPTIONS, constants.EditorCols.CLOUD_ARGUMENTS, constants.EditorCols.CLOUD_RUN_WAIT,
+                                                    constants.EditorCols.CLOUD_REMOTE_NAME, constants.EditorCols.CLOUD_USER_PREFIX, 
+                                                    constants.EditorCols.CLOUD_LOCAL_SAVE_PATH, constants.EditorCols.CLOUD_BACKUP_ON_LAUNCH, 
+                                                    constants.EditorCols.CLOUD_UPLOAD_ON_EXIT]),
+            # Local Backup group
+            (constants.EditorCols.BACKUP_APP_PATH, [constants.EditorCols.BACKUP_OPTIONS, constants.EditorCols.BACKUP_ARGUMENTS, constants.EditorCols.BACKUP_RUN_WAIT,
+                                                     constants.EditorCols.BACKUP_LOCAL_PREFIX, constants.EditorCols.BACKUP_LOCAL_SAVE_PATH,
+                                                     constants.EditorCols.BACKUP_ON_LAUNCH, constants.EditorCols.BACKUP_ON_EXIT, 
+                                                     constants.EditorCols.BACKUP_MAX_BACKUPS]),
         ]
         # Launcher Executable group
         groups.append((constants.EditorCols.LAUNCHER_EXE, [constants.EditorCols.LAUNCHER_EXE_OPTIONS, constants.EditorCols.LAUNCHER_EXE_ARGUMENTS]))
@@ -2043,6 +2128,68 @@ class EditorTab(QWidget):
             else:
                 item = self.table.item(row, col)
                 if item: game['iso_path'] = item.text()
+        
+        # Cloud Sync columns
+        elif col == constants.EditorCols.CLOUD_ENABLED.value:
+            game['cloud_enabled'] = self._get_checkbox_value(row, col)
+        elif col == constants.EditorCols.CLOUD_APP_PATH.value:
+            en, path, ov = self._get_merged_path_data(row, col)
+            game['cloud_app_enabled'] = en
+            game['cloud_app_path'] = path
+            game['cloud_app_overwrite'] = ov
+        elif col == constants.EditorCols.CLOUD_OPTIONS.value:
+            item = self.table.item(row, col)
+            game['cloud_options'] = item.text() if item else ""
+        elif col == constants.EditorCols.CLOUD_ARGUMENTS.value:
+            item = self.table.item(row, col)
+            game['cloud_arguments'] = item.text() if item else ""
+        elif col == constants.EditorCols.CLOUD_RUN_WAIT.value:
+            game['cloud_run_wait'] = self._get_checkbox_value(row, col)
+        elif col == constants.EditorCols.CLOUD_REMOTE_NAME.value:
+            item = self.table.item(row, col)
+            game['cloud_remote_name'] = item.text() if item else ""
+        elif col == constants.EditorCols.CLOUD_USER_PREFIX.value:
+            item = self.table.item(row, col)
+            game['cloud_user_prefix'] = item.text() if item else ""
+        elif col == constants.EditorCols.CLOUD_LOCAL_SAVE_PATH.value:
+            widget = self.table.cellWidget(row, col)
+            if isinstance(widget, QComboBox):
+                game['cloud_local_save_path'] = widget.currentText()
+        elif col == constants.EditorCols.CLOUD_BACKUP_ON_LAUNCH.value:
+            game['cloud_backup_on_launch'] = self._get_checkbox_value(row, col)
+        elif col == constants.EditorCols.CLOUD_UPLOAD_ON_EXIT.value:
+            game['cloud_upload_on_exit'] = self._get_checkbox_value(row, col)
+        
+        # Local Backup columns
+        elif col == constants.EditorCols.BACKUP_ENABLED.value:
+            game['backup_enabled'] = self._get_checkbox_value(row, col)
+        elif col == constants.EditorCols.BACKUP_APP_PATH.value:
+            en, path, ov = self._get_merged_path_data(row, col)
+            game['backup_app_enabled'] = en
+            game['backup_app_path'] = path
+            game['backup_app_overwrite'] = ov
+        elif col == constants.EditorCols.BACKUP_OPTIONS.value:
+            item = self.table.item(row, col)
+            game['backup_options'] = item.text() if item else ""
+        elif col == constants.EditorCols.BACKUP_ARGUMENTS.value:
+            item = self.table.item(row, col)
+            game['backup_arguments'] = item.text() if item else ""
+        elif col == constants.EditorCols.BACKUP_RUN_WAIT.value:
+            game['backup_run_wait'] = self._get_checkbox_value(row, col)
+        elif col == constants.EditorCols.BACKUP_LOCAL_PREFIX.value:
+            item = self.table.item(row, col)
+            game['backup_local_prefix'] = item.text() if item else ""
+        elif col == constants.EditorCols.BACKUP_LOCAL_SAVE_PATH.value:
+            widget = self.table.cellWidget(row, col)
+            if isinstance(widget, QComboBox):
+                game['backup_local_save_path'] = widget.currentText()
+        elif col == constants.EditorCols.BACKUP_ON_LAUNCH.value:
+            game['backup_on_launch'] = self._get_checkbox_value(row, col)
+        elif col == constants.EditorCols.BACKUP_ON_EXIT.value:
+            game['backup_on_exit'] = self._get_checkbox_value(row, col)
+        elif col == constants.EditorCols.BACKUP_MAX_BACKUPS.value:
+            item = self.table.item(row, col)
+            game['backup_max_backups'] = item.text() if item else "5"
 
     def swap_lc_cen_selected(self):
         """Swap between LC (>) and CEN (<) for selected path cells."""
@@ -2174,6 +2321,11 @@ class EditorTab(QWidget):
             overwrite = cbs[1].isChecked() if len(cbs) > 1 else False
             le = widget.findChild(QLineEdit)
             path = le.text() if le else ""
+            
+            # If checkbox is unchecked, return empty path to prevent propagation
+            if not enabled:
+                path = ""
+            
             return enabled, path, overwrite
         return False, "", False
 
@@ -2216,10 +2368,48 @@ class EditorTab(QWidget):
         if not data:
             return
 
-        self.original_data = [copy.deepcopy(game) for game in data]
+        # Sanitize data before populating - ensure disabled items have empty paths
+        sanitized_data = self._sanitize_data_for_display(data)
+        
+        self.original_data = [copy.deepcopy(game) for game in sanitized_data]
         self.filtered_data = self.original_data
         self.current_page = 0
         self.refresh_view()
+    
+    def _sanitize_data_for_display(self, data):
+        """Sanitize data by clearing paths for disabled items."""
+        sanitized = copy.deepcopy(data)
+        
+        path_enabled_pairs = [
+            ('controller_mapper_path', 'controller_mapper_enabled'),
+            ('borderless_windowing_path', 'borderless_windowing_enabled'),
+            ('multi_monitor_app_path', 'multi_monitor_app_enabled'),
+            ('just_after_launch_path', 'just_after_launch_enabled'),
+            ('just_before_exit_path', 'just_before_exit_enabled'),
+            ('pre1_path', 'pre_1_enabled'),
+            ('pre2_path', 'pre_2_enabled'),
+            ('pre3_path', 'pre_3_enabled'),
+            ('post1_path', 'post_1_enabled'),
+            ('post2_path', 'post_2_enabled'),
+            ('post3_path', 'post_3_enabled'),
+            ('player1_profile', 'player1_profile_enabled'),
+            ('player2_profile', 'player2_profile_enabled'),
+            ('mediacenter_profile', 'mediacenter_profile_enabled'),
+            ('mm_game_profile', 'mm_game_profile_enabled'),
+            ('mm_desktop_profile', 'mm_desktop_profile_enabled'),
+            ('launcher_executable', 'launcher_executable_enabled'),
+            ('disc_mount_path', 'disc_mount_enabled'),
+            ('disc_unmount_path', 'disc_unmount_enabled'),
+            ('cloud_app_path', 'cloud_app_enabled'),
+            ('backup_app_path', 'backup_app_enabled'),
+        ]
+        
+        for game in sanitized:
+            for path_key, enabled_key in path_enabled_pairs:
+                if not game.get(enabled_key, True):
+                    game[path_key] = ""
+        
+        return sanitized
 
     def _populate_row(self, row_num, game, duplicates):
         """Populate a single row with game data."""
@@ -2448,6 +2638,68 @@ class EditorTab(QWidget):
         self.table.setItem(row_num, constants.EditorCols.DU_ARGUMENTS.value, QTableWidgetItem(game.get('disc_unmount_arguments', '')))
         self.table.setCellWidget(row_num, constants.EditorCols.DU_RUN_WAIT.value, self._create_checkbox_widget(game.get('disc_unmount_run_wait', du_run_wait), row_num, constants.EditorCols.DU_RUN_WAIT.value))
 
+        # Cloud Sync columns
+        self.table.setCellWidget(row_num, constants.EditorCols.CLOUD_ENABLED.value, 
+            self._create_checkbox_widget(game.get('cloud_enabled', False), row_num, constants.EditorCols.CLOUD_ENABLED.value))
+        
+        cloud_symbol, cloud_run_wait = self._get_propagation_symbol_and_run_wait('rclone_app')
+        cloud_path = f"{cloud_symbol} {game.get('cloud_app_path', '').lstrip('<> ')}"
+        self.table.setCellWidget(row_num, constants.EditorCols.CLOUD_APP_PATH.value, 
+            self._create_merged_path_widget(game.get('cloud_app_enabled', True), cloud_path, 
+            game.get('cloud_app_overwrite', True), row_num, constants.EditorCols.CLOUD_APP_PATH.value))
+        
+        self.table.setItem(row_num, constants.EditorCols.CLOUD_OPTIONS.value, 
+            QTableWidgetItem(game.get('cloud_options', '')))
+        self.table.setItem(row_num, constants.EditorCols.CLOUD_ARGUMENTS.value, 
+            QTableWidgetItem(game.get('cloud_arguments', '')))
+        self.table.setCellWidget(row_num, constants.EditorCols.CLOUD_RUN_WAIT.value, 
+            self._create_checkbox_widget(game.get('cloud_run_wait', cloud_run_wait), row_num, constants.EditorCols.CLOUD_RUN_WAIT.value))
+        
+        self.table.setItem(row_num, constants.EditorCols.CLOUD_REMOTE_NAME.value, 
+            QTableWidgetItem(game.get('cloud_remote_name', '')))
+        self.table.setItem(row_num, constants.EditorCols.CLOUD_USER_PREFIX.value, 
+            QTableWidgetItem(game.get('cloud_user_prefix', '')))
+        
+        # Cloud save path combobox (populated from discovered saves)
+        self.table.setCellWidget(row_num, constants.EditorCols.CLOUD_LOCAL_SAVE_PATH.value,
+            self._create_save_path_combo_widget(game.get('cloud_local_save_path', ''), game, row_num, constants.EditorCols.CLOUD_LOCAL_SAVE_PATH.value))
+        
+        self.table.setCellWidget(row_num, constants.EditorCols.CLOUD_BACKUP_ON_LAUNCH.value, 
+            self._create_checkbox_widget(game.get('cloud_backup_on_launch', False), row_num, constants.EditorCols.CLOUD_BACKUP_ON_LAUNCH.value))
+        self.table.setCellWidget(row_num, constants.EditorCols.CLOUD_UPLOAD_ON_EXIT.value, 
+            self._create_checkbox_widget(game.get('cloud_upload_on_exit', False), row_num, constants.EditorCols.CLOUD_UPLOAD_ON_EXIT.value))
+
+        # Local Backup columns
+        self.table.setCellWidget(row_num, constants.EditorCols.BACKUP_ENABLED.value, 
+            self._create_checkbox_widget(game.get('backup_enabled', False), row_num, constants.EditorCols.BACKUP_ENABLED.value))
+        
+        backup_symbol, backup_run_wait = self._get_propagation_symbol_and_run_wait('ludusavi_app')
+        backup_path = f"{backup_symbol} {game.get('backup_app_path', '').lstrip('<> ')}"
+        self.table.setCellWidget(row_num, constants.EditorCols.BACKUP_APP_PATH.value, 
+            self._create_merged_path_widget(game.get('backup_app_enabled', True), backup_path, 
+            game.get('backup_app_overwrite', True), row_num, constants.EditorCols.BACKUP_APP_PATH.value))
+        
+        self.table.setItem(row_num, constants.EditorCols.BACKUP_OPTIONS.value, 
+            QTableWidgetItem(game.get('backup_options', '')))
+        self.table.setItem(row_num, constants.EditorCols.BACKUP_ARGUMENTS.value, 
+            QTableWidgetItem(game.get('backup_arguments', '')))
+        self.table.setCellWidget(row_num, constants.EditorCols.BACKUP_RUN_WAIT.value, 
+            self._create_checkbox_widget(game.get('backup_run_wait', backup_run_wait), row_num, constants.EditorCols.BACKUP_RUN_WAIT.value))
+        
+        self.table.setItem(row_num, constants.EditorCols.BACKUP_LOCAL_PREFIX.value, 
+            QTableWidgetItem(game.get('backup_local_prefix', '')))
+        
+        # Backup save path combobox (populated from discovered saves)
+        self.table.setCellWidget(row_num, constants.EditorCols.BACKUP_LOCAL_SAVE_PATH.value,
+            self._create_save_path_combo_widget(game.get('backup_local_save_path', ''), game, row_num, constants.EditorCols.BACKUP_LOCAL_SAVE_PATH.value))
+        
+        self.table.setCellWidget(row_num, constants.EditorCols.BACKUP_ON_LAUNCH.value, 
+            self._create_checkbox_widget(game.get('backup_on_launch', False), row_num, constants.EditorCols.BACKUP_ON_LAUNCH.value))
+        self.table.setCellWidget(row_num, constants.EditorCols.BACKUP_ON_EXIT.value, 
+            self._create_checkbox_widget(game.get('backup_on_exit', False), row_num, constants.EditorCols.BACKUP_ON_EXIT.value))
+        self.table.setItem(row_num, constants.EditorCols.BACKUP_MAX_BACKUPS.value, 
+            QTableWidgetItem(str(game.get('backup_max_backups', '5'))))
+
         # Apply styling
         self._apply_styling(row_num, game, duplicates)
 
@@ -2459,8 +2711,44 @@ class EditorTab(QWidget):
         pass
 
     def get_all_game_data(self):
-        """Extract all game data from the table."""
-        return self.original_data
+        """Extract all game data from the table, sanitizing disabled paths."""
+        # Deep copy to avoid modifying original_data
+        import copy
+        sanitized_data = copy.deepcopy(self.original_data)
+        
+        # Define path fields and their corresponding enabled flags
+        path_enabled_pairs = [
+            ('controller_mapper_path', 'controller_mapper_enabled'),
+            ('borderless_windowing_path', 'borderless_windowing_enabled'),
+            ('multi_monitor_app_path', 'multi_monitor_app_enabled'),
+            ('just_after_launch_path', 'just_after_launch_enabled'),
+            ('just_before_exit_path', 'just_before_exit_enabled'),
+            ('pre1_path', 'pre_1_enabled'),
+            ('pre2_path', 'pre_2_enabled'),
+            ('pre3_path', 'pre_3_enabled'),
+            ('post1_path', 'post_1_enabled'),
+            ('post2_path', 'post_2_enabled'),
+            ('post3_path', 'post_3_enabled'),
+            ('player1_profile', 'player1_profile_enabled'),
+            ('player2_profile', 'player2_profile_enabled'),
+            ('mediacenter_profile', 'mediacenter_profile_enabled'),
+            ('mm_game_profile', 'mm_game_profile_enabled'),
+            ('mm_desktop_profile', 'mm_desktop_profile_enabled'),
+            ('launcher_executable', 'launcher_executable_enabled'),
+            ('disc_mount_path', 'disc_mount_enabled'),
+            ('disc_unmount_path', 'disc_unmount_enabled'),
+            ('cloud_app_path', 'cloud_app_enabled'),
+            ('backup_app_path', 'backup_app_enabled'),
+        ]
+        
+        # Sanitize each game's data
+        for game in sanitized_data:
+            for path_key, enabled_key in path_enabled_pairs:
+                # If the enabled flag is False, clear the path
+                if not game.get(enabled_key, True):
+                    game[path_key] = ""
+        
+        return sanitized_data
 
     def get_selected_game_data(self):
         """Extract data for selected games in the table."""

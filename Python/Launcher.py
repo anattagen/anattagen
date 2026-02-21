@@ -256,6 +256,24 @@ class GameLauncher:
         
         self.executor = SequenceExecutorV2(self)
         
+        # Initialize tray menu
+        self.tray_menu = None
+        try:
+            from Python.tray_menu import LauncherTrayMenu, TRAY_AVAILABLE
+            if TRAY_AVAILABLE:
+                self.tray_menu = LauncherTrayMenu(self)
+                self.tray_menu.start()
+                logging.info("Tray menu initialized")
+        except ImportError:
+            try:
+                from tray_menu import LauncherTrayMenu, TRAY_AVAILABLE
+                if TRAY_AVAILABLE:
+                    self.tray_menu = LauncherTrayMenu(self)
+                    self.tray_menu.start()
+                    logging.info("Tray menu initialized")
+            except ImportError:
+                logging.warning("Tray menu not available")
+        
         # Close splash screen after initialization is done
         self.update_splash_progress(100, "Ready to launch!")
         self.close_splash()
@@ -424,27 +442,6 @@ class GameLauncher:
             self.mediacenter_profile = config.get('Paths', 'MediaCenterProfile', fallback='')
             self.mm_game_config = config.get('Paths', 'MultiMonitorGamingConfig', fallback='')
             self.mm_desktop_config = config.get('Paths', 'MultiMonitorDesktopConfig', fallback='')
-            self.cloud_app = config.get('Paths', 'CloudApp', fallback='')
-            self.cloud_app_options = config.get('Paths', 'CloudAppOptions', fallback='')
-            self.cloud_app_arguments = config.get('Paths', 'CloudAppArguments', fallback='')
-            
-            # Cloud backup specific paths
-            self.rclone_app = config.get('Paths', 'RcloneApp', fallback='')
-            self.ludusavi_app = config.get('Paths', 'LudusaviApp', fallback='')
-            
-            # Rclone configuration
-            self.rclone_remote_name = config.get('Paths', 'RcloneRemoteName', fallback='')
-            self.rclone_local_path = config.get('Paths', 'RcloneLocalPath', fallback='')
-            self.rclone_remote_path = config.get('Paths', 'RcloneRemotePath', fallback='')
-            self.rclone_sync_mode = config.get('Paths', 'RcloneSyncMode', fallback='sync')
-            self.rclone_backup_on_launch = config.getboolean('Paths', 'RcloneBackupOnLaunch', fallback=False)
-            self.rclone_backup_on_exit = config.getboolean('Paths', 'RcloneBackupOnExit', fallback=True)
-            
-            # Ludusavi configuration
-            self.ludusavi_backup_path = config.get('Paths', 'LudusaviBackupPath', fallback='')
-            self.ludusavi_game_name = config.get('Paths', 'LudusaviGameName', fallback='')
-            self.ludusavi_backup_on_launch = config.getboolean('Paths', 'LudusaviBackupOnLaunch', fallback=False)
-            self.ludusavi_backup_on_exit = config.getboolean('Paths', 'LudusaviBackupOnExit', fallback=True)
             
             self.disc_mount_app = config.get('Paths', 'DiscMountApp', fallback='')
             self.disc_mount_options = config.get('Paths', 'DiscMountOptions', fallback='')
@@ -455,6 +452,36 @@ class GameLauncher:
             self.disc_unmount_options = config.get('Paths', 'DiscUnmountOptions', fallback='')
             self.disc_unmount_arguments = config.get('Paths', 'DiscUnmountArguments', fallback='')
             self.disc_unmount_wait = config.getboolean('Paths', 'DiscUnmountWait', fallback=False)
+        
+        # Load CloudSync configuration
+        if 'CloudSync' in config:
+            self.cloud_enabled = config.getboolean('CloudSync', 'Enabled', fallback=False)
+            self.cloud_app = config.get('CloudSync', 'App', fallback='')
+            self.cloud_options = config.get('CloudSync', 'Options', fallback='')
+            self.cloud_arguments = config.get('CloudSync', 'Arguments', fallback='')
+            self.cloud_wait = config.getboolean('CloudSync', 'Wait', fallback=False)
+            self.cloud_remote_name = config.get('CloudSync', 'RemoteName', fallback='')
+            self.cloud_user_prefix = config.get('CloudSync', 'UserPrefix', fallback='')
+            self.cloud_save_path = config.get('CloudSync', 'SavePath', fallback='')
+            self.cloud_backup_on_launch = config.getboolean('CloudSync', 'BackupOnLaunch', fallback=False)
+            self.cloud_upload_on_exit = config.getboolean('CloudSync', 'UploadOnExit', fallback=True)
+        else:
+            self.cloud_enabled = False
+        
+        # Load LocalBackup configuration
+        if 'LocalBackup' in config:
+            self.backup_enabled = config.getboolean('LocalBackup', 'Enabled', fallback=False)
+            self.backup_app = config.get('LocalBackup', 'App', fallback='')
+            self.backup_options = config.get('LocalBackup', 'Options', fallback='')
+            self.backup_arguments = config.get('LocalBackup', 'Arguments', fallback='')
+            self.backup_wait = config.getboolean('LocalBackup', 'Wait', fallback=False)
+            self.backup_local_prefix = config.get('LocalBackup', 'LocalPrefix', fallback='')
+            self.backup_save_path = config.get('LocalBackup', 'SavePath', fallback='')
+            self.backup_backup_on_launch = config.getboolean('LocalBackup', 'BackupOnLaunch', fallback=False)
+            self.backup_backup_on_exit = config.getboolean('LocalBackup', 'BackupOnExit', fallback=True)
+            self.backup_max_backups_new = config.getint('LocalBackup', 'MaxBackups', fallback=5)
+        else:
+            self.backup_enabled = False
         
         # Load options
         if 'Options' in config:
@@ -538,6 +565,16 @@ class GameLauncher:
                     "Taskbar",
                     "Controller-Mapper"
                 ]
+        
+        # Run path discovery if needed (discover save/config files from PCGW templates)
+        try:
+            from Python.utils.path_discovery import discover_and_update_paths
+            if discover_and_update_paths(game_ini, context='launch'):
+                logging.info(f"Pre-launch path discovery completed for {self.game_name}")
+                # Reload config to get updated paths
+                config.read(game_ini)
+        except Exception as e:
+            logging.warning(f"Pre-launch path discovery failed: {e}")
 
     def modify_config(self):
         """Modify the configuration file based on CLI arguments."""
@@ -588,8 +625,7 @@ class GameLauncher:
             '$BORDERLESS': self.borderless_app,
             '$MMONAPP': self.multimonitor_tool,
             '$CLOUDAPP': getattr(self, 'cloud_app', ''),
-            '$RCLONE': getattr(self, 'rclone_app', ''),
-            '$LUDUSAVI': getattr(self, 'ludusavi_app', ''),
+            '$BACKUPAPP': getattr(self, 'backup_app', ''),
             '$GAMEDIR': self.game_dir,
             '$GAMEEXE': self.game_path,
             '$GAMENAME': self.game_name,
@@ -661,6 +697,218 @@ class GameLauncher:
         except Exception as e:
             self.show_message(f"Backup failed: {e}")
 
+    def cloud_sync_download(self):
+        """Download saves from cloud before launching game."""
+        if not getattr(self, 'cloud_enabled', False) or not getattr(self, 'cloud_backup_on_launch', False):
+            return
+        
+        try:
+            from Python.utils.cloud_path_utils import build_rclone_command, generate_remote_path, strip_path_variables
+            
+            cloud_app = self.resolve_path(self.cloud_app)
+            if not cloud_app or not os.path.exists(cloud_app):
+                logging.warning(f"Cloud sync app not found: {cloud_app}")
+                return
+            
+            # Get save path (use cloud_save_path or discover from SAVE section)
+            save_path = self.cloud_save_path
+            if not save_path:
+                # Try to get from SAVE section
+                config = configparser.ConfigParser()
+                config.read(self.ini_path)
+                from Python.utils.cloud_path_utils import get_primary_save_path
+                save_path = get_primary_save_path(config, 'SAVE', 'Windows')
+            
+            if not save_path:
+                logging.warning("No save path configured for cloud sync")
+                return
+            
+            # Expand save path
+            local_path = os.path.expandvars(save_path)
+            if '<path-to-game>' in local_path:
+                local_path = local_path.replace('<path-to-game>', self.game_dir)
+            
+            # Generate remote path
+            remote_path = generate_remote_path(
+                self.cloud_user_prefix,
+                self.game_name,
+                save_path,
+                self.game_dir
+            )
+            
+            # Build rclone command
+            cmd = build_rclone_command(
+                cloud_app,
+                self.cloud_remote_name,
+                remote_path,
+                local_path,
+                sync_mode='sync',
+                direction='download',
+                options=self.cloud_options
+            )
+            
+            if self.cloud_arguments:
+                cmd += f' {self.cloud_arguments}'
+            
+            self.show_message(f"Downloading saves from cloud: {remote_path}")
+            logging.info(f"Cloud sync download: {cmd}")
+            
+            self.run_process(cmd, wait=self.cloud_wait)
+            
+        except Exception as e:
+            logging.error(f"Cloud sync download failed: {e}", exc_info=True)
+            self.show_message(f"Cloud sync download failed: {e}")
+
+    def cloud_sync_upload(self):
+        """Upload saves to cloud after game exits."""
+        if not getattr(self, 'cloud_enabled', False) or not getattr(self, 'cloud_upload_on_exit', False):
+            return
+        
+        try:
+            from Python.utils.cloud_path_utils import build_rclone_command, generate_remote_path, strip_path_variables
+            
+            cloud_app = self.resolve_path(self.cloud_app)
+            if not cloud_app or not os.path.exists(cloud_app):
+                logging.warning(f"Cloud sync app not found: {cloud_app}")
+                return
+            
+            # Get save path
+            save_path = self.cloud_save_path
+            if not save_path:
+                config = configparser.ConfigParser()
+                config.read(self.ini_path)
+                from Python.utils.cloud_path_utils import get_primary_save_path
+                save_path = get_primary_save_path(config, 'SAVE', 'Windows')
+            
+            if not save_path:
+                logging.warning("No save path configured for cloud sync")
+                return
+            
+            # Expand save path
+            local_path = os.path.expandvars(save_path)
+            if '<path-to-game>' in local_path:
+                local_path = local_path.replace('<path-to-game>', self.game_dir)
+            
+            # Generate remote path
+            remote_path = generate_remote_path(
+                self.cloud_user_prefix,
+                self.game_name,
+                save_path,
+                self.game_dir
+            )
+            
+            # Build rclone command
+            cmd = build_rclone_command(
+                cloud_app,
+                self.cloud_remote_name,
+                remote_path,
+                local_path,
+                sync_mode='sync',
+                direction='upload',
+                options=self.cloud_options
+            )
+            
+            if self.cloud_arguments:
+                cmd += f' {self.cloud_arguments}'
+            
+            self.show_message(f"Uploading saves to cloud: {remote_path}")
+            logging.info(f"Cloud sync upload: {cmd}")
+            
+            self.run_process(cmd, wait=self.cloud_wait)
+            
+        except Exception as e:
+            logging.error(f"Cloud sync upload failed: {e}", exc_info=True)
+            self.show_message(f"Cloud sync upload failed: {e}")
+
+    def local_backup_create(self, on_launch=True):
+        """Create local backup of saves."""
+        if not getattr(self, 'backup_enabled', False):
+            return
+        
+        # Check if we should backup at this point
+        if on_launch and not getattr(self, 'backup_backup_on_launch', False):
+            return
+        if not on_launch and not getattr(self, 'backup_backup_on_exit', False):
+            return
+        
+        try:
+            from Python.utils.cloud_path_utils import build_ludusavi_command, generate_local_backup_path
+            
+            backup_app = self.resolve_path(self.backup_app)
+            if not backup_app or not os.path.exists(backup_app):
+                logging.warning(f"Backup app not found: {backup_app}")
+                return
+            
+            # Generate backup path with timestamp
+            backup_path = generate_local_backup_path(
+                self.backup_local_prefix,
+                self.game_name,
+                use_timestamp=True
+            )
+            
+            # Build ludusavi command
+            cmd = build_ludusavi_command(
+                backup_app,
+                backup_path,
+                self.game_name,
+                action='backup',
+                options=self.backup_options
+            )
+            
+            if self.backup_arguments:
+                cmd += f' {self.backup_arguments}'
+            
+            timing = "pre-launch" if on_launch else "post-exit"
+            self.show_message(f"Creating local backup ({timing}): {backup_path}")
+            logging.info(f"Local backup ({timing}): {cmd}")
+            
+            self.run_process(cmd, wait=self.backup_wait)
+            
+            # Rotate backups if max_backups is set
+            if hasattr(self, 'backup_max_backups_new'):
+                self._rotate_local_backups()
+            
+        except Exception as e:
+            logging.error(f"Local backup failed: {e}", exc_info=True)
+            self.show_message(f"Local backup failed: {e}")
+
+    def _rotate_local_backups(self):
+        """Remove old backups beyond max_backups limit."""
+        try:
+            from Python.utils.cloud_path_utils import generate_local_backup_path
+            
+            # Get base backup directory (without timestamp)
+            base_backup_dir = generate_local_backup_path(
+                self.backup_local_prefix,
+                self.game_name,
+                use_timestamp=False
+            )
+            
+            if not os.path.exists(base_backup_dir):
+                return
+            
+            # Get all backup directories (timestamped subdirectories)
+            backups = []
+            for item in os.listdir(base_backup_dir):
+                item_path = os.path.join(base_backup_dir, item)
+                if os.path.isdir(item_path):
+                    backups.append((item, item_path))
+            
+            # Sort by name (timestamp format ensures chronological order)
+            backups.sort()
+            
+            # Remove oldest backups if we exceed max
+            max_backups = getattr(self, 'backup_max_backups_new', 5)
+            while len(backups) > max_backups:
+                oldest_name, oldest_path = backups.pop(0)
+                shutil.rmtree(oldest_path)
+                logging.info(f"Removed old backup: {oldest_name}")
+                self.show_message(f"Removed old backup: {oldest_name}")
+                
+        except Exception as e:
+            logging.error(f"Backup rotation failed: {e}", exc_info=True)
+
+
     def run_game(self):
         """Run the main game executable"""
         self.show_message(f"Launching game: {self.game_name}")
@@ -696,7 +944,13 @@ class GameLauncher:
             # Write current PID to the PID file
             self.write_pid_file()
             
-            # Backup saves if enabled
+            # Cloud sync download (before launch)
+            self.cloud_sync_download()
+            
+            # Local backup (before launch)
+            self.local_backup_create(on_launch=True)
+            
+            # Backup saves if enabled (legacy)
             self.backup_save_files()
 
             # Execute launch sequence
@@ -705,12 +959,30 @@ class GameLauncher:
             # Run the game
             self.run_game()
             
+            # Run path discovery after game exits (to discover newly created saves)
+            try:
+                from Python.utils.path_discovery import discover_and_update_paths
+                if discover_and_update_paths(self.ini_path, context='exit'):
+                    logging.info(f"Post-exit path discovery completed for {self.game_name}")
+            except Exception as e:
+                logging.warning(f"Post-exit path discovery failed: {e}")
+            
+            # Local backup (after exit)
+            self.local_backup_create(on_launch=False)
+            
+            # Cloud sync upload (after exit)
+            self.cloud_sync_upload()
+            
             # Execute exit sequence
             self.executor.execute('exit_sequence')
             
         except Exception as e:
             self.show_message(f"Error: {e}")
         finally:
+            # Stop tray menu
+            if self.tray_menu:
+                self.tray_menu.stop()
+            
             # Final cleanup to ensure system state is restored
             self.executor.ensure_cleanup()
             if self.use_kill_list:

@@ -88,6 +88,27 @@ class AppConfig:
         self.ludusavi_backup_on_launch = False
         self.ludusavi_backup_on_exit = True
         
+        # Syncthing-specific configuration
+        self.syncthing_sync_folder = ""
+        self.syncthing_auto_start = True
+        
+        # EmuSync-specific configuration
+        self.emusync_emulator_path = ""
+        self.emusync_sync_on_launch = True
+        self.emusync_sync_on_exit = True
+        
+        # Game Backup Monitor-specific configuration
+        self.gbm_backup_path = ""
+        self.gbm_monitor_on_launch = True
+        
+        # Game Save Manager-specific configuration
+        self.gsm_backup_path = ""
+        self.gsm_backup_on_exit = True
+        
+        # Save State-specific configuration
+        self.savestate_backup_path = ""
+        self.savestate_auto_backup = True
+        
         self.pre1_path_options = ""
         self.pre1_path_arguments = ""
         self.pre2_path_options = ""
